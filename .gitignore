@@ -28,3 +28,6 @@ Thumbs.db
 src-tauri/target
 
 src-tauri/Cargo.lock
+
+# local sqlite db (auto-created at runtime; WAL/SHM artifacts must not be tracked)
+data/qpb-local.sqlite*
