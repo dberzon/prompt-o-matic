@@ -1,0 +1,121 @@
+# Cursor Rules — Prompt-o-matic
+
+## General Principles
+
+- Always prioritize understanding existing code before modifying it
+- Never rewrite large parts of the system unless explicitly instructed
+- Prefer minimal, surgical changes
+- Preserve existing behavior unless explicitly changing it
+
+---
+
+## Architecture Awareness
+
+This is a 3-layer system:
+
+1. React frontend (Vite)
+2. Node API layer
+3. Domain logic core
+
+Key flow:
+
+App.jsx
+→ assembler.js
+→ PromptOutput.jsx
+→ usePolish.js
+→ /api/polish
+→ polishCore.js
+→ provider
+→ UI display
+
+Do not break this flow.
+
+---
+
+## Safe Zones (Preferred Areas for Changes)
+
+- UI display logic (`PromptOutput.jsx`)
+- Prompt assembly (`assembler.js`)
+- Fragment ordering and formatting
+- Minor API payload changes
+
+---
+
+## Dangerous Zones (Handle Carefully)
+
+- `polishCore.js`
+- Provider resolution logic
+- Async API flow
+- LLM provider integrations (Ollama, Claude, LM Studio)
+
+If modifying these:
+- explain reasoning first
+- suggest minimal changes
+- highlight risks
+
+---
+
+## Coding Approach
+
+- Follow existing patterns in the file being modified
+- Do not introduce new frameworks or paradigms
+- Avoid unnecessary abstractions
+- Keep logic readable and explicit
+
+---
+
+## API Changes
+
+- Do not change API contracts unless necessary
+- If changing `/api/polish`, clearly document:
+  - input changes
+  - output changes
+  - compatibility risks
+
+---
+
+## LLM Integration Rules
+
+- Preserve system prompt behavior
+- Do not significantly change prompt structure without explanation
+- Respect provider selection logic
+- Avoid introducing non-deterministic behavior changes without warning
+
+---
+
+## Debugging Strategy
+
+When fixing bugs:
+
+1. Identify exact location in flow
+2. Trace data from input → output
+3. Avoid guessing
+4. Confirm assumptions before modifying
+
+---
+
+## When Unsure
+
+- Ask for clarification instead of guessing
+- Point out ambiguity explicitly
+- Suggest multiple options if needed
+
+---
+
+## Output Expectations
+
+- Prefer diff-style patches
+- Keep changes minimal
+- Explain what changed and why
+- Highlight potential side effects
+
+---
+
+## Project Context
+
+Always refer to:
+
+- `PROJECT_CONTEXT.md`
+- `docs/TAKEOVER_FLOW.md`
+
+before making decisions
