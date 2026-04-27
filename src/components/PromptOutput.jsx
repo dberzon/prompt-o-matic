@@ -68,6 +68,7 @@ export default function PromptOutput({
   localOnly = false,
   embeddedStatus = null,
 }) {
+  const isDev = import.meta.env.DEV
   const [showNeg, setShowNeg] = useState(false)
   const [useFrontPrefix, setUseFrontPrefix] = useState(true)
   const [showVariants, setShowVariants] = useState(false)
@@ -80,7 +81,7 @@ export default function PromptOutput({
   const [showQualityHints, setShowQualityHints] = useState(false)
   const [health, setHealth] = useState(null)
   const [healthError, setHealthError] = useState('')
-  const { state, polished, error, polish, revert, checkHealth } = usePolish()
+  const { state, polished, error, debug, polish, revert, checkHealth } = usePolish()
 
   const hasContent = prompt.length > 0
   const isAssembled = !!(scene?.trim() || scenario)
@@ -405,6 +406,20 @@ export default function PromptOutput({
                 ? 'Local-only mode active. Cloud fallback disabled.'
               : 'Using cloud provider.'}
         </p>
+      )}
+
+      {isDev && (
+        <div className={styles.debugPanel}>
+          <p className={styles.debugTitle}>Developer debug panel</p>
+          <p className={styles.debugRow}><strong>Request state:</strong> {state}</p>
+          <p className={styles.debugRow}><strong>Selected engine:</strong> {debug?.lastRequest?.engine ?? aiEngine}</p>
+          <p className={styles.debugRow}><strong>localOnly:</strong> {String(debug?.lastRequest?.localOnly ?? localOnly)}</p>
+          <p className={styles.debugRow}><strong>Provider:</strong> {debug?.lastResponse?.provider ?? 'n/a'}</p>
+          <p className={styles.debugRow}><strong>Fallback:</strong> {debug?.lastResponse?.fallback == null ? 'n/a' : String(debug.lastResponse.fallback)}</p>
+          <p className={styles.debugRow}><strong>Last error:</strong> {debug?.lastError ?? error ?? 'none'}</p>
+          <p className={styles.debugRow}><strong>Assembled prompt:</strong></p>
+          <pre className={styles.debugPre}>{assembledText || '(empty)'}</pre>
+        </div>
       )}
 
       {/* Polish / Revert buttons */}

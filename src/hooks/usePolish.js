@@ -6,6 +6,11 @@ export function usePolish() {
   const [state, setState] = useState('idle') // 'idle' | 'loading' | 'polished' | 'error'
   const [polished, setPolished] = useState(null) // string | null
   const [error, setError] = useState(null) // string | null
+  const [debug, setDebug] = useState({
+    lastRequest: null,
+    lastResponse: null,
+    lastError: null,
+  })
 
   const polish = useCallback(async ({
     fragments,
@@ -23,29 +28,36 @@ export function usePolish() {
   }) => {
     if (!fragments || fragments.length === 0) return
 
+    const requestPayload = {
+      fragments,
+      directorName: directorName ?? null,
+      directorNote: directorNote ?? null,
+      scene: scene ?? '',
+      scenario: scenario ?? null,
+      frontPrefix: frontPrefix ?? '',
+      narrativeBeat: typeof narrativeBeat === 'string' && narrativeBeat.trim()
+        ? narrativeBeat.trim()
+        : null,
+      engine,
+      localOnly,
+      embeddedPort,
+      embeddedSecret,
+      embeddedModel,
+    }
+
     setState('loading')
     setError(null)
+    setDebug((prev) => ({
+      ...prev,
+      lastRequest: requestPayload,
+      lastError: null,
+    }))
 
     try {
       const response = await fetch('/api/polish', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fragments,
-          directorName: directorName ?? null,
-          directorNote: directorNote ?? null,
-          scene: scene ?? '',
-          scenario: scenario ?? null,
-          frontPrefix: frontPrefix ?? '',
-          narrativeBeat: typeof narrativeBeat === 'string' && narrativeBeat.trim()
-            ? narrativeBeat.trim()
-            : null,
-          engine,
-          localOnly,
-          embeddedPort,
-          embeddedSecret,
-          embeddedModel,
-        }),
+        body: JSON.stringify(requestPayload),
       })
 
       const contentType = response.headers.get('content-type') ?? ''
@@ -67,9 +79,21 @@ export function usePolish() {
 
       setPolished(data.polished)
       setState('polished')
+      setDebug((prev) => ({
+        ...prev,
+        lastResponse: {
+          provider: data?.provider ?? null,
+          fallback: data?.fallback ?? null,
+          engine: data?.engine ?? null,
+        },
+      }))
     } catch (err) {
       setError(err.message ?? 'Unknown error')
       setState('error')
+      setDebug((prev) => ({
+        ...prev,
+        lastError: err?.message ?? 'Unknown error',
+      }))
     }
   }, [])
 
@@ -101,5 +125,5 @@ export function usePolish() {
     return data
   }, [])
 
-  return { state, polished, error, polish, revert, checkHealth }
+  return { state, polished, error, debug, polish, revert, checkHealth }
 }
