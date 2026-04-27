@@ -1,0 +1,14 @@
+{
+  "workflowId": "qwen-image-2512-comfyui-00010",
+  "fields": {
+    "positivePrompt": { "nodeId": "6", "inputKey": "text" },
+    "negativePrompt": { "nodeId": "7", "inputKey": "text" },
+    "seed": { "nodeId": "3", "inputKey": "seed" },
+    "width": { "nodeId": "58", "inputKey": "width" },
+    "height": { "nodeId": "58", "inputKey": "height" },
+    "batchSize": { "nodeId": "58", "inputKey": "batch_size" }
+  },
+  "optionalFields": {
+    "modelName": { "nodeId": "75", "inputKey": "unet_name" }
+  }
+}

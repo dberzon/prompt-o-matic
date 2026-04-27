@@ -1,0 +1,24 @@
+[package]
+name = "qwen-prompt-builder"
+version = "0.1.0"
+description = "Qwen Prompt Builder desktop shell"
+authors = ["qpb"]
+edition = "2021"
+
+[lib]
+name = "qpb_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.0.2", features = [] }
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tauri = { version = "2.1.1", features = [] }
+tauri-plugin-opener = "2.2.2"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "time", "sync", "fs", "io-util"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+sha2 = "0.10"
+futures-util = "0.3"
+rand = "0.8"

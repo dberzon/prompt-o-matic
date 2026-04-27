@@ -1,0 +1,199 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 0;
+  flex: 1;
+  max-width: 1400px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 0 24px 48px;
+  align-items: start;
+}
+
+.tabs {
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 8px 24px 0;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.tabBtn {
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.tabBtnActive {
+  color: var(--text);
+  border-color: var(--text-3);
+  background: var(--surface-2);
+}
+
+.characterTab {
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 8px 24px 48px;
+}
+
+.leftPanel {
+  padding-right: 32px;
+  padding-top: 8px;
+  padding-bottom: 48px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profileBar {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 8px;
+  display: grid;
+  grid-template-columns: auto auto auto auto 1fr auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.profileCheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-2);
+  padding: 0 4px;
+}
+
+.profileCheck input {
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.statusDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  justify-self: center;
+}
+
+.statusDotIdle {
+  background: var(--surface-3);
+}
+
+.statusDotReady {
+  background: var(--green);
+  border-color: rgba(106, 170, 130, 0.45);
+}
+
+.inlineHint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: 10px;
+  line-height: 1;
+  cursor: help;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.historyGroup {
+  display: inline-flex;
+  gap: 4px;
+  padding-right: 6px;
+  border-right: 1px solid var(--border);
+}
+
+.profileBtn {
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.profileBtn:hover:not(:disabled) {
+  border-color: var(--text-3);
+  color: var(--text);
+}
+
+.profileBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.profileSelect {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 11px;
+  padding: 5px 8px;
+}
+
+.rightPanel {
+  padding-top: 8px;
+  position: sticky;
+  top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (max-width: 960px) {
+  .tabs {
+    padding: 8px 16px 0;
+  }
+
+  .characterTab {
+    padding: 8px 16px 48px;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+    padding: 0 16px 48px;
+  }
+
+  .leftPanel {
+    padding-right: 0;
+  }
+
+  .profileBar {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .historyGroup {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding-right: 0;
+    padding-bottom: 6px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .rightPanel {
+    position: static;
+    order: -1;
+    padding-bottom: 8px;
+  }
+}

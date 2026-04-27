@@ -1,0 +1,361 @@
+.wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+/* ── Toggle header ──────────────────────────────────────────────────────────── */
+
+.toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--surface-2);
+  border: none;
+  border-bottom: 1px solid transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.toggle[aria-expanded="true"] {
+  border-bottom-color: var(--border);
+}
+
+.toggle:hover {
+  background: color-mix(in srgb, var(--surface-2) 85%, var(--accent) 15%);
+}
+
+.toggleLabel {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+}
+
+.toggleHint {
+  font-size: 10px;
+  color: var(--text-3);
+  flex: 1;
+}
+
+.toggleChevron {
+  font-size: 9px;
+  color: var(--text-3);
+}
+
+/* ── Body ───────────────────────────────────────────────────────────────────── */
+
+.body {
+  padding: 12px 14px 14px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Search row ─────────────────────────────────────────────────────────────── */
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.searchRow:focus-within {
+  border-color: var(--accent);
+}
+
+.searchIcon {
+  color: var(--text-3);
+  display: flex;
+  align-items: center;
+}
+
+.input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  padding: 9px 0;
+  font-family: inherit;
+}
+
+.input::placeholder {
+  color: var(--text-3);
+}
+
+.clearBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.clearBtn:hover {
+  color: var(--text-2);
+  background: color-mix(in srgb, var(--surface) 70%, var(--accent) 30%);
+}
+
+/* ── Examples ───────────────────────────────────────────────────────────────── */
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.examplesLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  margin-right: 4px;
+}
+
+.exampleBtn {
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-2);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.exampleBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── No results ─────────────────────────────────────────────────────────────── */
+
+.noResults {
+  font-size: 11px;
+  color: var(--text-3);
+  font-style: italic;
+  padding: 8px 4px;
+}
+
+/* ── Result group ───────────────────────────────────────────────────────────── */
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.groupLabel {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-3);
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.groupCount {
+  color: var(--text-3);
+  font-weight: 500;
+  margin-left: 2px;
+}
+
+.resultList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ── Row (directors + seeds) ────────────────────────────────────────────────── */
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.row:hover {
+  border-color: var(--text-3);
+}
+
+.rowMain {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.rowTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.seedText {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.rowPreview {
+  font-size: 11px;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+
+.rowMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 2px;
+}
+
+.metaTag {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  background: var(--accent-dim);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.metaNote {
+  font-size: 10px;
+  color: var(--text-3);
+  font-style: italic;
+}
+
+.tokenRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.tokenChip {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
+  font-family: var(--font-mono);
+}
+
+/* ── Apply buttons ──────────────────────────────────────────────────────────── */
+
+.applyBtn {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.applyBtn:hover {
+  background: var(--accent-glow);
+}
+
+.applyBtnSm {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.applyBtnSm:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ── Card group (deck cards by category) ────────────────────────────────────── */
+
+.cardGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.cardGroupLabel {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  padding-bottom: 2px;
+}
+
+.cardGroupList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cardRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  padding: 3px 0;
+}
+
+.cardRowMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cardText {
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.35;
+}
+
+.chipHint {
+  font-size: 9px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+  font-style: italic;
+}

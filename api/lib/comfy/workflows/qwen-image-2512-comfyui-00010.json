@@ -1,0 +1,205 @@
+{
+  "3": {
+    "inputs": {
+      "seed": 656916932103486,
+      "steps": 4,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "simple",
+      "denoise": 1,
+      "model": [
+        "77",
+        0
+      ],
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "latent_image": [
+        "58",
+        0
+      ]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "KSampler"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "In an exclusive private villa overlooking the turquoise Mediterranean Sea at sunrise, an 18+ adult male subject reclines languidly on an ornate chaise longue positioned on the expansive balcony of his seaside retreat. His weathered face basks in warm golden light from the rising sun as it casts a gentle glow across his features – accentuated by salt-and-pepper stubble that hints at years spent sailing the world's oceans and piercing gray eyes aglow with a deep love for life.\n\nStraddling him from above, the 18+ adult female subject sits on the edge of the balcony railing with her legs dangling elegantly over the turquoise sea below. Her age-defying beauty is accentuated by sculpted high cheekbones and full crimson-lipped mouth painted in glossy hue that contrasts dramatically against her sun-kissed skin glowing warmly under Mediterranean sunlight. Charcoal eyeliner lines her sultry eyes that gaze directly into his with magnetic intensity as she leans forward to whisper something in his ear while her hands rest possessively on the railing beside him.\n\nThe villa's exterior is a symphony of whites and creams – terracotta roof tiles blending seamlessly into gleaming marble facades where Mediterranean-style columns rise towards the horizon. Lush tropical greenery bursts forth from hanging baskets along the balcony railings as palms sway gently in the morning breeze, catching sunlight that dances through leafy patterns like emeralds set against sky blue.",
+      "clip": [
+        "76",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Positive Prompt)"
+    }
+  },
+  "7": {
+    "inputs": {
+      "text": "CGI, 3D render, illustration, cartoon, anime, digital painting, oversaturated, HDR, neon glow, hyperrealistic smooth skin, studio lighting, symmetrical fill lighting, AI art style, plastic texture, perfect idealized faces, stock photo composition, advertisement aesthetics, posed, over-sharpened, digital artifacts",
+      "clip": [
+        "76",
+        0
+      ]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "CLIP Text Encode (Negative Prompt)"
+    }
+  },
+  "8": {
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "vae": [
+        "39",
+        0
+      ]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "VAE Decode"
+    }
+  },
+  "39": {
+    "inputs": {
+      "vae_name": "qwen_image_vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Load VAE"
+    }
+  },
+  "58": {
+    "inputs": {
+      "width": 1664,
+      "height": 928,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": {
+      "title": "EmptySD3LatentImage"
+    }
+  },
+  "60": {
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "images": [
+        "8",
+        0
+      ]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "66": {
+    "inputs": {
+      "shift": 3,
+      "model": [
+        "81",
+        0
+      ]
+    },
+    "class_type": "ModelSamplingAuraFlow",
+    "_meta": {
+      "title": "ModelSamplingAuraFlow"
+    }
+  },
+  "75": {
+    "inputs": {
+      "unet_name": "qwen-image-2512-Q4_K_M.gguf"
+    },
+    "class_type": "UnetLoaderGGUF",
+    "_meta": {
+      "title": "Unet Loader (GGUF)"
+    }
+  },
+  "76": {
+    "inputs": {
+      "clip_name": "Qwen2.5-VL-7B-Instruct-Q5_K_M.gguf",
+      "type": "qwen_image"
+    },
+    "class_type": "CLIPLoaderGGUF",
+    "_meta": {
+      "title": "CLIPLoader (GGUF)"
+    }
+  },
+  "77": {
+    "inputs": {
+      "strength": 1,
+      "model": [
+        "66",
+        0
+      ]
+    },
+    "class_type": "CFGNorm",
+    "_meta": {
+      "title": "CFGNorm"
+    }
+  },
+  "80": {
+    "inputs": {
+      "lora_name": "gnass_2512_qwen.safetensors",
+      "strength_model": 0.6,
+      "model": [
+        "82",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "81": {
+    "inputs": {
+      "lora_name": "Wuli-Qwen-Image-2512-Turbo-LoRA-4steps-V1.0-bf16_ComfyUi.safetensors",
+      "strength_model": 1,
+      "model": [
+        "80",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "82": {
+    "inputs": {
+      "lora_name": "NSFW Female Enhancer Qwen V0.3.safetensors",
+      "strength_model": 0.6,
+      "model": [
+        "75",
+        0
+      ]
+    },
+    "class_type": "LoraLoaderModelOnly",
+    "_meta": {
+      "title": "Load LoRA"
+    }
+  },
+  "83": {
+    "inputs": {
+      "width": 928,
+      "height": 1664,
+      "batch_size": 1
+    },
+    "class_type": "EmptySD3LatentImage",
+    "_meta": {
+      "title": "EmptySD3LatentImage"
+    }
+  }
+}

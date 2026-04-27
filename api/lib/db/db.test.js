@@ -1,0 +1,159 @@
+import fs from 'node:fs'
+import os from 'node:os'
+import path from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import {
+  invalidCharacterProfiles,
+  validCharacterProfile,
+  validGeneratedImageRecord,
+  validQwenImagePromptPack,
+} from '../characters/fixtures.js'
+import {
+  createCharacter,
+  createGeneratedImageRecord,
+  createPromptPack,
+  deleteCharacter,
+  getCharacter,
+  getGeneratedImageRecord,
+  listGeneratedImageRecords,
+  getPromptPack,
+  listCharacters,
+  updateGeneratedImageRecord,
+  updateCharacter,
+} from './repositories.js'
+import { createSqliteDatabase, initializeDatabase } from './sqlite.js'
+
+const tempDirs = []
+
+function createTempDb() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qpb-db-test-'))
+  tempDirs.push(dir)
+  const dbPath = path.join(dir, 'test.sqlite')
+  const db = createSqliteDatabase({ env: { APP_MODE: 'local-studio' }, dbPath })
+  initializeDatabase(db)
+  return { db, dbPath }
+}
+
+afterEach(() => {
+  while (tempDirs.length > 0) {
+    const dir = tempDirs.pop()
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+describe('sqlite canonical storage', () => {
+  it('initializes required tables', () => {
+    const { db } = createTempDb()
+    const tables = db.prepare(`
+      SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('characters', 'prompt_packs', 'generated_images')
+    `).all()
+    const names = tables.map((row) => row.name).sort()
+    expect(names).toEqual(['characters', 'generated_images', 'prompt_packs'])
+    db.close()
+  })
+
+  it('creates, reads, lists, updates, and deletes character records', () => {
+    const { db } = createTempDb()
+    const created = createCharacter(db, {
+      ...validCharacterProfile,
+      id: 'char_repo_001',
+      embeddingStatus: 'pending',
+    })
+    expect(created.id).toBe('char_repo_001')
+
+    const fetched = getCharacter(db, 'char_repo_001')
+    expect(fetched.embeddingStatus).toBe('pending')
+
+    const listed = listCharacters(db, { projectId: validCharacterProfile.projectId })
+    expect(listed.length).toBe(1)
+    expect(listed[0].id).toBe('char_repo_001')
+
+    const updated = updateCharacter(db, 'char_repo_001', {
+      approved: false,
+      embeddingStatus: 'failed',
+    })
+    expect(updated.approved).toBe(false)
+    expect(updated.embeddingStatus).toBe('failed')
+
+    const deleted = deleteCharacter(db, 'char_repo_001')
+    expect(deleted).toBe(true)
+    expect(getCharacter(db, 'char_repo_001')).toBeNull()
+    db.close()
+  })
+
+  it('rejects invalid character payload before insert', () => {
+    const { db } = createTempDb()
+    expect(() => createCharacter(db, invalidCharacterProfiles.missingRequired)).toThrow()
+    db.close()
+  })
+
+  it('inserts and reads prompt packs', () => {
+    const { db } = createTempDb()
+    const pack = createPromptPack(db, {
+      ...validQwenImagePromptPack,
+      id: 'pack_repo_001',
+      characterId: 'char_repo_002',
+    })
+    const fetched = getPromptPack(db, pack.id)
+    expect(fetched.id).toBe('pack_repo_001')
+    expect(fetched.characterId).toBe('char_repo_002')
+    db.close()
+  })
+
+  it('inserts and reads generated image records', () => {
+    const { db } = createTempDb()
+    const record = createGeneratedImageRecord(db, {
+      ...validGeneratedImageRecord,
+      id: 'img_repo_001',
+      promptPackId: 'pack_repo_001',
+    })
+    const fetched = getGeneratedImageRecord(db, record.id)
+    expect(fetched.id).toBe('img_repo_001')
+    expect(fetched.promptPackId).toBe('pack_repo_001')
+    db.close()
+  })
+
+  it('lists generated image records by character and prompt pack', () => {
+    const { db } = createTempDb()
+    createGeneratedImageRecord(db, {
+      ...validGeneratedImageRecord,
+      id: 'img_repo_list_1',
+      characterId: 'char_a',
+      promptPackId: 'pack_a',
+    })
+    createGeneratedImageRecord(db, {
+      ...validGeneratedImageRecord,
+      id: 'img_repo_list_2',
+      characterId: 'char_b',
+      promptPackId: 'pack_b',
+    })
+    expect(listGeneratedImageRecords(db, { characterId: 'char_a' }).map((x) => x.id)).toContain('img_repo_list_1')
+    expect(listGeneratedImageRecords(db, { promptPackId: 'pack_b' }).map((x) => x.id)).toContain('img_repo_list_2')
+    db.close()
+  })
+
+  it('updates generated image approval and reject reason', () => {
+    const { db } = createTempDb()
+    createGeneratedImageRecord(db, {
+      ...validGeneratedImageRecord,
+      id: 'img_repo_patch_1',
+      promptPackId: 'pack_patch_1',
+      approved: false,
+    })
+    const approved = updateGeneratedImageRecord(db, 'img_repo_patch_1', { approved: true })
+    expect(approved.approved).toBe(true)
+    const rejected = updateGeneratedImageRecord(db, 'img_repo_patch_1', {
+      approved: false,
+      rejectedReason: 'bad hands',
+    })
+    expect(rejected.approved).toBe(false)
+    expect(rejected.rejectedReason).toBe('bad hands')
+    db.close()
+  })
+
+  it('blocks sqlite initialization in APP_MODE=cloud', () => {
+    expect(() => createSqliteDatabase({ env: { APP_MODE: 'cloud' }, dbPath: ':memory:' })).toThrow(
+      'SQLite canonical storage is local-studio only',
+    )
+  })
+})

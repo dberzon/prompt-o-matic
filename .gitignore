@@ -1,0 +1,30 @@
+node_modules
+dist
+.DS_Store
+*.local
+
+.vercel
+
+build
+.env
+.env.local
+.env.*.local
+.vscode/*
+!.vscode/extensions.json
+
+# logs
+*.log
+
+# temp files
+tmp
+temp
+
+# OS
+Thumbs.db
+
+# build caches (varies by tools)
+.cache
+
+src-tauri/target
+
+src-tauri/Cargo.lock

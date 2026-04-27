@@ -1,0 +1,135 @@
+.header {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logoMark {
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--accent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.aperture {
+  font-size: 14px;
+  color: var(--accent);
+  line-height: 1;
+}
+
+.name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text);
+  text-transform: uppercase;
+}
+
+.sub {
+  font-size: 11px;
+  color: var(--text-2);
+  letter-spacing: 0.02em;
+  margin-top: 1px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.link {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 5px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  letter-spacing: 0.03em;
+  transition: background 0.15s, color 0.15s;
+}
+
+.link:hover {
+  background: var(--accent-dim);
+}
+
+.clearBtn {
+  font-size: 12px;
+  color: var(--text-2);
+  background: transparent;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  letter-spacing: 0.03em;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.clearBtn:hover {
+  border-color: var(--text-3);
+  color: var(--text);
+}
+
+.guideBtn {
+  font-size: 12px;
+  color: var(--text);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  letter-spacing: 0.03em;
+  transition: background 0.15s;
+}
+
+.guideBtn:hover {
+  background: rgba(201, 168, 92, 0.2);
+}
+
+.guidePanel {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 24px 14px;
+}
+
+.guideTitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.guideList {
+  margin-left: 18px;
+  color: var(--text-2);
+  font-size: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+@media (max-width: 600px) {
+  .sub { display: none; }
+  .inner { padding: 12px 16px; }
+  .guidePanel { padding: 0 16px 12px; }
+}

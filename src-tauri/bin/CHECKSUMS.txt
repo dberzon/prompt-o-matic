@@ -1,0 +1,7 @@
+# Pin the exact llama.cpp release checksums in production.
+# Format: <sha256>  <filename>
+
+REPLACE_ME  llama-server-x86_64-pc-windows-msvc.exe
+REPLACE_ME  llama-server-x86_64-apple-darwin
+REPLACE_ME  llama-server-aarch64-apple-darwin
+REPLACE_ME  llama-server-x86_64-unknown-linux-gnu

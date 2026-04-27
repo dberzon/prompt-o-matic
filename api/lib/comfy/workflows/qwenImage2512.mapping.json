@@ -1,0 +1,14 @@
+{
+  "workflowId": "qwen-image-2512-default",
+  "fields": {
+    "positivePrompt": { "nodeId": "6", "inputKey": "text" },
+    "negativePrompt": { "nodeId": "7", "inputKey": "text" },
+    "seed": { "nodeId": "10", "inputKey": "seed" },
+    "width": { "nodeId": "5", "inputKey": "width" },
+    "height": { "nodeId": "5", "inputKey": "height" },
+    "batchSize": { "nodeId": "5", "inputKey": "batch_size" }
+  },
+  "optionalFields": {
+    "modelName": { "nodeId": "4", "inputKey": "ckpt_name" }
+  }
+}
