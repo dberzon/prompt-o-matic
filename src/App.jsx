@@ -721,7 +721,7 @@ export default function App() {
           className={`${styles.tabBtn} ${activeTab === 'pipeline' ? styles.tabBtnActive : ''}`}
           onClick={() => setActiveTab('pipeline')}
         >
-          Pipeline
+          Casting Room
         </button>
       </div>
 

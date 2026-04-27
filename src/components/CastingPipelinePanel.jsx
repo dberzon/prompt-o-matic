@@ -112,7 +112,7 @@ export default function CastingPipelinePanel() {
         if (defaultValid) setSelectedWorkflowId(defaultValid.workflowId)
       }
     } catch (err) {
-      setError(err.message || 'Failed to load pipeline data.')
+      setError(err.message || 'Failed to load casting room data.')
     } finally {
       setLoading(false)
     }
@@ -428,7 +428,7 @@ export default function CastingPipelinePanel() {
 
   return (
     <div className={styles.panel}>
-      <h2 className={styles.title}>Pipeline</h2>
+      <h2 className={styles.title}>Casting Room</h2>
       <p className={styles.subtle}>Manual operator controls for batch review, prompt-pack compile, Comfy queue, status, and ingest.</p>
       {loading && <div className={styles.subtle}>Loading...</div>}
       <ErrorBanner message={error} />
