@@ -1,9 +1,9 @@
 // src/hooks/usePolish.js
 import { useState, useCallback } from 'react'
 
-// States: idle | loading | polished | error
+// States: idle | loading | polished | dry-run | error
 export function usePolish() {
-  const [state, setState] = useState('idle') // 'idle' | 'loading' | 'polished' | 'error'
+  const [state, setState] = useState('idle') // 'idle' | 'loading' | 'polished' | 'dry-run' | 'error'
   const [polished, setPolished] = useState(null) // string | null
   const [error, setError] = useState(null) // string | null
   const [debug, setDebug] = useState({
@@ -22,6 +22,7 @@ export function usePolish() {
     narrativeBeat,
     engine = 'auto',
     localOnly = false,
+    dryRun = false,
     embeddedPort = null,
     embeddedSecret = null,
     embeddedModel = null,
@@ -43,6 +44,19 @@ export function usePolish() {
       embeddedPort,
       embeddedSecret,
       embeddedModel,
+    }
+
+    if (dryRun) {
+      setState('dry-run')
+      setPolished(null)
+      setError(null)
+      setDebug((prev) => ({
+        ...prev,
+        lastRequest: requestPayload,
+        lastResponse: null,
+        lastError: null,
+      }))
+      return
     }
 
     setState('loading')

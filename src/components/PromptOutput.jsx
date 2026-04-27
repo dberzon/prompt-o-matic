@@ -70,6 +70,7 @@ export default function PromptOutput({
 }) {
   const isDev = import.meta.env.DEV
   const [showNeg, setShowNeg] = useState(false)
+  const [dryRun, setDryRun] = useState(false)
   const [useFrontPrefix, setUseFrontPrefix] = useState(true)
   const [showVariants, setShowVariants] = useState(false)
   const [selectedVariant, setSelectedVariant] = useState(null)
@@ -78,6 +79,7 @@ export default function PromptOutput({
   const [showHistory, setShowHistory] = useState(false)
   const [diffTargetId, setDiffTargetId] = useState(null)
   const [shareState, setShareState] = useState('idle')
+  const [debugCopyState, setDebugCopyState] = useState('idle')
   const [showQualityHints, setShowQualityHints] = useState(false)
   const [health, setHealth] = useState(null)
   const [healthError, setHealthError] = useState('')
@@ -172,6 +174,7 @@ export default function PromptOutput({
       narrativeBeat,
       engine: aiEngine,
       localOnly,
+      dryRun,
       embeddedPort: embeddedStatus?.port ?? null,
       embeddedSecret: embeddedStatus?.secret ?? null,
     })
@@ -214,6 +217,30 @@ export default function PromptOutput({
     const added = [...targetTokens].filter((t) => !currentTokens.has(t)).slice(0, 25)
     return { removed, added }
   }, [diffTarget, displayText])
+
+  const debugPayload = useMemo(() => ({
+    assembledPrompt: assembledText,
+    requestState: state,
+    dryRun,
+    selectedEngine: debug?.lastRequest?.engine ?? aiEngine,
+    localOnly: debug?.lastRequest?.localOnly ?? localOnly,
+    provider: debug?.lastResponse?.provider ?? null,
+    fallback: debug?.lastResponse?.fallback ?? null,
+    lastError: debug?.lastError ?? error ?? null,
+    lastRequest: debug?.lastRequest ?? null,
+    lastResponse: debug?.lastResponse ?? null,
+  }), [assembledText, state, dryRun, debug, aiEngine, localOnly, error])
+
+  const handleCopyDebugJson = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(debugPayload, null, 2))
+      setDebugCopyState('copied')
+      setTimeout(() => setDebugCopyState('idle'), 2000)
+    } catch {
+      setDebugCopyState('error')
+      setTimeout(() => setDebugCopyState('idle'), 2000)
+    }
+  }, [debugPayload])
 
   const handleShare = async () => {
     if (!onShareState) return
@@ -410,8 +437,21 @@ export default function PromptOutput({
 
       {isDev && (
         <div className={styles.debugPanel}>
-          <p className={styles.debugTitle}>Developer debug panel</p>
+          <div className={styles.header}>
+            <p className={styles.debugTitle}>Developer debug panel</p>
+            <button
+              type="button"
+              className={`${styles.copyBtn} ${debugCopyState === 'copied' ? styles.copied : ''}`}
+              onClick={handleCopyDebugJson}
+            >
+              {debugCopyState === 'copied' ? '✓ Copied' : debugCopyState === 'error' ? 'Failed' : 'Copy debug JSON'}
+            </button>
+          </div>
+          {state === 'dry-run' && (
+            <p className={styles.errorMsg}>DRY RUN MODE ACTIVE</p>
+          )}
           <p className={styles.debugRow}><strong>Request state:</strong> {state}</p>
+          <p className={styles.debugRow}><strong>Dry run:</strong> {String(dryRun)}</p>
           <p className={styles.debugRow}><strong>Selected engine:</strong> {debug?.lastRequest?.engine ?? aiEngine}</p>
           <p className={styles.debugRow}><strong>localOnly:</strong> {String(debug?.lastRequest?.localOnly ?? localOnly)}</p>
           <p className={styles.debugRow}><strong>Provider:</strong> {debug?.lastResponse?.provider ?? 'n/a'}</p>
@@ -419,11 +459,26 @@ export default function PromptOutput({
           <p className={styles.debugRow}><strong>Last error:</strong> {debug?.lastError ?? error ?? 'none'}</p>
           <p className={styles.debugRow}><strong>Assembled prompt:</strong></p>
           <pre className={styles.debugPre}>{assembledText || '(empty)'}</pre>
+          <p className={styles.debugRow}><strong>Payload preview:</strong></p>
+          <pre className={styles.debugPre}>
+            {debug?.lastRequest ? JSON.stringify(debug.lastRequest, null, 2) : '(no payload yet)'}
+          </pre>
         </div>
       )}
 
       {/* Polish / Revert buttons */}
       <div className={styles.prefixRow}>
+        {isDev && (
+          <label className={styles.prefixToggle}>
+            <input
+              type="checkbox"
+              checked={dryRun}
+              onChange={(e) => setDryRun(e.target.checked)}
+              disabled={state === 'loading'}
+            />
+            <span>Dry Run (no API call)</span>
+          </label>
+        )}
         <label className={styles.prefixToggle}>
           <input
             type="checkbox"
@@ -459,7 +514,7 @@ export default function PromptOutput({
                 Polishing…
               </>
             ) : (
-              '✦ Polish with AI'
+              dryRun ? '✦ Dry run polish payload' : '✦ Polish with AI'
             )}
           </button>
         )}
