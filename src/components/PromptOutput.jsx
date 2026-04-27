@@ -267,6 +267,96 @@ export default function PromptOutput({
         ? { label: 'chips only', cls: styles.statusRaw }
         : null
 
+  const debugTheme = {
+    panel: {
+      marginTop: 14,
+      marginBottom: 14,
+      paddingTop: 12,
+      paddingBottom: 12,
+      borderTop: '1px solid rgba(148, 163, 184, 0.28)',
+      borderBottom: '1px solid rgba(148, 163, 184, 0.28)',
+    },
+    headingRow: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+    },
+    headingLeft: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 8,
+    },
+    devBadge: {
+      fontSize: 10,
+      fontWeight: 700,
+      letterSpacing: '0.08em',
+      textTransform: 'uppercase',
+      color: '#1f2937',
+      backgroundColor: 'rgba(148, 163, 184, 0.3)',
+      border: '1px solid rgba(148, 163, 184, 0.55)',
+      borderRadius: 999,
+      padding: '2px 7px',
+      lineHeight: 1.2,
+    },
+    section: {
+      marginTop: 10,
+      paddingTop: 8,
+      borderTop: '1px solid rgba(148, 163, 184, 0.2)',
+    },
+    sectionTitle: {
+      margin: '0 0 6px',
+      fontSize: 11,
+      fontWeight: 700,
+      letterSpacing: '0.09em',
+      textTransform: 'uppercase',
+      opacity: 0.75,
+    },
+    row: {
+      display: 'grid',
+      gridTemplateColumns: '140px minmax(0, 1fr)',
+      alignItems: 'start',
+      columnGap: 12,
+      margin: '3px 0',
+      fontSize: 13,
+    },
+    label: {
+      opacity: 0.72,
+    },
+    value: {
+      minWidth: 0,
+      overflowWrap: 'anywhere',
+      whiteSpace: 'pre-wrap',
+    },
+    mutedValue: {
+      opacity: 0.6,
+    },
+    warningValue: {
+      color: '#d97706',
+    },
+    blockValue: {
+      marginTop: 2,
+      maxHeight: 160,
+      overflow: 'auto',
+      padding: '8px 10px',
+      borderRadius: 8,
+      border: '1px solid rgba(148, 163, 184, 0.35)',
+      backgroundColor: 'rgba(15, 23, 42, 0.2)',
+      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+      fontSize: 12,
+      lineHeight: 1.35,
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-word',
+    },
+  }
+
+  const isDebugValueMuted = (value) => (
+    value === 'n/a'
+    || value === 'none'
+    || value === ''
+    || value == null
+  )
+
   return (
     <div className={styles.wrap}>
       {/* Header row */}
@@ -436,9 +526,12 @@ export default function PromptOutput({
       )}
 
       {isDev && (
-        <div className={styles.debugPanel}>
-          <div className={styles.header}>
-            <p className={styles.debugTitle}>Developer debug panel</p>
+        <div className={styles.debugPanel} style={debugTheme.panel}>
+          <div className={styles.header} style={debugTheme.headingRow}>
+            <div style={debugTheme.headingLeft}>
+              <p className={styles.debugTitle}>Developer debug panel</p>
+              <span style={debugTheme.devBadge}>DEV</span>
+            </div>
             <button
               type="button"
               className={`${styles.copyBtn} ${debugCopyState === 'copied' ? styles.copied : ''}`}
@@ -450,19 +543,86 @@ export default function PromptOutput({
           {state === 'dry-run' && (
             <p className={styles.errorMsg}>DRY RUN MODE ACTIVE</p>
           )}
-          <p className={styles.debugRow}><strong>Request state:</strong> {state}</p>
-          <p className={styles.debugRow}><strong>Dry run:</strong> {String(dryRun)}</p>
-          <p className={styles.debugRow}><strong>Selected engine:</strong> {debug?.lastRequest?.engine ?? aiEngine}</p>
-          <p className={styles.debugRow}><strong>localOnly:</strong> {String(debug?.lastRequest?.localOnly ?? localOnly)}</p>
-          <p className={styles.debugRow}><strong>Provider:</strong> {debug?.lastResponse?.provider ?? 'n/a'}</p>
-          <p className={styles.debugRow}><strong>Fallback:</strong> {debug?.lastResponse?.fallback == null ? 'n/a' : String(debug.lastResponse.fallback)}</p>
-          <p className={styles.debugRow}><strong>Last error:</strong> {debug?.lastError ?? error ?? 'none'}</p>
-          <p className={styles.debugRow}><strong>Assembled prompt:</strong></p>
-          <pre className={styles.debugPre}>{assembledText || '(empty)'}</pre>
-          <p className={styles.debugRow}><strong>Payload preview:</strong></p>
-          <pre className={styles.debugPre}>
-            {debug?.lastRequest ? JSON.stringify(debug.lastRequest, null, 2) : '(no payload yet)'}
-          </pre>
+          <div style={debugTheme.section}>
+            <p style={debugTheme.sectionTitle}>Request</p>
+            <p className={styles.debugRow} style={debugTheme.row}>
+              <span style={debugTheme.label}>Request state</span>
+              <span style={debugTheme.value}>{state}</span>
+            </p>
+            <p className={styles.debugRow} style={debugTheme.row}>
+              <span style={debugTheme.label}>Dry run</span>
+              <span style={debugTheme.value}>{String(dryRun)}</span>
+            </p>
+            <p className={styles.debugRow} style={debugTheme.row}>
+              <span style={debugTheme.label}>Selected engine</span>
+              <span style={debugTheme.value}>{debug?.lastRequest?.engine ?? aiEngine}</span>
+            </p>
+            <p className={styles.debugRow} style={debugTheme.row}>
+              <span style={debugTheme.label}>localOnly</span>
+              <span style={debugTheme.value}>{String(debug?.lastRequest?.localOnly ?? localOnly)}</span>
+            </p>
+          </div>
+
+          <div style={debugTheme.section}>
+            <p style={debugTheme.sectionTitle}>Response</p>
+            <p className={styles.debugRow} style={debugTheme.row}>
+              <span style={debugTheme.label}>Provider</span>
+              <span
+                style={{
+                  ...debugTheme.value,
+                  ...(isDebugValueMuted(debug?.lastResponse?.provider ?? 'n/a') ? debugTheme.mutedValue : null),
+                }}
+              >
+                {debug?.lastResponse?.provider ?? 'n/a'}
+              </span>
+            </p>
+            <p className={styles.debugRow} style={debugTheme.row}>
+              <span style={debugTheme.label}>Fallback</span>
+              <span
+                style={{
+                  ...debugTheme.value,
+                  ...(isDebugValueMuted(debug?.lastResponse?.fallback == null ? 'n/a' : String(debug.lastResponse.fallback)) ? debugTheme.mutedValue : null),
+                }}
+              >
+                {debug?.lastResponse?.fallback == null ? 'n/a' : String(debug.lastResponse.fallback)}
+              </span>
+            </p>
+          </div>
+
+          <div style={debugTheme.section}>
+            <p style={debugTheme.sectionTitle}>Diagnostics</p>
+            <p className={styles.debugRow} style={debugTheme.row}>
+              <span style={debugTheme.label}>Last error</span>
+              <span
+                style={{
+                  ...debugTheme.value,
+                  ...((debug?.lastError ?? error ?? 'none') === 'none'
+                    ? debugTheme.mutedValue
+                    : debugTheme.warningValue),
+                }}
+              >
+                {debug?.lastError ?? error ?? 'none'}
+              </span>
+            </p>
+            <p className={styles.debugRow} style={debugTheme.row}>
+              <span style={debugTheme.label}>Assembled prompt</span>
+              <pre
+                className={styles.debugPre}
+                style={{
+                  ...debugTheme.blockValue,
+                  ...(isDebugValueMuted(assembledText) ? debugTheme.mutedValue : null),
+                }}
+              >
+                {assembledText || '(empty)'}
+              </pre>
+            </p>
+            <p className={styles.debugRow} style={debugTheme.row}>
+              <span style={debugTheme.label}>Payload preview</span>
+              <pre className={styles.debugPre} style={debugTheme.blockValue}>
+                {debug?.lastRequest ? JSON.stringify(debug.lastRequest, null, 2) : '(no payload yet)'}
+              </pre>
+            </p>
+          </div>
         </div>
       )}
 
