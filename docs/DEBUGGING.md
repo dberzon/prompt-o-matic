@@ -78,3 +78,25 @@ Optional but useful:
 - Screenshot of the Prompt output and debug panel at failure time.
 - Whether issue reproduces consistently or intermittently.
 
+## usePolish Hook Tests (jsdom)
+
+The polish hook now has dedicated Vitest coverage in:
+- `src/hooks/usePolish.test.js`
+
+Covered behaviors:
+- happy path state transition: `idle -> loading -> polished`
+- debug capture on success (`lastRequest`, `lastResponse`)
+- HTTP error handling and surfaced API error message
+- non-JSON response handling
+- dry-run behavior (`dryRun: true` skips fetch and sets `dry-run` state)
+- empty fragment short-circuit (no fetch)
+- `revert()` reset behavior
+
+Run only this test file:
+- `npx vitest run src/hooks/usePolish.test.js`
+
+Important testing convention:
+- Future hook/component tests should use jsdom test environment.
+- Add this file header to UI/hook tests:
+  - `@vitest-environment jsdom`
+
