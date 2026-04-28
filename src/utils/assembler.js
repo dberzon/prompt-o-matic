@@ -1,4 +1,5 @@
 import { REWRITES, DEFAULTS } from '../data/constants.js'
+import { resolveCharacterSlug } from './slugify.js'
 
 function normalizeFragment(text = '') {
   return String(text)
@@ -49,10 +50,10 @@ export function dedupeFragments(parts = []) {
 
 function expandCharacterTokens(raw = '', characters = {}) {
   return String(raw).replace(/@([a-z0-9][a-z0-9_-]*)/gi, (full, rawSlug) => {
-    const slug = String(rawSlug).toLowerCase()
-    const entry = characters?.[slug]
-    if (!entry) return full
-    const value = (entry.optimizedDescription || entry.rawDescription || '').trim()
+    const resolved = resolveCharacterSlug(String(rawSlug), characters)
+    if (!resolved) return full
+    const entry = characters[resolved]
+    const value = (entry?.optimizedDescription || entry?.rawDescription || '').trim()
     return value || full
   })
 }

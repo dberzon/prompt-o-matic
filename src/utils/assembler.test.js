@@ -71,3 +71,43 @@ describe('assemblePrompt', () => {
     expect(result).toContain('warm amber interior light against cold blue exterior')
   })
 })
+
+describe('rewriteScene character token backward-compat', () => {
+  it('expands @snake_token when storage uses kebab key (legacy)', async () => {
+    const { rewriteScene } = await import('./assembler.js')
+    const characters = {
+      'lena-sholk': { rawDescription: 'a woman in her 30s', optimizedDescription: '' },
+    }
+    const result = rewriteScene('@lena_sholk reads at the window', characters)
+    expect(result).toContain('a woman in her 30s')
+    expect(result).not.toContain('@lena_sholk')
+  })
+
+  it('expands @kebab-token when storage uses snake key (forward token in legacy scene text)', async () => {
+    const { rewriteScene } = await import('./assembler.js')
+    const characters = {
+      lena_sholk: { rawDescription: 'a woman in her 30s', optimizedDescription: '' },
+    }
+    const result = rewriteScene('@lena-sholk reads at the window', characters)
+    expect(result).toContain('a woman in her 30s')
+    expect(result).not.toContain('@lena-sholk')
+  })
+
+  it('leaves @token unchanged when neither form present', async () => {
+    const { rewriteScene } = await import('./assembler.js')
+    const characters = {}
+    const result = rewriteScene('@lena_sholk reads at the window', characters)
+    expect(result).toContain('@lena_sholk')
+  })
+
+  it('prefers exact match over backward-compat fallback', async () => {
+    const { rewriteScene } = await import('./assembler.js')
+    const characters = {
+      lena_sholk: { rawDescription: 'snake entry', optimizedDescription: '' },
+      'lena-sholk': { rawDescription: 'kebab entry', optimizedDescription: '' },
+    }
+    const result = rewriteScene('@lena_sholk reads', characters)
+    expect(result).toContain('snake entry')
+    expect(result).not.toContain('kebab entry')
+  })
+})

@@ -1,14 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useCharacterOptimize } from '../hooks/useCharacterOptimize.js'
+import { toSnakeSlug, withUniqueSuffix } from '../utils/slugify.js'
 import styles from './CharacterBuilder.module.css'
-
-function toSlug(input) {
-  return String(input ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-}
 
 export default function CharacterBuilder({
   characters,
@@ -32,8 +25,8 @@ export default function CharacterBuilder({
     reset,
   } = useCharacterOptimize()
 
-  const slugAuto = useMemo(() => toSlug(name), [name])
-  const slug = toSlug(slugDraft || slugAuto)
+  const slugAuto = useMemo(() => toSnakeSlug(name), [name])
+  const slug = toSnakeSlug(slugDraft || slugAuto)
   const canSave = Boolean(slug && name.trim() && (acceptedText.trim() || description.trim()))
   const orderedCharacters = useMemo(
     () => Object.values(characters).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)),
@@ -55,15 +48,33 @@ export default function CharacterBuilder({
 
   const saveCharacter = () => {
     if (!canSave) return
+    const isManualSlug = Boolean(slugDraft.trim())
+    const baseSlug = slug
+    // Auto-suffix only when slug is auto-derived. Manual override preserves
+    // the existing error-on-duplicate UX (isDuplicate hint).
+    const finalSlug = isManualSlug
+      ? baseSlug
+      : withUniqueSuffix(baseSlug, characters, name)
+    if (isManualSlug && isDuplicate) return
     const value = {
-      slug,
+      slug: finalSlug,
       name: name.trim(),
       rawDescription: description.trim(),
       optimizedDescription: (acceptedText || optimized || '').trim(),
       createdAt: Date.now(),
     }
-    setCharacters((prev) => ({ ...prev, [slug]: value }))
-    setFlash(`Saved @${slug}`)
+    setCharacters((prev) => {
+      const next = { ...prev, [finalSlug]: value }
+      // Opportunistic per-edit migration: if a kebab-equivalent of this snake
+      // slug exists with the same name, remove the old kebab entry.
+      const kebabEquivalent = finalSlug.replace(/_/g, '-')
+      if (kebabEquivalent !== finalSlug && next[kebabEquivalent]?.name === value.name) {
+        delete next[kebabEquivalent]
+      }
+      return next
+    })
+    const suffixApplied = finalSlug !== baseSlug
+    setFlash(suffixApplied ? `Saved @${finalSlug} (auto-suffixed)` : `Saved @${finalSlug}`)
     setTimeout(() => setFlash(''), 1300)
   }
 
