@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useCharacterOptimize } from '../hooks/useCharacterOptimize.js'
+import { listBankEntries, createBankEntry, updateBankEntry } from '../lib/api/characterBank.js'
 import { toSnakeSlug, withUniqueSuffix } from '../utils/slugify.js'
 import styles from './CharacterBuilder.module.css'
 
@@ -24,6 +25,31 @@ export default function CharacterBuilder({
     optimize,
     reset,
   } = useCharacterOptimize()
+  const [bankEntries, setBankEntries] = useState([])
+  const [bankSyncStatus, setBankSyncStatus] = useState({})
+  const [bankSyncError, setBankSyncError] = useState({})
+
+  useEffect(() => {
+    let cancelled = false
+    listBankEntries()
+      .then((data) => {
+        if (cancelled) return
+        const items = Array.isArray(data?.items) ? data.items : []
+        setBankEntries(items)
+        const initialStatus = {}
+        for (const slug of Object.keys(characters)) {
+          if (items.some((e) => e.slug === slug)) {
+            initialStatus[slug] = 'synced'
+          }
+        }
+        setBankSyncStatus((prev) => ({ ...initialStatus, ...prev }))
+      })
+      .catch(() => {
+        // Bank unavailable (e.g. APP_MODE=cloud or dev server not running).
+        // Sync UI stays in idle state; local-only flow continues to work.
+      })
+    return () => { cancelled = true }
+  }, [])
 
   const slugAuto = useMemo(() => toSnakeSlug(name), [name])
   const slug = toSnakeSlug(slugDraft || slugAuto)
@@ -91,6 +117,44 @@ export default function CharacterBuilder({
       const { [entry.slug]: _, ...rest } = prev
       return rest
     })
+  }
+
+  const syncCharacter = async (entry) => {
+    const slug = entry.slug
+    setBankSyncStatus((prev) => ({ ...prev, [slug]: 'syncing' }))
+    setBankSyncError((prev) => ({ ...prev, [slug]: null }))
+    try {
+      const description = (entry.rawDescription || entry.optimizedDescription || '').trim()
+      if (!description) {
+        throw new Error('Cannot sync: description is empty')
+      }
+      const optimizedDescription = (entry.optimizedDescription || '').trim()
+      const existing = bankEntries.find((e) => e.slug === slug)
+      let result
+      if (existing) {
+        result = await updateBankEntry(existing.id, {
+          name: entry.name,
+          description,
+          optimizedDescription: optimizedDescription || undefined,
+        })
+        setBankEntries((prev) => prev.map((e) => (e.id === existing.id ? result.item : e)))
+      } else {
+        result = await createBankEntry({
+          slug,
+          name: entry.name,
+          description,
+          optimizedDescription: optimizedDescription || undefined,
+        })
+        setBankEntries((prev) => [...prev, result.item])
+      }
+      setBankSyncStatus((prev) => ({ ...prev, [slug]: 'synced' }))
+    } catch (err) {
+      const message = err?.code === 'SLUG_COLLISION'
+        ? 'Slug already in bank under a different character'
+        : (err?.message || 'Sync failed')
+      setBankSyncStatus((prev) => ({ ...prev, [slug]: 'error' }))
+      setBankSyncError((prev) => ({ ...prev, [slug]: message }))
+    }
   }
 
   const copyToken = async (entry) => {
@@ -180,6 +244,19 @@ export default function CharacterBuilder({
                 <div className={styles.row}>
                   <button className={styles.btnGhost} onClick={() => loadCharacter(entry)}>Edit</button>
                   <button className={styles.btnGhost} onClick={() => removeCharacter(entry)}>Delete</button>
+                  <button
+                    className={styles.btnGhost}
+                    onClick={() => syncCharacter(entry)}
+                    disabled={bankSyncStatus[entry.slug] === 'syncing'}
+                  >
+                    {bankSyncStatus[entry.slug] === 'synced' ? '✓ Synced' : 'Sync'}
+                  </button>
+                  {bankSyncStatus[entry.slug] === 'syncing' ? (
+                    <span className={styles.empty}>Syncing…</span>
+                  ) : null}
+                  {bankSyncStatus[entry.slug] === 'error' ? (
+                    <span className={styles.error}>{bankSyncError[entry.slug] || 'Sync failed'}</span>
+                  ) : null}
                 </div>
               </div>
             ))}

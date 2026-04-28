@@ -46,3 +46,7 @@ export function apiPost(path, payload) {
   return request('POST', path, payload)
 }
 
+export function apiPut(path, payload) {
+  return request('PUT', path, payload)
+}
+
