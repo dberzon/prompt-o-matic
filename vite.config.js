@@ -27,15 +27,25 @@ import { generateCharacterPortfolioPlan, queueCharacterPortfolio } from './api/l
 import { assertComfyOperationAllowed } from './api/lib/comfy/access.js'
 import { createComfyService } from './api/lib/comfy/comfyService.js'
 import {
+  createActorAudition,
+  createActorCandidate,
   createBankEntry,
+  deleteActorAudition,
+  deleteActorCandidate,
   deleteBankEntry,
+  getActorAudition,
+  getActorCandidate,
   getBankEntry,
   getBankEntryBySlug,
   getGeneratedImageRecord,
   getPromptPack,
+  listActorAuditions,
+  listActorCandidates,
   listBankEntries,
   listCharacters,
   listGeneratedImageRecords,
+  updateActorAudition,
+  updateActorCandidate,
   updateBankEntry,
   updateGeneratedImageRecord,
 } from './api/lib/db/repositories.js'
@@ -510,6 +520,124 @@ function apiDevPlugin(env) {
         } catch (err) {
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_BANK_ERROR' })
+        } finally {
+          runtime?.close?.()
+        }
+      })
+
+      server.middlewares.use('/api/actor-candidates', async (req, res) => {
+        let runtime = null
+        try {
+          const url = new URL(req.url || '', 'http://localhost')
+          runtime = createVectorRuntime({ env })
+          if (req.method === 'GET') {
+            const id = url.searchParams.get('id')
+            if (id) {
+              const item = getActorCandidate(runtime.db, id)
+              if (!item) { sendJsonMiddleware(res, 404, { error: 'Not found' }); return }
+              sendJsonMiddleware(res, 200, { ok: true, item })
+              return
+            }
+            const filters = {
+              status: url.searchParams.get('status') || undefined,
+              sourceBankEntryId: url.searchParams.get('sourceBankEntryId') || undefined,
+              promptPackId: url.searchParams.get('promptPackId') || undefined,
+            }
+            const items = listActorCandidates(runtime.db, filters)
+            sendJsonMiddleware(res, 200, { ok: true, items })
+            return
+          }
+          if (req.method === 'POST') {
+            const body = await readJsonBody(req)
+            const item = createActorCandidate(runtime.db, body || {})
+            sendJsonMiddleware(res, 200, { ok: true, item })
+            return
+          }
+          if (req.method === 'PUT') {
+            const body = await readJsonBody(req)
+            const id = body?.id
+            if (!id) { sendJsonMiddleware(res, 400, { error: 'Missing id' }); return }
+            const { id: _ignored, ...patch } = body
+            const item = updateActorCandidate(runtime.db, id, patch)
+            if (!item) { sendJsonMiddleware(res, 404, { error: 'Not found' }); return }
+            sendJsonMiddleware(res, 200, { ok: true, item })
+            return
+          }
+          if (req.method === 'DELETE') {
+            const id = url.searchParams.get('id')
+            if (!id) { sendJsonMiddleware(res, 400, { error: 'Missing id' }); return }
+            const deleted = deleteActorCandidate(runtime.db, id)
+            if (!deleted) { sendJsonMiddleware(res, 404, { error: 'Not found' }); return }
+            sendJsonMiddleware(res, 200, { ok: true, deleted: true })
+            return
+          }
+          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'ACTOR_CANDIDATE_ERROR' })
+        } finally {
+          runtime?.close?.()
+        }
+      })
+
+      server.middlewares.use('/api/actor-auditions', async (req, res) => {
+        let runtime = null
+        try {
+          const url = new URL(req.url || '', 'http://localhost')
+          runtime = createVectorRuntime({ env })
+          if (req.method === 'GET') {
+            const id = url.searchParams.get('id')
+            if (id) {
+              const item = getActorAudition(runtime.db, id)
+              if (!item) { sendJsonMiddleware(res, 404, { error: 'Not found' }); return }
+              sendJsonMiddleware(res, 200, { ok: true, item })
+              return
+            }
+            const filters = {
+              actorCandidateId: url.searchParams.get('actorCandidateId') || undefined,
+              bankEntryId: url.searchParams.get('bankEntryId') || undefined,
+              status: url.searchParams.get('status') || undefined,
+            }
+            const items = listActorAuditions(runtime.db, filters)
+            sendJsonMiddleware(res, 200, { ok: true, items })
+            return
+          }
+          if (req.method === 'POST') {
+            const body = await readJsonBody(req)
+            try {
+              const item = createActorAudition(runtime.db, body || {})
+              sendJsonMiddleware(res, 200, { ok: true, item })
+              return
+            } catch (err) {
+              if (err?.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+                sendJsonMiddleware(res, 409, { error: 'Audition already exists for this actor and character', code: 'AUDITION_EXISTS' })
+                return
+              }
+              throw err
+            }
+          }
+          if (req.method === 'PUT') {
+            const body = await readJsonBody(req)
+            const id = body?.id
+            if (!id) { sendJsonMiddleware(res, 400, { error: 'Missing id' }); return }
+            const { id: _ignored, ...patch } = body
+            const item = updateActorAudition(runtime.db, id, patch)
+            if (!item) { sendJsonMiddleware(res, 404, { error: 'Not found' }); return }
+            sendJsonMiddleware(res, 200, { ok: true, item })
+            return
+          }
+          if (req.method === 'DELETE') {
+            const id = url.searchParams.get('id')
+            if (!id) { sendJsonMiddleware(res, 400, { error: 'Missing id' }); return }
+            const deleted = deleteActorAudition(runtime.db, id)
+            if (!deleted) { sendJsonMiddleware(res, 404, { error: 'Not found' }); return }
+            sendJsonMiddleware(res, 200, { ok: true, deleted: true })
+            return
+          }
+          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'ACTOR_AUDITION_ERROR' })
         } finally {
           runtime?.close?.()
         }

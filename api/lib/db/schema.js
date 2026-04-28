@@ -86,4 +86,38 @@ CREATE TABLE IF NOT EXISTS character_bank_entries (
 
 CREATE INDEX IF NOT EXISTS idx_character_bank_entries_slug ON character_bank_entries(slug);
 CREATE INDEX IF NOT EXISTS idx_character_bank_entries_created_at ON character_bank_entries(created_at);
+
+CREATE TABLE IF NOT EXISTS actor_candidates (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL DEFAULT 'available',
+  source_bank_entry_id TEXT,
+  prompt_pack_id TEXT,
+  notes TEXT,
+  payload_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_actor_candidates_status ON actor_candidates(status);
+CREATE INDEX IF NOT EXISTS idx_actor_candidates_source_bank_entry_id ON actor_candidates(source_bank_entry_id);
+CREATE INDEX IF NOT EXISTS idx_actor_candidates_prompt_pack_id ON actor_candidates(prompt_pack_id);
+CREATE INDEX IF NOT EXISTS idx_actor_candidates_created_at ON actor_candidates(created_at);
+
+CREATE TABLE IF NOT EXISTS actor_auditions (
+  id TEXT PRIMARY KEY,
+  actor_candidate_id TEXT NOT NULL,
+  bank_entry_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  rejected_reason TEXT,
+  similarity_score REAL,
+  notes TEXT,
+  payload_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE (actor_candidate_id, bank_entry_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_actor_auditions_actor_candidate_id ON actor_auditions(actor_candidate_id);
+CREATE INDEX IF NOT EXISTS idx_actor_auditions_bank_entry_id ON actor_auditions(bank_entry_id);
+CREATE INDEX IF NOT EXISTS idx_actor_auditions_status ON actor_auditions(status);
 `

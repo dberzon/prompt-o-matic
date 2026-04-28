@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import {
+  parseActorAudition,
+  parseActorCandidate,
   parseCharacterBankEntry,
   parseCharacterProfile,
   parseGeneratedImageRecord,
@@ -618,5 +620,181 @@ export function updateBankEntry(db, id, patch) {
 
 export function deleteBankEntry(db, id) {
   const result = db.prepare('DELETE FROM character_bank_entries WHERE id = ?').run(id)
+  return result.changes > 0
+}
+
+export function createActorCandidate(db, payload) {
+  const createdAt = payload.createdAt || nowIso()
+  const id = payload.id || randomUUID()
+  const record = parseActorCandidate({
+    ...payload,
+    id,
+    status: payload.status || 'available',
+    createdAt,
+    updatedAt: payload.updatedAt || createdAt,
+  })
+  db.prepare(`
+    INSERT INTO actor_candidates (id, status, source_bank_entry_id, prompt_pack_id, notes, payload_json, created_at, updated_at)
+    VALUES (@id, @status, @source_bank_entry_id, @prompt_pack_id, @notes, @payload_json, @created_at, @updated_at)
+  `).run({
+    id: record.id,
+    status: record.status,
+    source_bank_entry_id: record.sourceBankEntryId ?? null,
+    prompt_pack_id: record.promptPackId ?? null,
+    notes: record.notes ?? null,
+    payload_json: JSON.stringify(record),
+    created_at: record.createdAt,
+    updated_at: record.updatedAt,
+  })
+  return record
+}
+
+export function getActorCandidate(db, id) {
+  const row = db.prepare('SELECT payload_json FROM actor_candidates WHERE id = ?').get(id)
+  return rowToPayload(row)
+}
+
+export function listActorCandidates(db, filters = {}) {
+  const clauses = []
+  const values = []
+  if (filters.status) { clauses.push('status = ?'); values.push(filters.status) }
+  if (filters.sourceBankEntryId) { clauses.push('source_bank_entry_id = ?'); values.push(filters.sourceBankEntryId) }
+  if (filters.promptPackId) { clauses.push('prompt_pack_id = ?'); values.push(filters.promptPackId) }
+  const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
+  const limit = Number.isInteger(filters.limit) ? filters.limit : null
+  const limitSql = limit && limit > 0 ? 'LIMIT ?' : ''
+  if (limitSql) values.push(limit)
+  const rows = db.prepare(`
+    SELECT payload_json FROM actor_candidates
+    ${whereSql}
+    ORDER BY created_at DESC
+    ${limitSql}
+  `).all(...values)
+  return rows.map(rowToPayload)
+}
+
+export function updateActorCandidate(db, id, patch) {
+  const current = getActorCandidate(db, id)
+  if (!current) return null
+  const merged = parseActorCandidate({
+    ...current,
+    ...patch,
+    id,
+    updatedAt: nowIso(),
+  })
+  db.prepare(`
+    UPDATE actor_candidates
+    SET status = @status,
+        source_bank_entry_id = @source_bank_entry_id,
+        prompt_pack_id = @prompt_pack_id,
+        notes = @notes,
+        payload_json = @payload_json,
+        updated_at = @updated_at
+    WHERE id = @id
+  `).run({
+    id: merged.id,
+    status: merged.status,
+    source_bank_entry_id: merged.sourceBankEntryId ?? null,
+    prompt_pack_id: merged.promptPackId ?? null,
+    notes: merged.notes ?? null,
+    payload_json: JSON.stringify(merged),
+    updated_at: merged.updatedAt,
+  })
+  return merged
+}
+
+export function deleteActorCandidate(db, id) {
+  const result = db.prepare('DELETE FROM actor_candidates WHERE id = ?').run(id)
+  return result.changes > 0
+}
+
+export function createActorAudition(db, payload) {
+  const createdAt = payload.createdAt || nowIso()
+  const id = payload.id || randomUUID()
+  const record = parseActorAudition({
+    ...payload,
+    id,
+    status: payload.status || 'pending',
+    createdAt,
+    updatedAt: payload.updatedAt || createdAt,
+  })
+  db.prepare(`
+    INSERT INTO actor_auditions (id, actor_candidate_id, bank_entry_id, status, rejected_reason, similarity_score, notes, payload_json, created_at, updated_at)
+    VALUES (@id, @actor_candidate_id, @bank_entry_id, @status, @rejected_reason, @similarity_score, @notes, @payload_json, @created_at, @updated_at)
+  `).run({
+    id: record.id,
+    actor_candidate_id: record.actorCandidateId,
+    bank_entry_id: record.bankEntryId,
+    status: record.status,
+    rejected_reason: record.rejectedReason ?? null,
+    similarity_score: record.similarityScore ?? null,
+    notes: record.notes ?? null,
+    payload_json: JSON.stringify(record),
+    created_at: record.createdAt,
+    updated_at: record.updatedAt,
+  })
+  return record
+}
+
+export function getActorAudition(db, id) {
+  const row = db.prepare('SELECT payload_json FROM actor_auditions WHERE id = ?').get(id)
+  return rowToPayload(row)
+}
+
+export function listActorAuditions(db, filters = {}) {
+  const clauses = []
+  const values = []
+  if (filters.actorCandidateId) { clauses.push('actor_candidate_id = ?'); values.push(filters.actorCandidateId) }
+  if (filters.bankEntryId) { clauses.push('bank_entry_id = ?'); values.push(filters.bankEntryId) }
+  if (filters.status) { clauses.push('status = ?'); values.push(filters.status) }
+  const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
+  const limit = Number.isInteger(filters.limit) ? filters.limit : null
+  const limitSql = limit && limit > 0 ? 'LIMIT ?' : ''
+  if (limitSql) values.push(limit)
+  const rows = db.prepare(`
+    SELECT payload_json FROM actor_auditions
+    ${whereSql}
+    ORDER BY created_at DESC
+    ${limitSql}
+  `).all(...values)
+  return rows.map(rowToPayload)
+}
+
+export function updateActorAudition(db, id, patch) {
+  const current = getActorAudition(db, id)
+  if (!current) return null
+  const merged = parseActorAudition({
+    ...current,
+    ...patch,
+    id,
+    updatedAt: nowIso(),
+  })
+  db.prepare(`
+    UPDATE actor_auditions
+    SET actor_candidate_id = @actor_candidate_id,
+        bank_entry_id = @bank_entry_id,
+        status = @status,
+        rejected_reason = @rejected_reason,
+        similarity_score = @similarity_score,
+        notes = @notes,
+        payload_json = @payload_json,
+        updated_at = @updated_at
+    WHERE id = @id
+  `).run({
+    id: merged.id,
+    actor_candidate_id: merged.actorCandidateId,
+    bank_entry_id: merged.bankEntryId,
+    status: merged.status,
+    rejected_reason: merged.rejectedReason ?? null,
+    similarity_score: merged.similarityScore ?? null,
+    notes: merged.notes ?? null,
+    payload_json: JSON.stringify(merged),
+    updated_at: merged.updatedAt,
+  })
+  return merged
+}
+
+export function deleteActorAudition(db, id) {
+  const result = db.prepare('DELETE FROM actor_auditions WHERE id = ?').run(id)
   return result.changes > 0
 }

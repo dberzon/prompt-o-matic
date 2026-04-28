@@ -146,3 +146,33 @@ export const CharacterBankEntrySchema = z.object({
 export function parseCharacterBankEntry(input) {
   return CharacterBankEntrySchema.parse(input)
 }
+
+export const ActorCandidateSchema = z.object({
+  id: nonEmpty,
+  status: z.enum(['available', 'archived']),
+  sourceBankEntryId: nonEmpty.optional(),
+  promptPackId: nonEmpty.optional(),
+  notes: z.string().optional(),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+}).strict()
+
+export function parseActorCandidate(input) {
+  return ActorCandidateSchema.parse(input)
+}
+
+export const ActorAuditionSchema = z.object({
+  id: nonEmpty,
+  actorCandidateId: nonEmpty,
+  bankEntryId: nonEmpty,
+  status: z.enum(['pending', 'approved', 'rejected']),
+  rejectedReason: z.string().optional(),
+  similarityScore: z.number().optional(),
+  notes: z.string().optional(),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+}).strict()
+
+export function parseActorAudition(input) {
+  return ActorAuditionSchema.parse(input)
+}
