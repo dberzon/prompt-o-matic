@@ -116,8 +116,8 @@ describe('runPolish', () => {
   it('uses LM Studio when local provider is configured to lmstudio', async () => {
     const fetchImpl = vi.fn(async (url) => {
       const s = String(url)
-      if (s.includes('/api/tags')) {
-        return { ok: true, json: async () => ({ models: [] }) }
+      if (s.includes('/models')) {
+        return { ok: true, json: async () => ({ data: [{ id: 'qwen-local' }] }) }
       }
       if (s.includes('/chat/completions')) {
         return {

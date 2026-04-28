@@ -13,6 +13,9 @@ export default async function handler(req, res) {
       embeddedPort: req.query?.embeddedPort ? Number(req.query.embeddedPort) : null,
       embeddedSecret: typeof req.query?.embeddedSecret === 'string' ? req.query.embeddedSecret : null,
       embeddedModel: typeof req.query?.embeddedModel === 'string' ? req.query.embeddedModel : null,
+      localProvider: typeof req.query?.localProvider === 'string' ? req.query.localProvider : null,
+      lmStudioBaseUrl: typeof req.query?.lmStudioBaseUrl === 'string' ? req.query.lmStudioBaseUrl : null,
+      lmStudioModel: typeof req.query?.lmStudioModel === 'string' ? req.query.lmStudioModel : null,
     }
     const status = await healthCheck({ engine, localOnly, payload })
     return sendJsonNode(res, 200, status)

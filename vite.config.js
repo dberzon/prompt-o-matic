@@ -106,6 +106,9 @@ function apiDevPlugin(env) {
               : null,
             embeddedSecret: url.searchParams.get('embeddedSecret') || null,
             embeddedModel: url.searchParams.get('embeddedModel') || null,
+            localProvider: url.searchParams.get('localProvider') || null,
+            lmStudioBaseUrl: url.searchParams.get('lmStudioBaseUrl') || null,
+            lmStudioModel: url.searchParams.get('lmStudioModel') || null,
           }
           const result = await healthCheck({ engine, localOnly, payload, env })
           sendJsonMiddleware(res, 200, result)

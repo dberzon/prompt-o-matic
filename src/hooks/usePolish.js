@@ -26,6 +26,10 @@ export function usePolish() {
     embeddedPort = null,
     embeddedSecret = null,
     embeddedModel = null,
+    localProvider = null,
+    lmStudioBaseUrl = null,
+    lmStudioModel = null,
+    cloudProvider = null,
   }) => {
     if (!fragments || fragments.length === 0) return
 
@@ -44,6 +48,10 @@ export function usePolish() {
       embeddedPort,
       embeddedSecret,
       embeddedModel,
+      localProvider,
+      lmStudioBaseUrl,
+      lmStudioModel,
+      cloudProvider,
     }
 
     if (dryRun) {
@@ -123,6 +131,9 @@ export function usePolish() {
     embeddedPort = null,
     embeddedSecret = null,
     embeddedModel = null,
+    localProvider = null,
+    lmStudioBaseUrl = null,
+    lmStudioModel = null,
   } = {}) => {
     const search = new URLSearchParams({
       engine,
@@ -131,6 +142,9 @@ export function usePolish() {
     if (embeddedPort) search.set('embeddedPort', String(embeddedPort))
     if (embeddedSecret) search.set('embeddedSecret', String(embeddedSecret))
     if (embeddedModel) search.set('embeddedModel', String(embeddedModel))
+    if (localProvider) search.set('localProvider', String(localProvider))
+    if (lmStudioBaseUrl) search.set('lmStudioBaseUrl', String(lmStudioBaseUrl))
+    if (lmStudioModel) search.set('lmStudioModel', String(lmStudioModel))
     const response = await fetch(`/api/polish-health?${search.toString()}`)
     const data = await response.json()
     if (!response.ok) {

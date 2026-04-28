@@ -8,6 +8,10 @@ import styles from './PromptOutput.module.css'
 const DEFAULT_FRONT_PREFIX = 'photorealistic film still'
 const HISTORY_KEY = 'qpb_prompt_history_v1'
 const HISTORY_LIMIT = 12
+const LOCAL_PROVIDER_KEY = 'qpb_local_provider_v1'
+const LMSTUDIO_HOST_KEY = 'qpb_lmstudio_host_v1'
+const LMSTUDIO_PORT_KEY = 'qpb_lmstudio_port_v1'
+const LMSTUDIO_MODEL_KEY = 'qpb_lmstudio_model_v1'
 
 function readHistory() {
   try {
@@ -17,6 +21,15 @@ function readHistory() {
     return Array.isArray(parsed) ? parsed : []
   } catch {
     return []
+  }
+}
+
+function readLocalSetting(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key)
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : fallback
+  } catch {
+    return fallback
   }
 }
 
@@ -83,7 +96,19 @@ export default function PromptOutput({
   const [showQualityHints, setShowQualityHints] = useState(false)
   const [health, setHealth] = useState(null)
   const [healthError, setHealthError] = useState('')
+  const [localProvider, setLocalProvider] = useState(() => readLocalSetting(LOCAL_PROVIDER_KEY, 'ollama'))
+  const [lmStudioHost, setLmStudioHost] = useState(() => readLocalSetting(LMSTUDIO_HOST_KEY, '127.0.0.1'))
+  const [lmStudioPort, setLmStudioPort] = useState(() => readLocalSetting(LMSTUDIO_PORT_KEY, '1234'))
+  const [lmStudioModel, setLmStudioModel] = useState(() => readLocalSetting(LMSTUDIO_MODEL_KEY, 'qwen-local'))
+  const [lmStudioValidation, setLmStudioValidation] = useState({ status: 'idle', message: '' })
   const { state, polished, error, debug, polish, revert, checkHealth } = usePolish()
+
+  const lmStudioBaseUrl = useMemo(() => {
+    const host = (lmStudioHost || '').trim()
+    const port = (lmStudioPort || '').trim()
+    if (!host || !port) return ''
+    return `http://${host}:${port}/v1`
+  }, [lmStudioHost, lmStudioPort])
 
   const hasContent = prompt.length > 0
   const isAssembled = !!(scene?.trim() || scenario)
@@ -137,9 +162,12 @@ export default function PromptOutput({
       try {
         const info = await checkHealth({
           engine: aiEngine,
-          localOnly,
+          localOnly: aiEngine === 'cloud' ? false : localOnly,
           embeddedPort: embeddedStatus?.port ?? null,
           embeddedSecret: embeddedStatus?.secret ?? null,
+          localProvider,
+          lmStudioBaseUrl: localProvider === 'lmstudio' ? lmStudioBaseUrl : null,
+          lmStudioModel: localProvider === 'lmstudio' ? lmStudioModel : null,
         })
         if (!active) return
         setHealth(info)
@@ -152,7 +180,23 @@ export default function PromptOutput({
     }
     run()
     return () => { active = false }
-  }, [aiEngine, localOnly, embeddedStatus, checkHealth])
+  }, [aiEngine, localOnly, embeddedStatus, checkHealth, localProvider, lmStudioBaseUrl, lmStudioModel])
+
+  useEffect(() => {
+    localStorage.setItem(LOCAL_PROVIDER_KEY, localProvider)
+  }, [localProvider])
+
+  useEffect(() => {
+    localStorage.setItem(LMSTUDIO_HOST_KEY, lmStudioHost)
+  }, [lmStudioHost])
+
+  useEffect(() => {
+    localStorage.setItem(LMSTUDIO_PORT_KEY, lmStudioPort)
+  }, [lmStudioPort])
+
+  useEffect(() => {
+    localStorage.setItem(LMSTUDIO_MODEL_KEY, lmStudioModel)
+  }, [lmStudioModel])
 
   const handleExportTxt = useCallback(() => {
     downloadPromptTxt({
@@ -177,6 +221,10 @@ export default function PromptOutput({
       dryRun,
       embeddedPort: embeddedStatus?.port ?? null,
       embeddedSecret: embeddedStatus?.secret ?? null,
+      localProvider,
+      lmStudioBaseUrl: localProvider === 'lmstudio' ? lmStudioBaseUrl : null,
+      lmStudioModel: localProvider === 'lmstudio' ? lmStudioModel : null,
+      cloudProvider: aiEngine === 'cloud' ? 'claude' : null,
     })
   }
 
@@ -224,12 +272,15 @@ export default function PromptOutput({
     dryRun,
     selectedEngine: debug?.lastRequest?.engine ?? aiEngine,
     localOnly: debug?.lastRequest?.localOnly ?? localOnly,
+    localProvider: debug?.lastRequest?.localProvider ?? localProvider,
+    lmStudioBaseUrl: debug?.lastRequest?.lmStudioBaseUrl ?? (localProvider === 'lmstudio' ? lmStudioBaseUrl : null),
+    lmStudioModel: debug?.lastRequest?.lmStudioModel ?? (localProvider === 'lmstudio' ? lmStudioModel : null),
     provider: debug?.lastResponse?.provider ?? null,
     fallback: debug?.lastResponse?.fallback ?? null,
     lastError: debug?.lastError ?? error ?? null,
     lastRequest: debug?.lastRequest ?? null,
     lastResponse: debug?.lastResponse ?? null,
-  }), [assembledText, state, dryRun, debug, aiEngine, localOnly, error])
+  }), [assembledText, state, dryRun, debug, aiEngine, localOnly, localProvider, lmStudioBaseUrl, lmStudioModel, error])
 
   const handleCopyDebugJson = useCallback(async () => {
     try {
@@ -253,6 +304,30 @@ export default function PromptOutput({
       setTimeout(() => setShareState('idle'), 2000)
     }
   }
+
+  const handleValidateLmStudio = useCallback(async () => {
+    if (!lmStudioBaseUrl) {
+      setLmStudioValidation({ status: 'error', message: 'Set LM Studio host and port first.' })
+      return
+    }
+    setLmStudioValidation({ status: 'loading', message: 'Checking LM Studio...' })
+    try {
+      const info = await checkHealth({
+        engine: 'local',
+        localOnly: true,
+        localProvider: 'lmstudio',
+        lmStudioBaseUrl,
+        lmStudioModel,
+      })
+      if (info?.lmstudio?.available) {
+        setLmStudioValidation({ status: 'ok', message: `LM Studio reachable at ${info.lmstudio.baseUrl}` })
+      } else {
+        setLmStudioValidation({ status: 'error', message: 'LM Studio not reachable. Check IP/port and LAN access.' })
+      }
+    } catch (err) {
+      setLmStudioValidation({ status: 'error', message: err?.message || 'LM Studio validation failed.' })
+    }
+  }, [checkHealth, lmStudioBaseUrl, lmStudioModel])
 
   // Status badge
   const badge = hasVariantOverride
@@ -356,6 +431,22 @@ export default function PromptOutput({
     || value === ''
     || value == null
   )
+
+  const effectiveProviderLabel = useMemo(() => {
+    const provider = debug?.lastResponse?.provider
+    const lastRequest = debug?.lastRequest || {}
+    if (!provider) return 'n/a'
+    if (provider === 'cloud') {
+      const cloudProvider = String(lastRequest.cloudProvider || '').toLowerCase()
+      return cloudProvider ? `cloud/${cloudProvider}` : 'cloud/claude'
+    }
+    if (provider === 'local') {
+      const localProviderName = String(lastRequest.localProvider || '').toLowerCase()
+      return localProviderName ? `local/${localProviderName}` : 'local/ollama'
+    }
+    if (provider === 'embedded') return 'embedded/sidecar'
+    return String(provider)
+  }, [debug])
 
   return (
     <div className={styles.wrap}>
@@ -505,14 +596,87 @@ export default function PromptOutput({
         </div>
       )}
 
+      <div className={styles.prefixRow}>
+        <label className={styles.prefixToggle}>
+          <span>Local provider:</span>
+          <select
+            value={localProvider}
+            onChange={(e) => setLocalProvider(e.target.value)}
+            disabled={state === 'loading'}
+            style={{ marginLeft: 8 }}
+          >
+            <option value="ollama">Ollama</option>
+            <option value="lmstudio">LM Studio</option>
+            <option value="mock">Mock</option>
+          </select>
+        </label>
+      </div>
+
+      {localProvider === 'lmstudio' && (
+        <>
+          <div className={styles.prefixRow}>
+            <label className={styles.prefixToggle}>
+              <span>LM Studio host:</span>
+              <input
+                value={lmStudioHost}
+                onChange={(e) => setLmStudioHost(e.target.value)}
+                placeholder="192.168.1.50"
+                disabled={state === 'loading'}
+                style={{ marginLeft: 8 }}
+              />
+            </label>
+            <label className={styles.prefixToggle}>
+              <span>Port:</span>
+              <input
+                value={lmStudioPort}
+                onChange={(e) => setLmStudioPort(e.target.value)}
+                placeholder="1234"
+                disabled={state === 'loading'}
+                style={{ marginLeft: 8, width: 80 }}
+              />
+            </label>
+            <label className={styles.prefixToggle}>
+              <span>Model:</span>
+              <input
+                value={lmStudioModel}
+                onChange={(e) => setLmStudioModel(e.target.value)}
+                placeholder="qwen-local"
+                disabled={state === 'loading'}
+                style={{ marginLeft: 8 }}
+              />
+            </label>
+            <button
+              className={styles.revertBtn}
+              onClick={handleValidateLmStudio}
+              disabled={lmStudioValidation.status === 'loading'}
+            >
+              {lmStudioValidation.status === 'loading' ? 'Validating...' : 'Validate LM Studio'}
+            </button>
+          </div>
+          <p className={styles.engineHint}>
+            LM Studio URL: {lmStudioBaseUrl || '(set host and port)'}
+          </p>
+          {lmStudioValidation.message && (
+            <p className={styles.engineHint}>
+              {lmStudioValidation.status === 'ok' ? 'Connected: ' : 'Validation: '}
+              {lmStudioValidation.message}
+            </p>
+          )}
+        </>
+      )}
+
       {healthError ? (
         <p className={styles.engineHint}>Engine check failed: {healthError}</p>
       ) : (
         <p className={styles.engineHint}>
           {health?.provider === 'local'
-            ? health?.local?.installed
-              ? 'Using local Ollama model.'
-              : 'Ollama is running, but model missing. Run: ollama pull qwen2.5:7b-instruct'
+            ? health?.local?.provider === 'lmstudio'
+              ? health?.local?.available
+                ? `Using LM Studio at ${health?.local?.baseUrl || 'configured URL'}.`
+                : 'LM Studio unavailable at configured URL. Check host/port and LAN reachability.'
+              : health?.local?.installed
+                ? 'Using local Ollama model.'
+                : 'Ollama is running, but model missing. Run: ollama pull qwen2.5:7b-instruct'
             : health?.provider === 'embedded'
               ? health?.embedded?.ready
                 ? 'Using embedded sidecar model.'
@@ -521,9 +685,12 @@ export default function PromptOutput({
               ? 'Local unavailable; automatically falling back to cloud.'
               : localOnly
                 ? 'Local-only mode active. Cloud fallback disabled.'
-              : 'Using cloud provider.'}
+              : 'Using cloud provider (Claude API).'}
         </p>
       )}
+      <p className={styles.engineHint}>
+        Effective provider (last request): {effectiveProviderLabel}
+      </p>
 
       {isDev && (
         <div className={styles.debugPanel} style={debugTheme.panel}>

@@ -1,8 +1,8 @@
 import { DEFAULT_LMSTUDIO_MODEL, DEFAULT_LMSTUDIO_URL, envRead } from './shared.js'
 
-export async function lmStudioProvider({ userMessage, fetchImpl, env, systemPrompt }) {
-  const baseUrl = (envRead(env, 'LMSTUDIO_BASE_URL') || DEFAULT_LMSTUDIO_URL).replace(/\/+$/, '')
-  const model = envRead(env, 'LMSTUDIO_MODEL') || DEFAULT_LMSTUDIO_MODEL
+export async function lmStudioProvider({ userMessage, fetchImpl, env, payload = {}, systemPrompt }) {
+  const baseUrl = String(payload?.lmStudioBaseUrl || envRead(env, 'LMSTUDIO_BASE_URL') || DEFAULT_LMSTUDIO_URL).replace(/\/+$/, '')
+  const model = payload?.lmStudioModel || envRead(env, 'LMSTUDIO_MODEL') || DEFAULT_LMSTUDIO_MODEL
   const timeoutMs = Number.parseInt(envRead(env, 'LMSTUDIO_TIMEOUT_MS') || '45000', 10)
 
   const controller = new AbortController()

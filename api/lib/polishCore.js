@@ -210,8 +210,8 @@ async function probeEmbedded(payload, fetchImpl) {
   }
 }
 
-async function probeLmStudio(fetchImpl, env) {
-  const baseUrl = (envRead(env, 'LMSTUDIO_BASE_URL') || DEFAULT_LMSTUDIO_URL).replace(/\/+$/, '')
+async function probeLmStudio(fetchImpl, env, payload = {}) {
+  const baseUrl = String(payload?.lmStudioBaseUrl || envRead(env, 'LMSTUDIO_BASE_URL') || DEFAULT_LMSTUDIO_URL).replace(/\/+$/, '')
   const timeoutMs = Number.parseInt(envRead(env, 'LMSTUDIO_TIMEOUT_MS') || '8000', 10)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), Number.isFinite(timeoutMs) ? timeoutMs : 8000)
@@ -227,6 +227,22 @@ async function probeLmStudio(fetchImpl, env) {
   }
 }
 
+async function probeOllama(fetchImpl, env) {
+  const baseUrl = (envRead(env, 'OLLAMA_BASE_URL') || DEFAULT_OLLAMA_URL).replace(/\/+$/, '')
+  try {
+    const response = await fetchImpl(`${baseUrl}/api/tags`)
+    return response.ok
+  } catch {
+    return false
+  }
+}
+
+function normalizeLocalProvider(input, env) {
+  const raw = String(input || envRead(env, 'LLM_PROVIDER') || '').toLowerCase()
+  if (raw === 'lmstudio' || raw === 'mock' || raw === 'ollama') return raw
+  return 'ollama'
+}
+
 function normalizeLocalOnly(input) {
   return input === true || input === '1' || input === 'true'
 }
@@ -234,6 +250,7 @@ function normalizeLocalOnly(input) {
 export async function resolveProviderSelection({ engine, localOnly = false, fetchImpl, env, payload = {} }) {
   const normalizedEngine = normalizeEngine(engine)
   const strictLocalOnly = normalizeLocalOnly(localOnly)
+  const localProvider = normalizeLocalProvider(payload?.localProvider, env)
   const defaultRaw = envRead(env, 'LLM_PROVIDER')
   const defaultProvider = defaultRaw === 'embedded' || defaultRaw === 'ollama' || defaultRaw === 'lmstudio' || defaultRaw === 'mock' ? 'local' : 'cloud'
   const selected = normalizedEngine === 'auto' ? defaultProvider : normalizedEngine
@@ -262,17 +279,24 @@ export async function resolveProviderSelection({ engine, localOnly = false, fetc
   }
 
   if (selected === 'local') {
-    try {
-      await fetchImpl(`${(envRead(env, 'OLLAMA_BASE_URL') || DEFAULT_OLLAMA_URL).replace(/\/+$/, '')}/api/tags`)
+    const isAvailable = localProvider === 'lmstudio'
+      ? await probeLmStudio(fetchImpl, env, payload)
+      : localProvider === 'mock'
+        ? true
+        : await probeOllama(fetchImpl, env)
+    if (isAvailable) {
       return { provider: 'local', resolvedFrom: normalizedEngine }
-    } catch {
-      if (normalizedEngine === 'local' || strictLocalOnly) {
-        const err = new Error('Local provider requested but Ollama is unavailable')
-        err.status = 503
-        throw err
-      }
-      return { provider: 'cloud', resolvedFrom: normalizedEngine, fallback: 'local-unavailable' }
     }
+    if (normalizedEngine === 'local' || strictLocalOnly) {
+      const err = new Error(
+        localProvider === 'lmstudio'
+          ? 'Local provider requested but LM Studio is unavailable'
+          : 'Local provider requested but Ollama is unavailable'
+      )
+      err.status = 503
+      throw err
+    }
+    return { provider: 'cloud', resolvedFrom: normalizedEngine, fallback: 'local-unavailable' }
   }
   return { provider: 'cloud', resolvedFrom: normalizedEngine }
 }
@@ -291,7 +315,7 @@ export async function runWithResolvedProvider({
   if (provider === 'local') {
     const configuredProvider = String(payload?.localProvider || envRead(env, 'LLM_PROVIDER') || '').toLowerCase()
     if (configuredProvider === 'lmstudio') {
-      return lmStudioProvider({ userMessage, fetchImpl, env, systemPrompt })
+      return lmStudioProvider({ userMessage, fetchImpl, env, payload, systemPrompt })
     }
     if (configuredProvider === 'mock') {
       return mockProvider({ userMessage, fetchImpl, env, payload, systemPrompt })
@@ -349,7 +373,9 @@ export async function healthCheck({
   env = process.env,
 }) {
   const providerSelection = await resolveProviderSelection({ engine, localOnly, fetchImpl, env, payload })
+  const localProvider = normalizeLocalProvider(payload?.localProvider, env)
   const ollamaBaseUrl = (envRead(env, 'OLLAMA_BASE_URL') || DEFAULT_OLLAMA_URL).replace(/\/+$/, '')
+  const lmStudioBaseUrl = String(payload?.lmStudioBaseUrl || envRead(env, 'LMSTUDIO_BASE_URL') || DEFAULT_LMSTUDIO_URL).replace(/\/+$/, '')
   let local = { available: false, model: envRead(env, 'OLLAMA_MODEL') || DEFAULT_OLLAMA_MODEL }
 
   try {
@@ -368,7 +394,24 @@ export async function healthCheck({
   }
 
   const embeddedAvailable = await probeEmbedded(payload, fetchImpl)
-  const lmStudioAvailable = await probeLmStudio(fetchImpl, env)
+  const lmStudioAvailable = await probeLmStudio(fetchImpl, env, payload)
+
+  if (localProvider === 'lmstudio') {
+    local = {
+      available: lmStudioAvailable,
+      provider: 'lmstudio',
+      baseUrl: lmStudioBaseUrl,
+      model: payload?.lmStudioModel || envRead(env, 'LMSTUDIO_MODEL') || 'qwen-local',
+    }
+  } else if (localProvider === 'mock') {
+    local = {
+      available: true,
+      provider: 'mock',
+      model: payload?.mockResponse ? 'inline-mock' : 'mock',
+    }
+  } else {
+    local = { ...local, provider: 'ollama', baseUrl: ollamaBaseUrl }
+  }
 
   return {
     engine: normalizeEngine(engine),
@@ -378,7 +421,7 @@ export async function healthCheck({
     local,
     lmstudio: {
       available: lmStudioAvailable,
-      baseUrl: (envRead(env, 'LMSTUDIO_BASE_URL') || DEFAULT_LMSTUDIO_URL).replace(/\/+$/, ''),
+      baseUrl: lmStudioBaseUrl,
     },
     embedded: {
       available: embeddedAvailable,
