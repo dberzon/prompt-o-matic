@@ -1,14 +1,16 @@
 # Qwen Prompt Builder
 
-Cinematic prompt builder for [Qwen image generation](https://chat.qwen.ai). Director-register interaction scenarios, technical parameter chips, and scene assembly for photorealistic, non-CGI outputs in the aesthetic register of Tarkovsky, Kubrick, Lynch, Jarmusch, and 21 other directors.
+Cinematic prompt builder for [Qwen image generation](https://chat.qwen.ai). Director-register interaction scenarios, technical parameter chips, and scene assembly for photorealistic, non-CGI outputs in the aesthetic register of Tarkovsky, Kubrick, Lynch, Jarmusch, and 56 other directors.
 
 ## Documentation
 
 - Technical developer handoff: [docs/TECHNICAL.md](docs/TECHNICAL.md)
+- Project context and flow: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), [docs/TAKEOVER_FLOW.md](docs/TAKEOVER_FLOW.md)
+- Debugging and dev panel: [docs/DEBUGGING.md](docs/DEBUGGING.md)
 
 ## Features
 
-- **25 directors** — each with unique interaction scenarios for 1, 2, or 3 characters
+- **60 directors** — each with unique interaction scenarios for 1, 2, or 3 characters
 - **Character engine** — configurable gender + age, scenarios auto-rewrite with your characters
 - **Scene description** — plain-language input automatically expanded into cinematic material language
 - **Technical chips** — shot, lens, environment, texture, light, palette, film stock, qualifiers
@@ -593,20 +595,52 @@ npm run preview    # preview the production build locally
 ```
 src/
 ├── data/
-│   ├── directors.js   — 25 directors, scenarios for 1/2/3 characters
+│   ├── directors.js   — 60 directors, scenarios for 1/2/3 characters
 │   ├── chips.js       — all chip groups + negative prompt
-│   └── constants.js   — rewrites, defaults, presets
+│   ├── constants.js   — rewrites, defaults, presets
+│   ├── sceneBank.js   — director scene-bank entries (style keys, hints)
+│   └── sceneDeck.js   — curated scene starting points
 ├── utils/
-│   └── assembler.js   — prompt assembly logic, scene rewriter, char descriptors
+│   ├── assembler.js       — prompt assembly, scene rewriter, char descriptors
+│   ├── promptRules.js     — rule validation + auto-fix suggestions
+│   ├── variants.js        — generates prompt variants
+│   ├── qualityScore.js    — heuristic prompt quality score
+│   ├── sceneScaffold.js   — scaffold generator for scene composition
+│   ├── sceneSearch.js     — scene-bank search/match
+│   ├── slugify.js         — snake_case slugs + collision suffix for @-tokens
+│   └── downloadPromptFile.js — export prompt as .txt
+├── hooks/
+│   ├── usePolish.js              — /api/polish request + dev debug capture
+│   ├── useCharacterOptimize.js   — /api/optimize-character flow
+│   └── useWorkspaceHistory.js    — undo/redo + recent prompts
+├── lib/
+│   ├── api/                  — typed client wrappers for /api/* routes
+│   └── embeddedRuntime.js    — Tauri sidecar bridge
 ├── components/
 │   ├── Header.jsx
 │   ├── SceneInput.jsx
+│   ├── SceneScaffold.jsx
+│   ├── SceneDeck.jsx
+│   ├── SceneMatcher.jsx
 │   ├── DirectorSection.jsx
 │   ├── ChipSection.jsx
-│   └── PromptOutput.jsx
+│   ├── PromptOutput.jsx
+│   ├── ReferenceBoard.jsx
+│   ├── CommandPalette.jsx
+│   ├── BatchExplorer.jsx
+│   ├── EmbeddedSetup.jsx
+│   ├── CharacterBuilder.jsx        — Character Builder tab
+│   └── CastingPipelinePanel.jsx    — Casting Room tab (operator pipeline)
 ├── App.jsx
 └── index.css
+
+api/
+├── *.js               — serverless route handlers
+└── lib/               — domain logic (polish, characters, prompts, comfy,
+                        portfolio, generatedImages, vector, db, llm/providers)
 ```
+
+The app exposes three tabs in `App.jsx`: **Prompt Builder**, **Character Builder**, **Casting Room** (operator pipeline panel).
 
 ## Extending
 

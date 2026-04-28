@@ -6,6 +6,25 @@ Constraint check: no source/test/config changes; this document is the only deliv
 
 ---
 
+## Status update (current)
+
+The original document below was a discovery snapshot. Since then, parts of the phase plan have shipped. Updates as of the current code state:
+
+- **Phase 1 — DONE.** Tab labels in `src/App.jsx` are now `"Character Builder"` and `"Casting Room"` (`src/App.jsx:715–724`). The `CastingPipelinePanel` component and `'pipeline'` tab key are still used internally to keep route/state names stable.
+- **Phase 2 — substantially DONE for slug/token surface.** A reusable utility now exists at `src/utils/slugify.js` (`toSnakeSlug`, `withUniqueSuffix`, `resolveCharacterSlug`). `CharacterBuilder.jsx` writes snake_case slugs with auto-suffix collision handling and a duplicate guard. `assembler.js` resolves both snake_case and kebab-case `@token` references for backward compatibility (`src/utils/assembler.js:51–58`). The "explicit character bank contract" piece is still local-storage backed.
+- **Phase 3 — OPEN.** Character Builder still persists to `localStorage` (`qpb_characters_v1`); no DB-backed `/api/character` create/read endpoint added yet.
+- **Phase 4–6 — OPEN** as originally described.
+
+Open question status (compared to §I below):
+
+- Q3 (tag format) — resolved as snake_case (`@lena_sholk`).
+- Q5 (rename scope) — resolved as Option A (UI text only; internal API/component identifiers unchanged).
+- Other questions remain open.
+
+The factual sections below (A.3, F.4, G) were correct at the time of discovery; later corrections appear inline as **[Updated]** notes so the original evidence anchors are preserved.
+
+---
+
 ## A) Existing tab structure
 
 ### A.1 Current tab implementation location
@@ -26,6 +45,8 @@ Constraint check: no source/test/config changes; this document is the only deliv
 - The string `"Character Builder"` exists as an internal section heading `<h2>Character Builder</h2>` inside the tab content component (`src/components/CharacterBuilder.jsx:L100`).
 - A tab label `"Casting Room"` is currently **absent**; current tab label is `"Pipeline"` (`src/App.jsx:L724`).
 - Inside the panel, heading is also `"Pipeline"` (`src/components/CastingPipelinePanel.jsx:L431`).
+
+**[Updated]** Tab labels are now `"Character Builder"` and `"Casting Room"` in `src/App.jsx:718` and `src/App.jsx:724`. The `CastingPipelinePanel` component and the `'pipeline'` tab state key are unchanged.
 
 ---
 
@@ -267,18 +288,28 @@ Workflow node mapping does not change by view:
 - A reusable utility named `slugify` is **NOT FOUND in repo**.
 - Existing slug behavior appears duplicated ad hoc (e.g., `toSlug` in `CharacterBuilder`, plus separate hyphen key builders in `App.jsx`) (`src/components/CharacterBuilder.jsx:L5-L11`, `src/App.jsx:L404`, `src/App.jsx:L622`).
 
+**[Updated]** A reusable utility now exists at `src/utils/slugify.js` and exports:
+
+- `toSnakeSlug(input)` — snake_case normalization,
+- `withUniqueSuffix(baseSlug, characters, currentName)` — deterministic numeric suffix to avoid collisions,
+- `resolveCharacterSlug(slug, characters)` — exact match first, then snake↔kebab compatibility for backward-compatible `@token` lookup.
+
+`CharacterBuilder.jsx` consumes `toSnakeSlug` + `withUniqueSuffix` for save flow, and `assembler.js` uses `resolveCharacterSlug` for token expansion (`src/utils/assembler.js:51–58`).
+
 ---
 
 ## G) Gap analysis (delta table)
 
 Legend: `Exists` = implemented end-to-end; `Partial` = some infrastructure exists but does not meet requested behavior; `Missing` = no supporting flow found.
 
+**[Updated]** Rows 2, 3, 4 below have changed since the discovery snapshot. See the "Status update (current)" section at the top.
+
 | Capability | Current State | Evidence and one-line note |
 |---|---|---|
 | 1) Save character with name + description | Partial | UI saves `name`, `rawDescription`, `optimizedDescription` in localStorage-backed map, not SQLite-backed canonical character flow (`src/components/CharacterBuilder.jsx:L58-L66`, `src/App.jsx:L194`, `src/App.jsx:L214-L216`). |
-| 2) Generate @slug-style tag from name | Partial | UI auto-derives slug from name and surfaces `@slug`, but uses kebab-case (`-`) not requested snake-style sample (`_`) (`src/components/CharacterBuilder.jsx:L5-L11`, `src/components/CharacterBuilder.jsx:L35-L37`, `src/components/CharacterBuilder.jsx:L66`). |
-| 3) Tab labeled "Character Builder" | Missing | Tab label is `"Characters"`; `"Character Builder"` exists only inside panel heading (`src/App.jsx:L715-L719`, `src/components/CharacterBuilder.jsx:L100`). |
-| 4) Tab labeled "Casting Room" (or current name if "Pipeline") | Partial | Existing tab/panel is named `"Pipeline"` and already hosts audition-like batch/candidate tooling (`src/App.jsx:L721-L725`, `src/components/CastingPipelinePanel.jsx:L431`, `src/components/CastingPipelinePanel.jsx:L471-L488`). |
+| 2) Generate @slug-style tag from name | ~~Partial~~ **Exists (snake_case)** | `toSnakeSlug` + `withUniqueSuffix` in `src/utils/slugify.js`; consumed by `CharacterBuilder.jsx`; backward-compatible token lookup via `resolveCharacterSlug` in `assembler.js`. |
+| 3) Tab labeled "Character Builder" | ~~Missing~~ **Exists** | Tab button label is now `"Character Builder"` (`src/App.jsx:718`). |
+| 4) Tab labeled "Casting Room" (or current name if "Pipeline") | ~~Partial~~ **Exists (UI label only)** | Tab button label is now `"Casting Room"` (`src/App.jsx:724`). Internal component name (`CastingPipelinePanel`) and tab state key (`'pipeline'`) are unchanged by design (Q5 → Option A). |
 | 5) Character dropdown populated from DB | Exists | Pipeline panel loads `/api/characters` and populates selectable saved character IDs (`src/components/CastingPipelinePanel.jsx:L99-L109`, `src/components/CastingPipelinePanel.jsx:L501-L509`). |
 | 6) Generate front-view headshot for a character | Exists | Compiler defaults to `front_portrait`; portfolio and queue APIs support front view generation and ingest (`src/lib/api/promptPacks.js:L6`, `api/lib/prompts/qwenPromptCompiler.js:L46-L54`, `src/components/CastingPipelinePanel.jsx:L267`). |
 | 7) Generate side-view headshot for a character | Partial | `profile_portrait` is supported in backend and selectable in portfolio UI, but no hardwired dedicated "side headshot pair" audition unit (`api/lib/prompts/qwenPromptCompiler.js:L64-L72`, `api/lib/portfolio/characterPortfolio.js:L5-L12`, `src/components/CastingPipelinePanel.jsx:L69-L75`). |
@@ -292,7 +323,9 @@ Legend: `Exists` = implemented end-to-end; `Partial` = some infrastructure exist
 
 Design principle: smallest reversible UI-label/data-contract changes first; schema and flow changes after alignment questions are answered.
 
-### Phase 1
+### Phase 1 — DONE
+
+Shipped in commits `97ce821` (rename pipeline UI labels to Casting Room) and `8b8c6b4` (rename Characters tab to Character Builder).
 
 1. Goal: rename user-facing tab/panel labels from `"Pipeline"` to `"Casting Room"` without changing backend route names.
 2. Files expected to change:
@@ -305,7 +338,9 @@ Design principle: smallest reversible UI-label/data-contract changes first; sche
 4. Risk: Low — string-only UI changes with no data-path impact.
 5. Reversible: Yes — simple text revert.
 
-### Phase 2
+### Phase 2 — Substantially DONE (slug/token surface)
+
+Slug + `@token` parts shipped in commit `261e8b3` (snake_case character slugs with backward-compat token lookup). Persistence is still localStorage-backed; full DB-backed bank moves to Phase 3.
 
 1. Goal: align Character Builder UX and persistence contract to `name + free-text description + auto tag` with explicit bank semantics.
 2. Files expected to change:
