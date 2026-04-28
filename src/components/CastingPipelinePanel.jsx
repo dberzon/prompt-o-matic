@@ -25,6 +25,7 @@ import {
   rejectGeneratedImage,
 } from '../lib/api/generatedImages.js'
 import { buildCharacterPortfolioPlan, queueCharacterPortfolio } from '../lib/api/portfolio.js'
+import { listBankEntries } from '../lib/api/characterBank.js'
 import styles from './CastingPipelinePanel.module.css'
 
 function ErrorBanner({ message }) {
@@ -78,6 +79,14 @@ export default function CastingPipelinePanel() {
   const [portfolioJobs, setPortfolioJobs] = useState([])
   const [portfolioJobsStatus, setPortfolioJobsStatus] = useState(null)
   const [portfolioIngestResult, setPortfolioIngestResult] = useState(null)
+  const [bankEntries, setBankEntries] = useState([])
+  const [selectedBankEntryId, setSelectedBankEntryId] = useState('')
+  const [bankLoadError, setBankLoadError] = useState(null)
+
+  const selectedBankEntry = useMemo(
+    () => bankEntries.find((entry) => entry.id === selectedBankEntryId) || null,
+    [bankEntries, selectedBankEntryId]
+  )
 
   const selectableWorkflows = useMemo(() => {
     if (showInvalidWorkflows) return workflows
@@ -138,6 +147,22 @@ export default function CastingPipelinePanel() {
 
   useEffect(() => {
     initialLoad()
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    listBankEntries()
+      .then((data) => {
+        if (cancelled) return
+        const items = Array.isArray(data?.items) ? data.items : []
+        setBankEntries(items)
+        setBankLoadError(null)
+      })
+      .catch((err) => {
+        if (cancelled) return
+        setBankLoadError(err?.message || 'Failed to load bank entries')
+      })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -433,6 +458,42 @@ export default function CastingPipelinePanel() {
       {loading && <div className={styles.subtle}>Loading...</div>}
       <ErrorBanner message={error} />
       <SuccessBanner message={success} />
+
+      <section className={styles.section}>
+        <h3>Cast from Bank</h3>
+        {bankLoadError && (
+          <div className={styles.subtle}>Bank unavailable: {bankLoadError}</div>
+        )}
+        {!bankLoadError && bankEntries.length === 0 && (
+          <div className={styles.subtle}>
+            No bank characters yet. Sync characters from the Character Builder tab to populate this list.
+          </div>
+        )}
+        {!bankLoadError && bankEntries.length > 0 && (
+          <>
+            <div className={styles.row}>
+              <select
+                value={selectedBankEntryId}
+                onChange={(e) => setSelectedBankEntryId(e.target.value)}
+                className={styles.select}
+              >
+                <option value="">Select a character...</option>
+                {bankEntries.map((entry) => (
+                  <option key={entry.id} value={entry.id}>
+                    @{entry.slug} — {entry.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedBankEntry && (
+              <div className={styles.subtle}>
+                <div><strong>{selectedBankEntry.name}</strong> (@{selectedBankEntry.slug})</div>
+                <div>{selectedBankEntry.description}</div>
+              </div>
+            )}
+          </>
+        )}
+      </section>
 
       <section className={styles.section}>
         <h3>Comfy Status</h3>
