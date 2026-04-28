@@ -26,6 +26,7 @@ import {
 import { generateCharacterPortfolioPlan, queueCharacterPortfolio } from './api/lib/portfolio/characterPortfolio.js'
 import { assertComfyOperationAllowed } from './api/lib/comfy/access.js'
 import { createComfyService } from './api/lib/comfy/comfyService.js'
+import { runAudition } from './api/lib/audition/auditionOrchestrator.js'
 import {
   createActorAudition,
   createActorCandidate,
@@ -638,6 +639,67 @@ function apiDevPlugin(env) {
         } catch (err) {
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'ACTOR_AUDITION_ERROR' })
+        } finally {
+          runtime?.close?.()
+        }
+      })
+
+      server.middlewares.use('/api/audition/generate', async (req, res) => {
+        if (req.method !== 'POST') {
+          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
+          return
+        }
+        let runtime = null
+        try {
+          const body = await readJsonBody(req)
+          const bankEntryId = body?.bankEntryId
+          if (!bankEntryId) {
+            sendJsonMiddleware(res, 400, { error: 'Missing bankEntryId' })
+            return
+          }
+          const count = Number.isFinite(body?.count) ? body.count : 3
+          const view = typeof body?.view === 'string' && body.view.trim() ? body.view.trim() : 'front_portrait'
+
+          runtime = createVectorRuntime({ env })
+
+          const llmGenerate = async ({ system, user, providerPayload }) => {
+            const providerSelection = await resolveProviderSelection({
+              engine: providerPayload?.engine,
+              localOnly: false,
+              fetchImpl: fetch,
+              env,
+              payload: providerPayload || {},
+            })
+            return runWithResolvedProvider({
+              provider: providerSelection.provider,
+              userMessage: user,
+              payload: providerPayload || {},
+              fetchImpl: fetch,
+              env,
+              systemPrompt: system,
+            })
+          }
+
+          let comfyService = null
+          try {
+            comfyService = createComfyService({ env })
+          } catch (comfyErr) {
+            // Comfy unavailable; orchestrator will skip queueing gracefully.
+            comfyService = null
+          }
+
+          const result = await runAudition({
+            db: runtime.db,
+            bankEntryId,
+            count,
+            view,
+            llmGenerate,
+            comfyService,
+          })
+          sendJsonMiddleware(res, 200, { ok: true, ...result })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'AUDITION_ERROR' })
         } finally {
           runtime?.close?.()
         }
