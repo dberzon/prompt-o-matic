@@ -72,4 +72,18 @@ CREATE INDEX IF NOT EXISTS idx_batch_candidates_batch_id ON character_batch_cand
 CREATE INDEX IF NOT EXISTS idx_batch_candidates_source_candidate_id ON character_batch_candidates(source_candidate_id);
 CREATE INDEX IF NOT EXISTS idx_batch_candidates_classification ON character_batch_candidates(classification);
 CREATE INDEX IF NOT EXISTS idx_batch_candidates_review_status ON character_batch_candidates(review_status);
+
+CREATE TABLE IF NOT EXISTS character_bank_entries (
+  id TEXT PRIMARY KEY,
+  slug TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  optimized_description TEXT,
+  payload_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_character_bank_entries_slug ON character_bank_entries(slug);
+CREATE INDEX IF NOT EXISTS idx_character_bank_entries_created_at ON character_bank_entries(created_at);
 `

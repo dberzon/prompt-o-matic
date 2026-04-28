@@ -132,3 +132,17 @@ export function parseGeneratedImageRecord(input) {
 export function parseCharacterGenerationRequest(input) {
   return CharacterGenerationRequestSchema.parse(input)
 }
+
+export const CharacterBankEntrySchema = z.object({
+  id: nonEmpty,
+  slug: z.string().trim().min(1).regex(/^[a-z0-9]+(_[a-z0-9]+)*$/, 'slug must be snake_case ASCII'),
+  name: nonEmpty,
+  description: nonEmpty,
+  optimizedDescription: z.string().optional(),
+  createdAt: isoDateTime,
+  updatedAt: isoDateTime,
+}).strict()
+
+export function parseCharacterBankEntry(input) {
+  return CharacterBankEntrySchema.parse(input)
+}

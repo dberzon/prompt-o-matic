@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import {
+  parseCharacterBankEntry,
   parseCharacterProfile,
   parseGeneratedImageRecord,
   parseQwenImagePromptPack,
@@ -534,4 +535,88 @@ export function saveApprovedCandidateAsCharacter(db, id) {
     reviewStatus: 'saved',
     savedCharacterId: saved.id,
   })
+}
+
+export function createBankEntry(db, payload) {
+  const createdAt = payload.createdAt || nowIso()
+  const id = payload.id || randomUUID()
+  const record = parseCharacterBankEntry({
+    ...payload,
+    id,
+    createdAt,
+    updatedAt: payload.updatedAt || createdAt,
+  })
+  db.prepare(`
+    INSERT INTO character_bank_entries (id, slug, name, description, optimized_description, payload_json, created_at, updated_at)
+    VALUES (@id, @slug, @name, @description, @optimized_description, @payload_json, @created_at, @updated_at)
+  `).run({
+    id: record.id,
+    slug: record.slug,
+    name: record.name,
+    description: record.description,
+    optimized_description: record.optimizedDescription ?? null,
+    payload_json: JSON.stringify(record),
+    created_at: record.createdAt,
+    updated_at: record.updatedAt,
+  })
+  return record
+}
+
+export function getBankEntry(db, id) {
+  const row = db.prepare('SELECT payload_json FROM character_bank_entries WHERE id = ?').get(id)
+  return rowToPayload(row)
+}
+
+export function getBankEntryBySlug(db, slug) {
+  const row = db.prepare('SELECT payload_json FROM character_bank_entries WHERE slug = ?').get(slug)
+  return rowToPayload(row)
+}
+
+export function listBankEntries(db, filters = {}) {
+  const limit = Number.isInteger(filters.limit) ? filters.limit : null
+  const limitSql = limit && limit > 0 ? 'LIMIT ?' : ''
+  const values = []
+  if (limitSql) values.push(limit)
+  const rows = db.prepare(`
+    SELECT payload_json
+    FROM character_bank_entries
+    ORDER BY created_at DESC
+    ${limitSql}
+  `).all(...values)
+  return rows.map(rowToPayload)
+}
+
+export function updateBankEntry(db, id, patch) {
+  const current = getBankEntry(db, id)
+  if (!current) return null
+  const merged = parseCharacterBankEntry({
+    ...current,
+    ...patch,
+    id,
+    updatedAt: nowIso(),
+  })
+  db.prepare(`
+    UPDATE character_bank_entries
+    SET slug = @slug,
+        name = @name,
+        description = @description,
+        optimized_description = @optimized_description,
+        payload_json = @payload_json,
+        updated_at = @updated_at
+    WHERE id = @id
+  `).run({
+    id: merged.id,
+    slug: merged.slug,
+    name: merged.name,
+    description: merged.description,
+    optimized_description: merged.optimizedDescription ?? null,
+    payload_json: JSON.stringify(merged),
+    updated_at: merged.updatedAt,
+  })
+  return merged
+}
+
+export function deleteBankEntry(db, id) {
+  const result = db.prepare('DELETE FROM character_bank_entries WHERE id = ?').run(id)
+  return result.changes > 0
 }
