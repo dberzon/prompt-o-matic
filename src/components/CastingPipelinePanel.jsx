@@ -25,6 +25,8 @@ import {
   rejectGeneratedImage,
 } from '../lib/api/generatedImages.js'
 import { buildCharacterPortfolioPlan, queueCharacterPortfolio } from '../lib/api/portfolio.js'
+import { generateAudition } from '../lib/api/audition.js'
+import { approveActorAudition, rejectActorAudition } from '../lib/api/actorAuditions.js'
 import { listBankEntries } from '../lib/api/characterBank.js'
 import styles from './CastingPipelinePanel.module.css'
 
@@ -82,6 +84,15 @@ export default function CastingPipelinePanel() {
   const [bankEntries, setBankEntries] = useState([])
   const [selectedBankEntryId, setSelectedBankEntryId] = useState('')
   const [bankLoadError, setBankLoadError] = useState(null)
+  const [auditionCount, setAuditionCount] = useState(3)
+  const [auditionView, setAuditionView] = useState('front_portrait')
+  const [auditionRunning, setAuditionRunning] = useState(false)
+  const [auditionResults, setAuditionResults] = useState([])
+  const [auditionRunMeta, setAuditionRunMeta] = useState(null)
+  const [auditionStatuses, setAuditionStatuses] = useState({})
+  const [auditionImages, setAuditionImages] = useState({})
+  const [auditionItemActions, setAuditionItemActions] = useState({})
+  const [auditionError, setAuditionError] = useState(null)
 
   const selectedBankEntry = useMemo(
     () => bankEntries.find((entry) => entry.id === selectedBankEntryId) || null,
@@ -168,6 +179,111 @@ export default function CastingPipelinePanel() {
   useEffect(() => {
     refreshBatch(selectedBatchId)
   }, [selectedBatchId])
+
+  const handleGenerateAudition = async () => {
+    const bankEntryId = selectedBankEntryId
+    if (!bankEntryId) {
+      setAuditionError('Select a bank character first')
+      return
+    }
+    setAuditionRunning(true)
+    setAuditionError(null)
+    try {
+      const data = await generateAudition({
+        bankEntryId,
+        count: auditionCount,
+        view: auditionView,
+      })
+      setAuditionResults(Array.isArray(data?.results) ? data.results : [])
+      setAuditionRunMeta({
+        bankEntryId: data?.bankEntryId,
+        requested: data?.requested,
+        successful: data?.successful,
+        failed: data?.failed,
+      })
+      const initialStatuses = {}
+      for (const result of (data?.results || [])) {
+        if (result.ok && result.comfyPromptId) initialStatuses[result.comfyPromptId] = 'pending'
+      }
+      setAuditionStatuses(initialStatuses)
+      setAuditionImages({})
+      setAuditionItemActions({})
+    } catch (err) {
+      setAuditionError(err?.message || 'Audition generation failed')
+    } finally {
+      setAuditionRunning(false)
+    }
+  }
+
+  const handleRefreshAuditionStatuses = async () => {
+    const promptIds = Object.keys(auditionStatuses)
+    if (promptIds.length === 0) return
+    try {
+      const jobs = auditionResults
+        .filter((result) => result.ok && result.comfyPromptId)
+        .map((result) => ({ promptId: result.comfyPromptId, promptPackId: result.promptPackId, view: auditionView }))
+      const data = await getComfyJobsStatus(jobs)
+      const next = { ...auditionStatuses }
+      for (const item of (data?.items || [])) {
+        if (item.promptId) next[item.promptId] = item.status || 'unknown'
+      }
+      setAuditionStatuses(next)
+    } catch (err) {
+      setAuditionError(err?.message || 'Status refresh failed')
+    }
+  }
+
+  const handleIngestAuditionResults = async () => {
+    const ready = auditionResults
+      .filter((result) => result.ok && result.comfyPromptId && auditionStatuses[result.comfyPromptId] === 'success')
+      .map((result) => ({
+        promptId: result.comfyPromptId,
+        promptPackId: result.promptPackId,
+        characterId: result.characterId,
+        viewType: auditionView,
+      }))
+    if (ready.length === 0) {
+      setAuditionError('No audition jobs completed yet')
+      return
+    }
+    try {
+      await ingestComfyOutputsMany(ready)
+      const imageMap = { ...auditionImages }
+      for (const result of auditionResults) {
+        if (!result.ok || !result.characterId) continue
+        try {
+          const list = await listGeneratedImages({ characterId: result.characterId })
+          imageMap[result.characterId] = Array.isArray(list?.items) ? list.items : []
+        } catch {
+          imageMap[result.characterId] = imageMap[result.characterId] || []
+        }
+      }
+      setAuditionImages(imageMap)
+    } catch (err) {
+      setAuditionError(err?.message || 'Ingest failed')
+    }
+  }
+
+  const handleApproveAudition = async (auditionId) => {
+    setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: true, error: null } }))
+    try {
+      await approveActorAudition(auditionId)
+      setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, error: null, status: 'approved' } }))
+    } catch (err) {
+      setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, error: err?.message || 'Approve failed' } }))
+    }
+  }
+
+  const handleRejectAudition = async (auditionId) => {
+    const reason = window.prompt('Reason for rejection (optional)') || undefined
+    setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: true, error: null } }))
+    try {
+      await rejectActorAudition(auditionId, reason)
+      setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, error: null, status: 'rejected' } }))
+    } catch (err) {
+      setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, error: err?.message || 'Reject failed' } }))
+    }
+  }
 
   async function handleCandidateAction(action, candidateId) {
     setActionLoading(true)
@@ -489,6 +605,88 @@ export default function CastingPipelinePanel() {
               <div className={styles.subtle}>
                 <div><strong>{selectedBankEntry.name}</strong> (@{selectedBankEntry.slug})</div>
                 <div>{selectedBankEntry.description}</div>
+              </div>
+            )}
+            <div className={styles.row}>
+              <label>Count</label>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={auditionCount}
+                onChange={(e) => setAuditionCount(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}
+                disabled={auditionRunning}
+              />
+              <label>View</label>
+              <select
+                value={auditionView}
+                onChange={(e) => setAuditionView(e.target.value)}
+                disabled={auditionRunning}
+              >
+                <option value="front_portrait">Front portrait</option>
+                <option value="three_quarter_portrait">Three-quarter portrait</option>
+                <option value="profile_portrait">Profile (side)</option>
+                <option value="full_body">Full body</option>
+              </select>
+              <button
+                type="button"
+                onClick={handleGenerateAudition}
+                disabled={auditionRunning || !selectedBankEntryId}
+              >
+                {auditionRunning ? 'Generating...' : 'Generate Auditions'}
+              </button>
+              {auditionError ? <span className={styles.error}>{auditionError}</span> : null}
+            </div>
+            {auditionResults.length > 0 && (
+              <div className={styles.section}>
+                <div className={styles.row}>
+                  <strong>Audition results:</strong>
+                  <span>{auditionRunMeta?.successful ?? 0} successful / {auditionRunMeta?.failed ?? 0} failed</span>
+                  <button type="button" onClick={handleRefreshAuditionStatuses}>Refresh statuses</button>
+                  <button type="button" onClick={handleIngestAuditionResults}>Ingest completed</button>
+                </div>
+                {auditionResults.map((result, index) => (
+                  <div key={result.auditionId || `failed-${index}`} className={styles.item}>
+                    {result.ok ? (
+                      <>
+                        <div>
+                          <strong>Audition {result.auditionId}</strong>
+                          <span> — character {result.characterId}</span>
+                          <span> — comfy job {result.comfyPromptId || 'n/a'}: {result.comfyPromptId ? (auditionStatuses[result.comfyPromptId] || 'pending') : 'n/a'}</span>
+                        </div>
+                        {(auditionImages[result.characterId] || []).slice(0, 4).map((img) => (
+                          <img
+                            key={img.id}
+                            src={`/api/generated-image-view?id=${encodeURIComponent(img.id)}`}
+                            alt={`actor ${result.characterId}`}
+                            style={{ maxWidth: 120, maxHeight: 160, objectFit: 'cover', marginRight: 8 }}
+                          />
+                        ))}
+                        <div className={styles.row}>
+                          <button
+                            type="button"
+                            onClick={() => handleApproveAudition(result.auditionId)}
+                            disabled={auditionItemActions[result.auditionId]?.busy}
+                          >
+                            {auditionItemActions[result.auditionId]?.status === 'approved' ? '✓ Approved' : 'Approve'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRejectAudition(result.auditionId)}
+                            disabled={auditionItemActions[result.auditionId]?.busy}
+                          >
+                            {auditionItemActions[result.auditionId]?.status === 'rejected' ? '✗ Rejected' : 'Reject'}
+                          </button>
+                          {auditionItemActions[result.auditionId]?.error ? (
+                            <span className={styles.error}>{auditionItemActions[result.auditionId].error}</span>
+                          ) : null}
+                        </div>
+                      </>
+                    ) : (
+                      <span className={styles.error}>Failed: {result.error} ({result.code})</span>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </>
