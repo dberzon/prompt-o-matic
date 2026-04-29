@@ -31,3 +31,6 @@ src-tauri/Cargo.lock
 
 # local sqlite db (auto-created at runtime; WAL/SHM artifacts must not be tracked)
 data/qpb-local.sqlite*
+
+# Claude Code local state (per-user / per-machine; not for tracking)
+.claude/
