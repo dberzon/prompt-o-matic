@@ -20,6 +20,7 @@ import BatchExplorer from './components/BatchExplorer.jsx'
 import EmbeddedSetup from './components/EmbeddedSetup.jsx'
 import CharacterBuilder from './components/CharacterBuilder.jsx'
 import CastingPipelinePanel from './components/CastingPipelinePanel.jsx'
+import MobilePromptBar from './components/MobilePromptBar.jsx'
 import styles from './App.module.css'
 
 const DEFAULT_CHARS = [
@@ -300,6 +301,9 @@ export default function App() {
     () => validatePromptRules({ chips, hasContent: !!(scene.trim() || scenario) }),
     [chips, scene, scenario]
   )
+
+  const hasContent = prompt.length > 0
+  const assembledText = prompt.join(', ')
 
   const clonePresetChips = useCallback((chipMap) => (
     Object.fromEntries(
@@ -880,6 +884,10 @@ export default function App() {
           />
           <ReferenceBoard />
         </div>
+        <MobilePromptBar
+          displayText={assembledText}
+          hasContent={hasContent}
+        />
       </div> : activeTab === 'characters' ? (
         <div className={styles.characterTab}>
           <CharacterBuilder

@@ -166,7 +166,7 @@
   }
 
   .characterTab {
-    padding: 8px 16px 48px;
+    padding: 8px 16px 80px; /* Extra space for mobile bar if needed in future */
   }
 
   .layout {
@@ -193,7 +193,10 @@
 
   .rightPanel {
     position: static;
-    order: -1;
     padding-bottom: 8px;
+  }
+
+  .leftPanel {
+    padding-bottom: 80px; /* Extra space for sticky mobile bar */
   }
 }
