@@ -34,3 +34,8 @@ data/qpb-local.sqlite*
 
 # Claude Code local state (per-user / per-machine; not for tracking)
 .claude/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key

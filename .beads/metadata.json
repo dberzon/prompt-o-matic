@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "qwen_prompt_builder",
+  "project_id": "0867de96-cd0c-4db7-b7b6-55945d5f3933"
+}
