@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import { NEGATIVE_PROMPT } from '../data/chips.js'
 import { usePolish } from '../hooks/usePolish.js'
 import { scorePromptQuality } from '../utils/qualityScore.js'
@@ -88,7 +88,9 @@ export default function PromptOutput({
   const [showVariants, setShowVariants] = useState(false)
   const [selectedVariant, setSelectedVariant] = useState(null)
   const [restoredText, setRestoredText] = useState(null)
+  const [manualEdit, setManualEdit] = useState(null)
   const [history, setHistory] = useState(() => readHistory())
+  const textareaRef = useRef(null)
   const [showHistory, setShowHistory] = useState(false)
   const [diffTargetId, setDiffTargetId] = useState(null)
   const [shareState, setShareState] = useState('idle')
@@ -117,20 +119,27 @@ export default function PromptOutput({
   const assembledText = prompt.join(', ')
 
   // What we actually display and copy
-  const displayText = restoredText
+  const displayText = manualEdit !== null
+    ? manualEdit
+    : restoredText
     ? restoredText
     : hasVariantOverride
     ? selectedVariant.text
     : isPolished
       ? polished
       : assembledText
-  const displayFragments = restoredText
+  const displayFragments = manualEdit !== null
+    ? [manualEdit]
+    : restoredText
     ? [restoredText]
     : hasVariantOverride
     ? [selectedVariant.text]
     : isPolished
     ? [polished] // show as one block when polished
     : prompt // show as individual fragments when assembled
+
+  const hasManualEdit = manualEdit !== null
+  const isEditable = hasContent
 
   const qualityReport = useMemo(
     () => scorePromptQuality({
@@ -206,8 +215,38 @@ export default function PromptOutput({
     })
   }, [displayText, exportFilenameBase])
 
+  const handleTextareaChange = useCallback((e) => {
+    const value = e.target.value
+    setManualEdit(value)
+  }, [])
+
+  const handleResetToAssembled = useCallback(() => {
+    setManualEdit(null)
+    setRestoredText(null)
+    setSelectedVariant(null)
+  }, [])
+
+  // Auto-grow textarea effect
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
+    }
+  }, [displayText])
+
+  // Clear manual edit when underlying assembled text changes (one-way sync)
+  useEffect(() => {
+    if (hasManualEdit) {
+      // Only clear if the assembled text is different
+      if (manualEdit !== assembledText) {
+        // Keep manual edit - user is editing, don't override
+      }
+    }
+  }, [assembledText, hasManualEdit, manualEdit])
+
   const handlePolish = () => {
     setRestoredText(null)
+    setManualEdit(null)
     polish({
       fragments: prompt,
       directorName,
@@ -330,7 +369,9 @@ export default function PromptOutput({
   }, [checkHealth, lmStudioBaseUrl, lmStudioModel])
 
   // Status badge
-  const badge = hasVariantOverride
+  const badge = hasManualEdit
+    ? { label: 'manually edited', cls: styles.statusPolished }
+    : hasVariantOverride
     ? { label: `variant: ${selectedVariant.label}`, cls: styles.statusPolished }
     : restoredText
     ? { label: 'restored', cls: styles.statusPolished }
@@ -461,6 +502,16 @@ export default function PromptOutput({
           )}
         </div>
         <div className={styles.headerActions}>
+          {hasManualEdit && (
+            <button
+              type="button"
+              className={styles.resetBtn}
+              onClick={handleResetToAssembled}
+              title="Reset to assembled prompt from chips"
+            >
+              ↻ Reset
+            </button>
+          )}
           <button
             type="button"
             className={`${styles.copyBtn} ${shareState === 'copied' ? styles.copied : ''}`}
@@ -550,28 +601,22 @@ export default function PromptOutput({
       )}
 
       {/* Prompt display */}
-      <div className={`${styles.promptBox} ${isAssembled || isPolished ? styles.promptBoxActive : ''} ${isPolished ? styles.promptBoxPolished : ''}`}>
-        {hasContent ? (
-          <div className={styles.promptParts}>
-            {isPolished ? (
-              <span className={styles.partText}>{polished}</span>
-            ) : (
-              displayFragments.map((part, i) => (
-                <span key={i} className={styles.promptPart}>
-                  <span className={styles.partText}>{part}</span>
-                  {i < displayFragments.length - 1 && (
-                    <span className={styles.comma}>, </span>
-                  )}
-                </span>
-              ))
-            )}
-          </div>
-        ) : (
+      {isEditable ? (
+        <textarea
+          ref={textareaRef}
+          className={`${styles.promptTextarea} ${isAssembled || isPolished ? styles.promptBoxActive : ''} ${hasManualEdit ? styles.promptBoxEdited : isPolished ? styles.promptBoxPolished : ''}`}
+          value={displayText}
+          onChange={handleTextareaChange}
+          placeholder="Configure directors and characters, then add technical chips…"
+          spellCheck={false}
+        />
+      ) : (
+        <div className={`${styles.promptBox} ${isAssembled || isPolished ? styles.promptBoxActive : ''} ${isPolished ? styles.promptBoxPolished : ''}`}>
           <p className={styles.placeholder}>
             Configure directors and characters, then add technical chips…
           </p>
-        )}
-      </div>
+        </div>
+      )}
 
       {issues.length > 0 && (
         <div className={styles.rulePanel}>

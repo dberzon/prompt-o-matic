@@ -259,6 +259,34 @@
   transition: border-color 0.2s;
 }
 
+.promptTextarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px;
+  background: var(--surface);
+  min-height: 120px;
+  max-height: 600px;
+  resize: none;
+  overflow-y: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.85;
+  color: var(--text);
+  transition: border-color 0.2s;
+}
+
+.promptTextarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.promptTextarea::placeholder {
+  color: var(--text-3);
+  font-style: italic;
+  opacity: 0.7;
+}
+
 .promptBoxActive {
   border-color: var(--border-2);
   background: var(--surface);
@@ -564,6 +592,30 @@
 .promptBoxPolished {
   border-color: var(--accent);
   background: var(--surface);
+}
+
+/* Edited prompt box variant */
+.promptBoxEdited {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+
+.resetBtn {
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  transition: all 0.12s;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.resetBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
 }
 
 /* Error message */
