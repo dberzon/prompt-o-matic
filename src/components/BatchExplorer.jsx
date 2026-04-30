@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react'
 import { assemblePrompt } from '../utils/assembler.js'
+import { useSectionState } from '../hooks/useSectionState.js'
 import styles from './BatchExplorer.module.css'
 
 export default function BatchExplorer({ scenario, chips }) {
   const [lines, setLines] = useState('')
   const [results, setResults] = useState([])
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useSectionState('batch-explorer', false)
 
   const runBatch = useCallback(() => {
     const scenes = lines

@@ -1,10 +1,11 @@
 import { useRef, useState, useMemo } from 'react'
 import { CHIP_GROUPS } from '../data/chips.js'
 import { PRESETS, FEATURED_PRESET_KEYS, DIRECTOR_PRESETS } from '../data/constants.js'
+import { useSectionState } from '../hooks/useSectionState.js'
 import styles from './ChipSection.module.css'
 
 function CollapsibleGroup({ group, chips, onToggle }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useSectionState(`chip-group-${group.id}`, false)
   const panelId = `chip-group-panel-${group.id}`
 
   const selectedCount = group.subsections.reduce((sum, sub) => {

@@ -12,6 +12,7 @@ import {
   randomDraw,
   getCard,
 } from '../data/sceneDeck.js'
+import { useSectionState } from '../hooks/useSectionState.js'
 import styles from './SceneDeck.module.css'
 
 function RerollIcon() {
@@ -67,7 +68,7 @@ function CategoryRow({ categoryId, index, onReroll, onCycle }) {
 }
 
 export default function SceneDeck({ onApply, selectedDir }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useSectionState('scene-deck', false)
   const [draw, setDraw] = useState(() => randomDraw())
   const [applyScene, setApplyScene] = useState(true)
   const [applyBeat, setApplyBeat] = useState(true)

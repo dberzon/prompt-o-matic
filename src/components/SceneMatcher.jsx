@@ -1,6 +1,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import { searchCorpus } from '../utils/sceneSearch.js'
 import { DIRECTORS } from '../data/directors.js'
+import { useSectionState } from '../hooks/useSectionState.js'
 import styles from './SceneMatcher.module.css'
 
 function SearchIcon() {
@@ -29,7 +30,7 @@ const EXAMPLES = [
 ]
 
 export default function SceneMatcher({ onApply, matcherRef }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useSectionState('scene-matcher', false)
   const [rawQuery, setRawQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const inputRef = useRef(null)

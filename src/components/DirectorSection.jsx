@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { DIRECTORS, DIRECTOR_LIST } from '../data/directors.js'
 import { getSceneBankEntry } from '../data/sceneBank.js'
 import { getCharDesc } from '../utils/assembler.js'
+import { useSectionState } from '../hooks/useSectionState.js'
 import styles from './DirectorSection.module.css'
 
 const GENDERS = ['man', 'woman', 'person']
@@ -40,7 +41,7 @@ export default function DirectorSection({
   onNarrativeBeatChange,
   onUseStyleKeyForPolishChange,
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useSectionState('director-section', true)
   const [copiedSeedIdx, setCopiedSeedIdx] = useState(null)
   const panelId = 'director-section-panel'
 
