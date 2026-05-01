@@ -131,6 +131,10 @@ Use this 60-second flow the first time you open the app:
 
 ## Quick deploy to Vercel
 
+### Required environment variable
+
+Set `ANTHROPIC_API_KEY` in your Vercel project settings → Environment Variables. This is needed for the AI polish endpoint (`/api/polish`) to call Claude. All other features (ComfyUI, character batch, vector) are local-studio only and are automatically disabled in cloud mode via `APP_MODE=cloud` (set in `vercel.json`).
+
 ### Option A — Vercel CLI (fastest)
 
 ```bash
@@ -138,14 +142,14 @@ npm i -g vercel
 vercel
 ```
 
-Follow the prompts. Vercel detects Vite automatically.
+Follow the prompts. Set `ANTHROPIC_API_KEY` when asked for environment variables, or add it in the Vercel dashboard after deploy.
 
 ### Option B — GitHub → Vercel UI
 
 1. Push this repo to GitHub
 2. Go to [vercel.com](https://vercel.com) → New Project
 3. Import your GitHub repo
-4. Vercel detects Vite automatically — no configuration needed
+4. Under Environment Variables, add `ANTHROPIC_API_KEY`
 5. Click Deploy
 
 ### Local development
