@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo, useRef } from 'react'
 import { DIRECTORS, DIRECTOR_LIST } from '../data/directors.js'
 import { getSceneBankEntry } from '../data/sceneBank.js'
 import { getCharDesc } from '../utils/assembler.js'
@@ -22,6 +22,51 @@ function buildBlendClauses(secondaryScenarios, secondaryNote = '') {
   return unique.length > 0 ? unique : ['secondary stylistic influence']
 }
 
+function interpolateScenario(template, c) {
+  return String(template)
+    .replace(/\{c0\}/g, c[0] ?? '')
+    .replace(/\{c1\}/g, c[1] ?? '')
+    .replace(/\{c2\}/g, c[2] ?? '')
+}
+
+function customToRuntimeDir(entry) {
+  return {
+    name: entry.name,
+    short: entry.short,
+    note: entry.note,
+    s: {
+      1: c => (entry.scenarios?.['1'] ?? []).map(t => interpolateScenario(t, c)),
+      2: c => (entry.scenarios?.['2'] ?? []).map(t => interpolateScenario(t, c)),
+      3: c => (entry.scenarios?.['3'] ?? []).map(t => interpolateScenario(t, c)),
+    },
+  }
+}
+
+const EMPTY_FORM = { name: '', short: '', note: '', s1: '', s2: '', s3: '' }
+
+function formToEntry(form) {
+  const key = `custom-${form.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`
+  const parseLines = (text) => text.split('\n').map(l => l.trim()).filter(Boolean)
+  return {
+    key,
+    name: form.name.trim(),
+    short: form.short.trim() || form.name.trim().slice(0, 10),
+    note: form.note.trim(),
+    scenarios: { '1': parseLines(form.s1), '2': parseLines(form.s2), '3': parseLines(form.s3) },
+  }
+}
+
+function entryToForm(entry) {
+  return {
+    name: entry.name,
+    short: entry.short,
+    note: entry.note,
+    s1: (entry.scenarios?.['1'] ?? []).join('\n'),
+    s2: (entry.scenarios?.['2'] ?? []).join('\n'),
+    s3: (entry.scenarios?.['3'] ?? []).join('\n'),
+  }
+}
+
 export default function DirectorSection({
   selectedDir,
   blendEnabled,
@@ -40,10 +85,21 @@ export default function DirectorSection({
   onAppendScene,
   onNarrativeBeatChange,
   onUseStyleKeyForPolishChange,
+  customDirectors = [],
+  onSaveCustomDirector,
+  onDeleteCustomDirector,
 }) {
   const [open, setOpen] = useSectionState('director-section', true)
   const [copiedSeedIdx, setCopiedSeedIdx] = useState(null)
+  const [customOpen, setCustomOpen] = useState(false)
+  const [editForm, setEditForm] = useState(EMPTY_FORM)
+  const [editingKey, setEditingKey] = useState(null)
   const panelId = 'director-section-panel'
+
+  const allDirMap = useMemo(() => {
+    const custom = Object.fromEntries(customDirectors.map(d => [d.key, customToRuntimeDir(d)]))
+    return { ...DIRECTORS, ...custom }
+  }, [customDirectors])
 
   const copySeed = async (text, idx) => {
     try {
@@ -55,8 +111,8 @@ export default function DirectorSection({
     }
   }
 
-  const dirData = selectedDir ? DIRECTORS[selectedDir] : null
-  const blendData = blendDir ? DIRECTORS[blendDir] : null
+  const dirData = selectedDir ? allDirMap[selectedDir] : null
+  const blendData = blendDir ? allDirMap[blendDir] : null
   const bank = selectedDir ? getSceneBankEntry(selectedDir) : null
 
   const charDescs = Array.from({ length: charCount }, (_, i) =>
@@ -93,7 +149,7 @@ export default function DirectorSection({
         </div>
         <span className={styles.badge}>
           {selectedDir
-            ? `${DIRECTORS[selectedDir]?.short} · ${charCount}ch${scenario ? ' · scenario' : ''}`
+            ? `${allDirMap[selectedDir]?.short} · ${charCount}ch${scenario ? ' · scenario' : ''}`
             : 'none configured'}
         </span>
       </button>
@@ -113,6 +169,21 @@ export default function DirectorSection({
                 {DIRECTORS[key].short}
               </button>
             ))}
+            {customDirectors.length > 0 && (
+              <>
+                <span className={styles.dirGridSep} />
+                {customDirectors.map(d => (
+                  <button
+                    key={d.key}
+                    className={`${styles.dirChip} ${styles.dirChipCustom} ${selectedDir === d.key ? styles.dirActive : ''}`}
+                    onClick={() => onDirSelect(d.key)}
+                    title={d.name}
+                  >
+                    {d.short}
+                  </button>
+                ))}
+              </>
+            )}
           </div>
 
           {/* Director note */}
@@ -210,6 +281,9 @@ export default function DirectorSection({
                     {DIRECTOR_LIST.filter((key) => key !== selectedDir).map((key) => (
                       <option key={key} value={key}>{DIRECTORS[key].short}</option>
                     ))}
+                    {customDirectors.filter(d => d.key !== selectedDir).map(d => (
+                      <option key={d.key} value={d.key}>{d.short} (custom)</option>
+                    ))}
                   </select>
                   <div className={styles.sliderRow}>
                     <span className={styles.sliderLabel}>
@@ -229,6 +303,113 @@ export default function DirectorSection({
               )}
             </div>
           )}
+
+          {/* Custom directors */}
+          <div className={styles.customWrap}>
+            <button
+              className={styles.customToggle}
+              onClick={() => setCustomOpen(o => !o)}
+              aria-expanded={customOpen}
+            >
+              <span className={`${styles.chevron} ${customOpen ? styles.chevronOpen : ''}`}>›</span>
+              <span>Custom directors</span>
+              <span className={styles.customCount}>{customDirectors.length}/3</span>
+            </button>
+            {customOpen && (
+              <div className={styles.customBody}>
+                {/* Existing custom directors */}
+                {customDirectors.map(d => (
+                  <div key={d.key} className={styles.customItem}>
+                    <span className={styles.customItemName}>{d.name}</span>
+                    <span className={styles.customItemShort}>{d.short}</span>
+                    <button
+                      className={styles.customItemEdit}
+                      onClick={() => { setEditForm(entryToForm(d)); setEditingKey(d.key) }}
+                    >Edit</button>
+                    <button
+                      className={styles.customItemDelete}
+                      onClick={() => { onDeleteCustomDirector?.(d.key); setEditingKey(null); setEditForm(EMPTY_FORM) }}
+                    >×</button>
+                  </div>
+                ))}
+
+                {/* Form: create or edit */}
+                {(editingKey !== null || customDirectors.length < 3) && (
+                  <div className={styles.customForm}>
+                    <p className={styles.customFormTitle}>
+                      {editingKey ? 'Edit director' : 'New director'}
+                    </p>
+                    <div className={styles.customRow}>
+                      <input
+                        className={styles.customInput}
+                        placeholder="Full name"
+                        value={editForm.name}
+                        onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                      />
+                      <input
+                        className={styles.customInputShort}
+                        placeholder="Short"
+                        maxLength={12}
+                        value={editForm.short}
+                        onChange={e => setEditForm(f => ({ ...f, short: e.target.value }))}
+                      />
+                    </div>
+                    <textarea
+                      className={styles.customTextarea}
+                      placeholder="Style note (shown as director note)"
+                      rows={2}
+                      value={editForm.note}
+                      onChange={e => setEditForm(f => ({ ...f, note: e.target.value }))}
+                    />
+                    <p className={styles.customFieldLabel}>Scenarios — 1 character (one per line, use {'{c0}'} for the character)</p>
+                    <textarea
+                      className={styles.customTextarea}
+                      rows={3}
+                      placeholder={`{c0}, alone in the frame, the setting presses in\n{c0} at a window, back to camera`}
+                      value={editForm.s1}
+                      onChange={e => setEditForm(f => ({ ...f, s1: e.target.value }))}
+                    />
+                    <p className={styles.customFieldLabel}>Scenarios — 2 characters (use {'{c0}'}, {'{c1}'})</p>
+                    <textarea
+                      className={styles.customTextarea}
+                      rows={3}
+                      placeholder={`{c0} and {c1}, facing each other, neither speaking\n{c0} watching {c1} from across the room`}
+                      value={editForm.s2}
+                      onChange={e => setEditForm(f => ({ ...f, s2: e.target.value }))}
+                    />
+                    <p className={styles.customFieldLabel}>Scenarios — 3 characters (use {'{c0}'}, {'{c1}'}, {'{c2}'})</p>
+                    <textarea
+                      className={styles.customTextarea}
+                      rows={3}
+                      placeholder={`{c0}, {c1}, and {c2} arranged without symmetry`}
+                      value={editForm.s3}
+                      onChange={e => setEditForm(f => ({ ...f, s3: e.target.value }))}
+                    />
+                    <div className={styles.customActions}>
+                      <button
+                        className={styles.customSave}
+                        disabled={!editForm.name.trim()}
+                        onClick={() => {
+                          const entry = formToEntry(editForm)
+                          onSaveCustomDirector?.(entry)
+                          setEditForm(EMPTY_FORM)
+                          setEditingKey(null)
+                        }}
+                      >
+                        {editingKey ? 'Save changes' : 'Add director'}
+                      </button>
+                      {editingKey && (
+                        <button
+                          className={styles.customCancel}
+                          onClick={() => { setEditForm(EMPTY_FORM); setEditingKey(null) }}
+                        >Cancel</button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Character count */}
           <p className={styles.subLabel} style={{ marginTop: '16px' }}>Characters</p>

@@ -29,6 +29,7 @@ const DEFAULT_CHARS = [
   { g: 'man', a: '20s' },
 ]
 const CUSTOM_PRESETS_KEY = 'qpb_custom_presets_v1'
+const CUSTOM_DIRECTORS_KEY = 'qpb_custom_directors_v1'
 const WORKSPACE_PROFILES_KEY = 'qpb_workspace_profiles_v1'
 const AI_ENGINE_KEY = 'qpb_ai_engine_v1'
 const LOCAL_ONLY_KEY = 'qpb_local_only_v1'
@@ -56,6 +57,17 @@ function readCustomPresets() {
     return parsed && typeof parsed === 'object' ? parsed : {}
   } catch {
     return {}
+  }
+}
+
+function readCustomDirectors() {
+  try {
+    const raw = localStorage.getItem(CUSTOM_DIRECTORS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
   }
 }
 
@@ -180,6 +192,7 @@ export default function App() {
   const [blendDir, setBlendDir] = useState(null)
   const [blendWeight, setBlendWeight] = useState(70)
   const [customPresets, setCustomPresets] = useState(() => readCustomPresets())
+  const [customDirectors, setCustomDirectors] = useState(() => readCustomDirectors())
   const [profiles, setProfiles] = useState(() => readWorkspaceProfiles())
   const [selectedProfile, setSelectedProfile] = useState('')
   const [paletteOpen, setPaletteOpen] = useState(false)
@@ -199,6 +212,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(CUSTOM_PRESETS_KEY, JSON.stringify(customPresets))
   }, [customPresets])
+
+  useEffect(() => {
+    localStorage.setItem(CUSTOM_DIRECTORS_KEY, JSON.stringify(customDirectors))
+  }, [customDirectors])
 
   useEffect(() => {
     localStorage.setItem(WORKSPACE_PROFILES_KEY, JSON.stringify(profiles))
@@ -313,16 +330,24 @@ export default function App() {
 
 $1
 
-  const mergeChips = useCallback((patch) => {
-    setChips(prev => {
-      const next = { ...prev }
-      for (const [groupId, values] of Object.entries(patch)) {
-        const current = next[groupId] ?? []
-        const toAdd = values.filter(v => !current.includes(v))
-        if (toAdd.length > 0) next[groupId] = [...current, ...toAdd]
+$1
+
+  const saveCustomDirector = useCallback((entry) => {
+    setCustomDirectors(prev => {
+      const idx = prev.findIndex(d => d.key === entry.key)
+      if (idx >= 0) {
+        const next = [...prev]
+        next[idx] = entry
+        return next
       }
-      return next
+      if (prev.length >= 3) return prev
+      return [...prev, entry]
     })
+  }, [])
+
+  const deleteCustomDirector = useCallback((key) => {
+    setSelectedDir(prev => (prev === key ? null : prev))
+    setCustomDirectors(prev => prev.filter(d => d.key !== key))
   }, [])
 
   const captureApplyState = useCallback(() => ({
@@ -841,6 +866,9 @@ $1
             onAppendScene={appendScene}
             onNarrativeBeatChange={setNarrativeBeat}
             onUseStyleKeyForPolishChange={setUseStyleKeyForPolish}
+            customDirectors={customDirectors}
+            onSaveCustomDirector={saveCustomDirector}
+            onDeleteCustomDirector={deleteCustomDirector}
           />
 
           <ChipSection

@@ -430,3 +430,212 @@
 .beatClear:hover {
   color: var(--text);
 }
+
+/* Custom director grid items */
+.dirGridSep {
+  width: 1px;
+  background: var(--border-2);
+  align-self: stretch;
+  margin: 0 2px;
+}
+
+.dirChipCustom {
+  border-style: dashed;
+}
+
+/* Custom directors section */
+.customWrap {
+  margin-top: 4px;
+}
+
+.customToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-3);
+  background: none;
+  border: none;
+  padding: 4px 0;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.customToggle:hover {
+  color: var(--text-2);
+}
+
+.customCount {
+  font-size: 10px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+
+.customBody {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 0 4px;
+}
+
+.customItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.customItemName {
+  flex: 1;
+  color: var(--text);
+}
+
+.customItemShort {
+  font-size: 11px;
+  color: var(--text-3);
+  font-family: var(--font-mono);
+}
+
+.customItemEdit {
+  font-size: 11px;
+  color: var(--accent);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.customItemDelete {
+  font-size: 14px;
+  color: var(--text-3);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.customItemDelete:hover {
+  color: var(--red, #e05);
+}
+
+.customForm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.customFormTitle {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+}
+
+.customRow {
+  display: flex;
+  gap: 6px;
+}
+
+.customInput {
+  flex: 1;
+  font-size: 12px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.customInputShort {
+  width: 80px;
+  font-size: 12px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.customInput:focus,
+.customInputShort:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.customTextarea {
+  width: 100%;
+  font-size: 12px;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  resize: vertical;
+  font-family: var(--font-mono);
+  line-height: 1.5;
+}
+
+.customTextarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.customFieldLabel {
+  font-size: 10px;
+  color: var(--text-3);
+  margin-top: 2px;
+}
+
+.customActions {
+  display: flex;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.customSave {
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-dim);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.customSave:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.customSave:not(:disabled):hover {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.customCancel {
+  font-size: 11px;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.customCancel:hover {
+  color: var(--text);
+  border-color: var(--border-2);
+}
