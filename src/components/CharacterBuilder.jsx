@@ -43,6 +43,26 @@ export default function CharacterBuilder({
           }
         }
         setBankSyncStatus((prev) => ({ ...initialStatus, ...prev }))
+        // Pull bank entries not present in localStorage (DB is source of truth).
+        if (items.length > 0) {
+          setCharacters((prev) => {
+            const merged = { ...prev }
+            let changed = false
+            for (const bankEntry of items) {
+              if (!merged[bankEntry.slug]) {
+                merged[bankEntry.slug] = {
+                  slug: bankEntry.slug,
+                  name: bankEntry.name,
+                  rawDescription: bankEntry.description,
+                  optimizedDescription: bankEntry.optimizedDescription || '',
+                  createdAt: new Date(bankEntry.createdAt).getTime(),
+                }
+                changed = true
+              }
+            }
+            return changed ? merged : prev
+          })
+        }
       })
       .catch(() => {
         // Bank unavailable (e.g. APP_MODE=cloud or dev server not running).
@@ -102,6 +122,9 @@ export default function CharacterBuilder({
     const suffixApplied = finalSlug !== baseSlug
     setFlash(suffixApplied ? `Saved @${finalSlug} (auto-suffixed)` : `Saved @${finalSlug}`)
     setTimeout(() => setFlash(''), 1300)
+    // Best-effort background sync to DB. Failures are silent — localStorage
+    // remains the fallback if the bank is unreachable.
+    syncCharacter(value)
   }
 
   const loadCharacter = (entry) => {
