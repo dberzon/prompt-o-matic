@@ -102,7 +102,18 @@ function CollapsibleGroup({ group, chips, onToggle }) {
   )
 }
 
-export default function ChipSection({$1  onMergeChips,
+export default function ChipSection({
+  chips,
+  onToggle,
+  onMergeChips,
+  onPreset,
+  selectedDir,
+  onApplySelectedDirectorPreset,
+  lastAppliedPresetLabel,
+  customPresets,
+  onSaveCustomPreset,
+  onExportCustomPresets,
+  onImportCustomPresets,
 }) {
   const importRef = useRef(null)
   const [importMessage, setImportMessage] = useState('')

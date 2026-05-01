@@ -8,6 +8,8 @@ import styles from './PromptOutput.module.css'
 const DEFAULT_FRONT_PREFIX = 'photorealistic film still'
 const HISTORY_KEY = 'qpb_prompt_history_v1'
 const HISTORY_LIMIT = 12
+const SAVED_PROMPTS_KEY = 'qpb_saved_prompts_v1'
+const SAVED_PROMPTS_LIMIT = 30
 const LOCAL_PROVIDER_KEY = 'qpb_local_provider_v1'
 const LMSTUDIO_HOST_KEY = 'qpb_lmstudio_host_v1'
 const LMSTUDIO_PORT_KEY = 'qpb_lmstudio_port_v1'
@@ -16,6 +18,17 @@ const LMSTUDIO_MODEL_KEY = 'qpb_lmstudio_model_v1'
 function readHistory() {
   try {
     const raw = localStorage.getItem(HISTORY_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+function readSavedPrompts() {
+  try {
+    const raw = localStorage.getItem(SAVED_PROMPTS_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed : []
@@ -92,6 +105,8 @@ export default function PromptOutput({
   const [history, setHistory] = useState(() => readHistory())
   const textareaRef = useRef(null)
   const [showHistory, setShowHistory] = useState(false)
+  const [savedPrompts, setSavedPrompts] = useState(() => readSavedPrompts())
+  const [showSaved, setShowSaved] = useState(false)
   const [diffTargetId, setDiffTargetId] = useState(null)
   const [shareState, setShareState] = useState('idle')
   const [debugCopyState, setDebugCopyState] = useState('idle')
@@ -344,6 +359,44 @@ export default function PromptOutput({
     }
   }
 
+  const handleSavePrompt = useCallback(() => {
+    const text = displayText.trim()
+    if (!text) return
+    const name = window.prompt('Save prompt as:')
+    if (!name?.trim()) return
+    setSavedPrompts((prev) => {
+      const entry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        name: name.trim(),
+        text,
+        timestamp: Date.now(),
+      }
+      const next = [entry, ...prev].slice(0, SAVED_PROMPTS_LIMIT)
+      localStorage.setItem(SAVED_PROMPTS_KEY, JSON.stringify(next))
+      return next
+    })
+  }, [displayText])
+
+  const handleDeleteSavedPrompt = useCallback((id) => {
+    setSavedPrompts((prev) => {
+      const next = prev.filter((e) => e.id !== id)
+      localStorage.setItem(SAVED_PROMPTS_KEY, JSON.stringify(next))
+      return next
+    })
+  }, [])
+
+  const handleRenameSavedPrompt = useCallback((id) => {
+    setSavedPrompts((prev) => {
+      const entry = prev.find((e) => e.id === id)
+      if (!entry) return prev
+      const newName = window.prompt('Rename to:', entry.name)
+      if (!newName?.trim()) return prev
+      const next = prev.map((e) => e.id === id ? { ...e, name: newName.trim() } : e)
+      localStorage.setItem(SAVED_PROMPTS_KEY, JSON.stringify(next))
+      return next
+    })
+  }, [])
+
   const handleValidateLmStudio = useCallback(async () => {
     if (!lmStudioBaseUrl) {
       setLmStudioValidation({ status: 'error', message: 'Set LM Studio host and port first.' })
@@ -529,6 +582,15 @@ export default function PromptOutput({
             title="Download positive prompt plus NEGATIVE block as a .txt file."
           >
             Export .txt
+          </button>
+          <button
+            type="button"
+            className={styles.copyBtn}
+            onClick={handleSavePrompt}
+            disabled={!displayText.trim()}
+            title="Save this prompt under a name"
+          >
+            Save prompt
           </button>
           <CopyButton text={displayText} />
         </div>
@@ -964,6 +1026,53 @@ export default function PromptOutput({
                     }}
                   >
                     Restore
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className={styles.savedWrap}>
+        <button
+          className={styles.revertBtn}
+          onClick={() => setShowSaved((v) => !v)}
+          disabled={savedPrompts.length === 0}
+        >
+          {showSaved ? 'Hide saved' : `Saved prompts (${savedPrompts.length})`}
+        </button>
+        {showSaved && (
+          <div className={styles.savedList}>
+            {savedPrompts.map((entry) => (
+              <div key={entry.id} className={styles.savedItem}>
+                <div className={styles.savedMeta}>
+                  <span className={styles.savedName}>{entry.name}</span>
+                  <span>{new Date(entry.timestamp).toLocaleDateString()}</span>
+                </div>
+                <p className={styles.historyText}>{entry.text}</p>
+                <div className={styles.historyActions}>
+                  <CopyButton text={entry.text} label="Copy" />
+                  <button
+                    className={styles.ruleFixBtn}
+                    onClick={() => {
+                      setRestoredText(entry.text)
+                      setSelectedVariant(null)
+                    }}
+                  >
+                    Restore
+                  </button>
+                  <button
+                    className={styles.ruleFixBtn}
+                    onClick={() => handleRenameSavedPrompt(entry.id)}
+                  >
+                    Rename
+                  </button>
+                  <button
+                    className={styles.ruleFixBtn}
+                    onClick={() => handleDeleteSavedPrompt(entry.id)}
+                  >
+                    Delete
                   </button>
                 </div>
               </div>
