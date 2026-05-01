@@ -19,6 +19,14 @@ export const REWRITES = [
   [/\bsuit\b/gi, 'dark suit, not recently pressed'],
   [/\buniform\b/gi, 'utilitarian uniform, worn and faded'],
   [/\bdress\b/gi, 'simple dress, unremarkable, the fabric slightly creased'],
+  [/lying down/gi, 'lying on one side, not quite asleep'],
+  [/\bsitting\b/gi, 'seated, weight forward, elbows on knees'],
+  [/\bstanding\b/gi, 'standing still, weight on one foot, not at attention'],
+  [/\bwalking\b/gi, 'walking at unhurried pace, no apparent destination'],
+  [/\bleaning\b/gi, 'leaning against the wall, one shoulder into it'],
+  [/\bcrouching\b/gi, 'crouched low, weight on the balls of the feet'],
+  [/\bkneeling\b/gi, 'kneeling on one knee, not in supplication'],
+  [/\bslumped\b/gi, 'slumped, upper body collapsed forward, not asleep'],
 ]
 
 export const DEFAULTS = {
