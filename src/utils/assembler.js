@@ -88,6 +88,9 @@ export function assemblePrompt({ scene, scenario, chips, characters = {} }) {
   if (chips.env) chips.env.forEach(v => parts.push(v))
   if (chips.texture) chips.texture.forEach(v => parts.push(v))
 
+  // 4b. Composition (frame placement — after environment, before light)
+  if (chips.comp) chips.comp.forEach(v => parts.push(v))
+
   // 5. Light
   if (chips.light) {
     chips.light.forEach(v => parts.push(v))
