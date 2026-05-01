@@ -10,11 +10,13 @@ import { parseCharacterProfile } from '../characters/schemas.js'
 import { compileCharacterPromptPacks } from '../prompts/qwenPromptCompiler.js'
 import { buildBankEntryAuditionPrompt } from './auditionPrompts.js'
 
+const DEFAULT_VIEWS = ['front_portrait', 'profile_portrait']
+
 export async function runAudition({
   db,
   bankEntryId,
   count = 3,
-  view = 'front_portrait',
+  views = DEFAULT_VIEWS,
   llmGenerate,
   comfyService = null,
 }) {
@@ -29,6 +31,10 @@ export async function runAudition({
     err.code = 'BANK_ENTRY_NOT_FOUND'
     throw err
   }
+
+  const safeViews = Array.isArray(views) && views.length > 0
+    ? views.filter((v) => typeof v === 'string' && v.trim())
+    : DEFAULT_VIEWS
 
   const safeCount = Math.max(1, Math.min(10, Math.trunc(count) || 1))
   const userPrompt = buildBankEntryAuditionPrompt({ bankEntry, count: safeCount })
@@ -49,72 +55,88 @@ export async function runAudition({
 
   const nowIso = new Date().toISOString()
   const results = []
+
   for (const rawProfile of rawProfiles.slice(0, safeCount)) {
+    const pairId = randomUUID()
+
     try {
-      // Normalize required server-side fields the LLM should not produce.
+      // Validate and persist the character profile once per pair.
       const candidatePayload = {
         ...rawProfile,
         id: randomUUID(),
         createdAt: nowIso,
         updatedAt: nowIso,
         embeddingStatus: 'not_indexed',
-        // Tag origin via name/projectId so the structured profile is traceable to the bank entry.
         name: rawProfile?.name || bankEntry.name,
       }
-
-      // Validate strict-ly against CharacterProfileSchema.
       const validated = parseCharacterProfile(candidatePayload)
-
-      // Persist structured character.
       const character = createCharacter(db, validated)
 
-      // Compile prompt-pack for the requested view.
-      const compileResult = compileCharacterPromptPacks({
-        db,
-        input: { characterId: character.id, views: [view] },
-      })
-      const promptPack = compileResult?.packs?.[0] ?? null
-
-      // Optionally queue Comfy. Graceful no-op if comfyService is null.
-      let comfyJob = null
-      if (comfyService && promptPack) {
+      // Generate one actor_candidate + audition per view in the pair.
+      const viewResults = []
+      for (const view of safeViews) {
         try {
-          comfyJob = await comfyService.queuePromptPackById({
+          const compileResult = compileCharacterPromptPacks({
             db,
-            promptPackId: promptPack.id,
-            allowWorkflowFallback: true,
+            input: { characterId: character.id, views: [view] },
           })
-        } catch (queueErr) {
-          comfyJob = { error: queueErr?.message || 'Comfy queue failed' }
+          const promptPack = compileResult?.packs?.[0] ?? null
+
+          let comfyJob = null
+          if (comfyService && promptPack) {
+            try {
+              comfyJob = await comfyService.queuePromptPackById({
+                db,
+                promptPackId: promptPack.id,
+                allowWorkflowFallback: true,
+              })
+            } catch (queueErr) {
+              comfyJob = { error: queueErr?.message || 'Comfy queue failed' }
+            }
+          }
+
+          const actorCandidate = createActorCandidate(db, {
+            status: 'available',
+            sourceBankEntryId: bankEntry.id,
+            promptPackId: promptPack?.id,
+            notes: JSON.stringify({
+              characterId: character.id,
+              comfyPromptId: comfyJob?.promptId ?? null,
+              pairId,
+              view,
+            }),
+          })
+
+          const audition = createActorAudition(db, {
+            actorCandidateId: actorCandidate.id,
+            bankEntryId: bankEntry.id,
+            status: 'pending',
+          })
+
+          viewResults.push({
+            ok: true,
+            view,
+            auditionId: audition.id,
+            actorCandidateId: actorCandidate.id,
+            promptPackId: promptPack?.id ?? null,
+            comfyPromptId: comfyJob?.promptId ?? null,
+            comfyError: comfyJob?.error ?? null,
+          })
+        } catch (viewErr) {
+          viewResults.push({
+            ok: false,
+            view,
+            error: viewErr?.message || 'View generation failed',
+            code: viewErr?.code || 'VIEW_GENERATION_ERROR',
+          })
         }
       }
 
-      // Persist actor_candidate (links to bank entry, prompt pack, character via notes).
-      const actorCandidate = createActorCandidate(db, {
-        status: 'available',
-        sourceBankEntryId: bankEntry.id,
-        promptPackId: promptPack?.id,
-        notes: JSON.stringify({
-          characterId: character.id,
-          comfyPromptId: comfyJob?.promptId ?? null,
-        }),
-      })
-
-      // Persist actor_audition.
-      const audition = createActorAudition(db, {
-        actorCandidateId: actorCandidate.id,
-        bankEntryId: bankEntry.id,
-        status: 'pending',
-      })
-
       results.push({
         ok: true,
+        pairId,
         characterId: character.id,
-        actorCandidateId: actorCandidate.id,
-        auditionId: audition.id,
-        promptPackId: promptPack?.id ?? null,
-        comfyPromptId: comfyJob?.promptId ?? null,
-        comfyError: comfyJob?.error ?? null,
+        views: viewResults,
       })
     } catch (err) {
       results.push({

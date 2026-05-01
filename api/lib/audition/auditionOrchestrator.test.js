@@ -76,7 +76,7 @@ afterEach(() => {
 })
 
 describe('runAudition', () => {
-  it('happy path persists candidates and auditions for count=2', async () => {
+  it('happy path: count=2 produces 2 pairs, each with front+side views', async () => {
     const bank = seedBankEntry(db)
     const llmGenerate = vi.fn().mockResolvedValue(JSON.stringify([
       validProfileFixture(),
@@ -101,10 +101,19 @@ describe('runAudition', () => {
     expect(result.successful).toBe(2)
     expect(result.failed).toBe(0)
     expect(result.results).toHaveLength(2)
-    expect(listActorCandidates(db)).toHaveLength(2)
+    // Each pair has 2 views → 4 candidates and 4 auditions total.
+    expect(listActorCandidates(db)).toHaveLength(4)
     const auditions = listActorAuditions(db)
-    expect(auditions).toHaveLength(2)
+    expect(auditions).toHaveLength(4)
     expect(auditions.every((item) => item.status === 'pending')).toBe(true)
+    // Verify pair shape.
+    const pair = result.results[0]
+    expect(pair.ok).toBe(true)
+    expect(pair.pairId).toBeTruthy()
+    expect(pair.characterId).toBeTruthy()
+    expect(Array.isArray(pair.views)).toBe(true)
+    expect(pair.views).toHaveLength(2)
+    expect(pair.views.map((v) => v.view)).toEqual(['front_portrait', 'profile_portrait'])
   })
 
   it('throws when LLM returns invalid JSON', async () => {
@@ -155,8 +164,9 @@ describe('runAudition', () => {
     expect(result.successful).toBe(1)
     expect(result.failed).toBe(1)
     expect(result.results.some((item) => item.ok === false)).toBe(true)
-    expect(listActorCandidates(db)).toHaveLength(1)
-    expect(listActorAuditions(db)).toHaveLength(1)
+    // 1 valid character × 2 views = 2 candidates and 2 auditions.
+    expect(listActorCandidates(db)).toHaveLength(2)
+    expect(listActorAuditions(db)).toHaveLength(2)
   })
 
   it('persists candidates and auditions without comfyService and returns null comfyPromptId', async () => {
@@ -172,8 +182,11 @@ describe('runAudition', () => {
     })
 
     expect(result.successful).toBe(1)
-    expect(result.results[0].comfyPromptId).toBeNull()
-    expect(listActorCandidates(db)).toHaveLength(1)
-    expect(listActorAuditions(db)).toHaveLength(1)
+    // comfyPromptId now lives per-view inside result.views[].
+    expect(result.results[0].views[0].comfyPromptId).toBeNull()
+    expect(result.results[0].views[1].comfyPromptId).toBeNull()
+    // 1 character × 2 views = 2 candidates and 2 auditions.
+    expect(listActorCandidates(db)).toHaveLength(2)
+    expect(listActorAuditions(db)).toHaveLength(2)
   })
 })

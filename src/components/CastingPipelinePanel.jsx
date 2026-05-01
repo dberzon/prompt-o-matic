@@ -85,7 +85,6 @@ export default function CastingPipelinePanel() {
   const [selectedBankEntryId, setSelectedBankEntryId] = useState('')
   const [bankLoadError, setBankLoadError] = useState(null)
   const [auditionCount, setAuditionCount] = useState(3)
-  const [auditionView, setAuditionView] = useState('front_portrait')
   const [auditionRunning, setAuditionRunning] = useState(false)
   const [auditionResults, setAuditionResults] = useState([])
   const [auditionRunMeta, setAuditionRunMeta] = useState(null)
@@ -189,11 +188,7 @@ export default function CastingPipelinePanel() {
     setAuditionRunning(true)
     setAuditionError(null)
     try {
-      const data = await generateAudition({
-        bankEntryId,
-        count: auditionCount,
-        view: auditionView,
-      })
+      const data = await generateAudition({ bankEntryId, count: auditionCount })
       setAuditionResults(Array.isArray(data?.results) ? data.results : [])
       setAuditionRunMeta({
         bankEntryId: data?.bankEntryId,
@@ -201,9 +196,13 @@ export default function CastingPipelinePanel() {
         successful: data?.successful,
         failed: data?.failed,
       })
+      // Collect all comfy prompt IDs across all views in all pairs.
       const initialStatuses = {}
       for (const result of (data?.results || [])) {
-        if (result.ok && result.comfyPromptId) initialStatuses[result.comfyPromptId] = 'pending'
+        if (!result.ok || !Array.isArray(result.views)) continue
+        for (const v of result.views) {
+          if (v.ok && v.comfyPromptId) initialStatuses[v.comfyPromptId] = 'pending'
+        }
       }
       setAuditionStatuses(initialStatuses)
       setAuditionImages({})
@@ -216,12 +215,17 @@ export default function CastingPipelinePanel() {
   }
 
   const handleRefreshAuditionStatuses = async () => {
-    const promptIds = Object.keys(auditionStatuses)
-    if (promptIds.length === 0) return
+    if (Object.keys(auditionStatuses).length === 0) return
     try {
-      const jobs = auditionResults
-        .filter((result) => result.ok && result.comfyPromptId)
-        .map((result) => ({ promptId: result.comfyPromptId, promptPackId: result.promptPackId, view: auditionView }))
+      const jobs = []
+      for (const result of auditionResults) {
+        if (!result.ok || !Array.isArray(result.views)) continue
+        for (const v of result.views) {
+          if (v.ok && v.comfyPromptId) {
+            jobs.push({ promptId: v.comfyPromptId, promptPackId: v.promptPackId, view: v.view })
+          }
+        }
+      }
       const data = await getComfyJobsStatus(jobs)
       const next = { ...auditionStatuses }
       for (const item of (data?.items || [])) {
@@ -234,14 +238,20 @@ export default function CastingPipelinePanel() {
   }
 
   const handleIngestAuditionResults = async () => {
-    const ready = auditionResults
-      .filter((result) => result.ok && result.comfyPromptId && auditionStatuses[result.comfyPromptId] === 'success')
-      .map((result) => ({
-        promptId: result.comfyPromptId,
-        promptPackId: result.promptPackId,
-        characterId: result.characterId,
-        viewType: auditionView,
-      }))
+    const ready = []
+    for (const result of auditionResults) {
+      if (!result.ok || !Array.isArray(result.views)) continue
+      for (const v of result.views) {
+        if (v.ok && v.comfyPromptId && auditionStatuses[v.comfyPromptId] === 'success') {
+          ready.push({
+            promptId: v.comfyPromptId,
+            promptPackId: v.promptPackId,
+            characterId: result.characterId,
+            viewType: v.view,
+          })
+        }
+      }
+    }
     if (ready.length === 0) {
       setAuditionError('No audition jobs completed yet')
       return
@@ -249,13 +259,13 @@ export default function CastingPipelinePanel() {
     try {
       await ingestComfyOutputsMany(ready)
       const imageMap = { ...auditionImages }
-      for (const result of auditionResults) {
-        if (!result.ok || !result.characterId) continue
+      const uniqueCharIds = [...new Set(auditionResults.filter((r) => r.ok).map((r) => r.characterId))]
+      for (const characterId of uniqueCharIds) {
         try {
-          const list = await listGeneratedImages({ characterId: result.characterId })
-          imageMap[result.characterId] = Array.isArray(list?.items) ? list.items : []
+          const list = await listGeneratedImages({ characterId })
+          imageMap[characterId] = Array.isArray(list?.items) ? list.items : []
         } catch {
-          imageMap[result.characterId] = imageMap[result.characterId] || []
+          imageMap[characterId] = imageMap[characterId] || []
         }
       }
       setAuditionImages(imageMap)
@@ -617,17 +627,7 @@ export default function CastingPipelinePanel() {
                 onChange={(e) => setAuditionCount(Math.max(1, Math.min(10, Number(e.target.value) || 1)))}
                 disabled={auditionRunning}
               />
-              <label>View</label>
-              <select
-                value={auditionView}
-                onChange={(e) => setAuditionView(e.target.value)}
-                disabled={auditionRunning}
-              >
-                <option value="front_portrait">Front portrait</option>
-                <option value="three_quarter_portrait">Three-quarter portrait</option>
-                <option value="profile_portrait">Profile (side)</option>
-                <option value="full_body">Full body</option>
-              </select>
+              <span className={styles.subtle}>front + side pair</span>
               <button
                 type="button"
                 onClick={handleGenerateAudition}
@@ -646,40 +646,60 @@ export default function CastingPipelinePanel() {
                   <button type="button" onClick={handleIngestAuditionResults}>Ingest completed</button>
                 </div>
                 {auditionResults.map((result, index) => (
-                  <div key={result.auditionId || `failed-${index}`} className={styles.item}>
+                  <div key={result.pairId || `failed-${index}`} className={styles.item}>
                     {result.ok ? (
                       <>
-                        <div>
-                          <strong>Audition {result.auditionId}</strong>
-                          <span> — character {result.characterId}</span>
-                          <span> — comfy job {result.comfyPromptId || 'n/a'}: {result.comfyPromptId ? (auditionStatuses[result.comfyPromptId] || 'pending') : 'n/a'}</span>
+                        <div className={styles.subtle}>
+                          Pair {result.pairId?.slice(0, 8)} — character {result.characterId?.slice(0, 8)}
                         </div>
-                        {(auditionImages[result.characterId] || []).slice(0, 4).map((img) => (
-                          <img
-                            key={img.id}
-                            src={`/api/generated-image-view?id=${encodeURIComponent(img.id)}`}
-                            alt={`actor ${result.characterId}`}
-                            style={{ maxWidth: 120, maxHeight: 160, objectFit: 'cover', marginRight: 8 }}
-                          />
-                        ))}
-                        <div className={styles.row}>
-                          <button
-                            type="button"
-                            onClick={() => handleApproveAudition(result.auditionId)}
-                            disabled={auditionItemActions[result.auditionId]?.busy}
-                          >
-                            {auditionItemActions[result.auditionId]?.status === 'approved' ? '✓ Approved' : 'Approve'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleRejectAudition(result.auditionId)}
-                            disabled={auditionItemActions[result.auditionId]?.busy}
-                          >
-                            {auditionItemActions[result.auditionId]?.status === 'rejected' ? '✗ Rejected' : 'Reject'}
-                          </button>
-                          {auditionItemActions[result.auditionId]?.error ? (
-                            <span className={styles.error}>{auditionItemActions[result.auditionId].error}</span>
-                          ) : null}
+                        <div className={styles.row} style={{ alignItems: 'flex-start', gap: 16 }}>
+                          {(result.views || []).map((v) => (
+                            <div key={v.view} style={{ flex: 1 }}>
+                              <div className={styles.subtle} style={{ marginBottom: 4 }}>
+                                {v.view.replace(/_/g, ' ')}
+                              </div>
+                              {v.ok ? (
+                                <>
+                                  {(auditionImages[result.characterId] || [])
+                                    .filter((img) => !img.viewType || img.viewType === v.view)
+                                    .slice(0, 2)
+                                    .map((img) => (
+                                      <img
+                                        key={img.id}
+                                        src={`/api/generated-image-view?id=${encodeURIComponent(img.id)}`}
+                                        alt={v.view}
+                                        style={{ maxWidth: 110, maxHeight: 150, objectFit: 'cover', marginRight: 4, display: 'block', marginBottom: 4 }}
+                                      />
+                                    ))
+                                  }
+                                  <div className={styles.subtle}>
+                                    Comfy: {v.comfyPromptId ? (auditionStatuses[v.comfyPromptId] || 'pending') : 'n/a'}
+                                  </div>
+                                  <div className={styles.row}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleApproveAudition(v.auditionId)}
+                                      disabled={auditionItemActions[v.auditionId]?.busy}
+                                    >
+                                      {auditionItemActions[v.auditionId]?.status === 'approved' ? '✓' : 'Approve'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRejectAudition(v.auditionId)}
+                                      disabled={auditionItemActions[v.auditionId]?.busy}
+                                    >
+                                      {auditionItemActions[v.auditionId]?.status === 'rejected' ? '✗' : 'Reject'}
+                                    </button>
+                                    {auditionItemActions[v.auditionId]?.error && (
+                                      <span className={styles.error}>{auditionItemActions[v.auditionId].error}</span>
+                                    )}
+                                  </div>
+                                </>
+                              ) : (
+                                <span className={styles.error}>{v.error}</span>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       </>
                     ) : (

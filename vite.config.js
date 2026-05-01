@@ -678,7 +678,9 @@ function apiDevPlugin(env) {
             return
           }
           const count = Number.isFinite(body?.count) ? body.count : 3
-          const view = typeof body?.view === 'string' && body.view.trim() ? body.view.trim() : 'front_portrait'
+          const views = Array.isArray(body?.views) && body.views.length > 0
+            ? body.views
+            : ['front_portrait', 'profile_portrait']
 
           runtime = createVectorRuntime({ env })
 
@@ -712,7 +714,7 @@ function apiDevPlugin(env) {
             db: runtime.db,
             bankEntryId,
             count,
-            view,
+            views,
             llmGenerate,
             comfyService,
           })
