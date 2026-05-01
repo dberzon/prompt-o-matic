@@ -4,6 +4,47 @@ import { PRESETS, FEATURED_PRESET_KEYS, DIRECTOR_PRESETS } from '../data/constan
 import { useSectionState } from '../hooks/useSectionState.js'
 import styles from './ChipSection.module.css'
 
+const TIME_OF_DAY_PRESETS = [
+  { label: 'Dawn', chips: {
+    light: ['magic hour, golden light from below the cloud line'],
+    texture: ['frost on dead grass, thin ice on puddles'],
+    color: ['cool blue-gray, low contrast midtones'],
+  }},
+  { label: 'Morning', chips: {
+    light: ['flat overcast light, uniform gray sky, no cast shadows'],
+    color: ['cool blue-gray, low contrast midtones'],
+  }},
+  { label: 'Midday', chips: {
+    light: ['harsh midday overhead sun, high contrast'],
+    texture: ['heat shimmer over asphalt, air wavering'],
+    color: ['drained earth tones, brown and pale beige, very low saturation'],
+  }},
+  { label: 'Golden hour', chips: {
+    light: ['magic hour, golden light from below the cloud line'],
+    texture: ['dust suspended in shaft of light'],
+    color: ['warm amber interior light against cold blue exterior'],
+  }},
+  { label: 'Blue hour', chips: {
+    light: ['late afternoon fading light, sky brighter than ground'],
+    color: ['cool blue-gray, low contrast midtones'],
+  }},
+  { label: 'Night rain', chips: {
+    light: ['neon and available light, night exterior'],
+    texture: ['rain-soaked surfaces, reflections of sky in wet ground'],
+    color: ['night-city cyan and orange, neon palette'],
+  }},
+  { label: 'Night clear', chips: {
+    light: ['sodium street lamp, amber monochrome cast'],
+    texture: ['city lights reflected in wet asphalt'],
+    color: ['cool blue-gray, low contrast midtones'],
+  }},
+  { label: 'Fog', chips: {
+    light: ['fog-filtered diffused light, no direct source visible'],
+    texture: ['heavy fog, middle distance dissolved to pale silhouette'],
+    color: ['near-monochrome, color barely present'],
+  }},
+]
+
 function CollapsibleGroup({ group, chips, onToggle }) {
   const [open, setOpen] = useSectionState(`chip-group-${group.id}`, false)
   const panelId = `chip-group-panel-${group.id}`
@@ -61,17 +102,7 @@ function CollapsibleGroup({ group, chips, onToggle }) {
   )
 }
 
-export default function ChipSection({
-  chips,
-  onToggle,
-  onPreset,
-  selectedDir,
-  onApplySelectedDirectorPreset,
-  lastAppliedPresetLabel,
-  customPresets,
-  onSaveCustomPreset,
-  onExportCustomPresets,
-  onImportCustomPresets,
+export default function ChipSection({$1  onMergeChips,
 }) {
   const importRef = useRef(null)
   const [importMessage, setImportMessage] = useState('')
@@ -153,6 +184,25 @@ export default function ChipSection({
         </div>
       </div>
       {importMessage && <p className={styles.lastPresetLabel}>{importMessage}</p>}
+
+      {/* Time of day / weather quick-set */}
+      {onMergeChips && (
+        <div className={styles.quickSetRow}>
+          <span className={styles.quickSetLabel}>Time of day</span>
+          <div className={styles.quickSetButtons}>
+            {TIME_OF_DAY_PRESETS.map((preset) => (
+              <button
+                key={preset.label}
+                className={styles.quickSetBtn}
+                onClick={() => onMergeChips(preset.chips)}
+                title={`Merge light + texture + color chips for ${preset.label}`}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Director presets (bespoke per-director technical presets) */}
       <div className={styles.section}>

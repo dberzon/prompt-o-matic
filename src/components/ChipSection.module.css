@@ -196,3 +196,44 @@
   border-color: var(--accent);
   color: var(--accent);
 }
+
+/* Time of day quick-set */
+.quickSetRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 2px 0;
+}
+
+.quickSetLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.quickSetButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.quickSetBtn {
+  font-size: 11px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-3);
+  transition: all 0.12s;
+  letter-spacing: 0.02em;
+}
+
+.quickSetBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-glow);
+}

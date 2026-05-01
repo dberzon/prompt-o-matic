@@ -14,6 +14,11 @@ export const REWRITES = [
   [/\brain\b/gi, 'fine persistent rain, all surfaces dark with moisture'],
   [/\bfog\b/gi, 'low fog, middle distance dissolved into pale gray'],
   [/\bsnow\b/gi, 'thin snow cover, ground not fully white'],
+  [/gray raincoat/gi, 'gray wool raincoat, collar turned up, dark with moisture at the shoulders'],
+  [/\bovercoat\b/gi, 'heavy wool overcoat, worn at the elbows'],
+  [/\bsuit\b/gi, 'dark suit, not recently pressed'],
+  [/\buniform\b/gi, 'utilitarian uniform, worn and faded'],
+  [/\bdress\b/gi, 'simple dress, unremarkable, the fabric slightly creased'],
 ]
 
 export const DEFAULTS = {

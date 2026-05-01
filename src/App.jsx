@@ -311,16 +311,17 @@ export default function App() {
     )
   ), [])
 
-  const toggleChip = useCallback((groupId, value) => {
+$1
+
+  const mergeChips = useCallback((patch) => {
     setChips(prev => {
-      const current = prev[groupId] ?? []
-      const has = current.includes(value)
-      const next = has ? current.filter(v => v !== value) : [...current, value]
-      if (next.length === 0) {
-        const { [groupId]: _, ...rest } = prev
-        return rest
+      const next = { ...prev }
+      for (const [groupId, values] of Object.entries(patch)) {
+        const current = next[groupId] ?? []
+        const toAdd = values.filter(v => !current.includes(v))
+        if (toAdd.length > 0) next[groupId] = [...current, ...toAdd]
       }
-      return { ...prev, [groupId]: next }
+      return next
     })
   }, [])
 
@@ -845,6 +846,7 @@ export default function App() {
           <ChipSection
             chips={chips}
             onToggle={toggleChip}
+            onMergeChips={mergeChips}
             onPreset={loadPreset}
             selectedDir={selectedDir}
             onApplySelectedDirectorPreset={applySelectedDirectorPreset}
