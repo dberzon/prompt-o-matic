@@ -79,8 +79,8 @@
 
 /* Director grid */
 .dirGrid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
   gap: 5px;
   margin-bottom: 10px;
 }
@@ -433,10 +433,10 @@
 
 /* Custom director grid items */
 .dirGridSep {
-  width: 1px;
+  grid-column: 1 / -1;
+  height: 1px;
   background: var(--border-2);
-  align-self: stretch;
-  margin: 0 2px;
+  margin: 2px 0;
 }
 
 .dirChipCustom {
