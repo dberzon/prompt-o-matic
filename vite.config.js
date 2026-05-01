@@ -2,6 +2,7 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { healthCheck, runPolish } from './api/lib/polishCore.js'
 import { resolveProviderSelection, runWithResolvedProvider } from './api/lib/polishCore.js'
+import { runReferenceImageAnalysis } from './api/lib/referenceImageCore.js'
 import { runCharacterOptimize } from './api/lib/characterOptimizeCore.js'
 import { runBatchCharacterGeneration } from './api/lib/characters/batchGeneration.js'
 import {
@@ -113,6 +114,22 @@ function apiDevPlugin(env) {
           const result = await healthCheck({ engine, localOnly, payload, env })
           sendJsonMiddleware(res, 200, result)
         } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message })
+        }
+      })
+
+      server.middlewares.use('/api/analyze-reference-image', async (req, res) => {
+        if (req.method !== 'POST') {
+          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
+          return
+        }
+        try {
+          const body = await readJsonBody(req)
+          const result = await runReferenceImageAnalysis({ payload: body, env })
+          sendJsonMiddleware(res, 200, result)
+        } catch (err) {
+          console.error('[api-dev] Reference image analysis error:', err?.message, err?.meta ?? '')
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message })
         }

@@ -74,12 +74,65 @@
   outline: none;
 }
 
-.removeBtn {
-  width: 100%;
-  border: none;
+.cardActions {
+  display: flex;
   border-top: 1px solid var(--border);
+}
+
+.analyzeBtn {
+  flex: 1;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--accent);
+  font-size: 11px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.analyzeBtn:disabled {
+  color: var(--text-3);
+  cursor: default;
+}
+
+.removeBtn {
+  flex: 1;
+  border: none;
   background: transparent;
   color: var(--red);
   font-size: 11px;
   padding: 6px 8px;
+  cursor: pointer;
+}
+
+.analysis {
+  border-top: 1px solid var(--border);
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.analysisRow {
+  font-size: 10px;
+  color: var(--text-2);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.analysisLabel {
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 9px;
+  font-weight: 600;
+  margin-right: 5px;
+}
+
+.analysisError {
+  font-size: 10px;
+  color: var(--red);
+  padding: 6px 8px;
+  margin: 0;
+  border-top: 1px solid var(--border);
 }
