@@ -3,6 +3,7 @@ import { NEGATIVE_PROMPT } from '../data/chips.js'
 import { usePolish } from '../hooks/usePolish.js'
 import { scorePromptQuality } from '../utils/qualityScore.js'
 import { downloadPromptTxt } from '../utils/downloadPromptFile.js'
+import { listGeneratedImages } from '../lib/api/generatedImages.js'
 import styles from './PromptOutput.module.css'
 
 const DEFAULT_FRONT_PREFIX = 'photorealistic film still'
@@ -107,6 +108,9 @@ export default function PromptOutput({
   const [showHistory, setShowHistory] = useState(false)
   const [savedPrompts, setSavedPrompts] = useState(() => readSavedPrompts())
   const [showSaved, setShowSaved] = useState(false)
+  const [showGallery, setShowGallery] = useState(false)
+  const [galleryImages, setGalleryImages] = useState([])
+  const [galleryLoading, setGalleryLoading] = useState(false)
   const [diffTargetId, setDiffTargetId] = useState(null)
   const [shareState, setShareState] = useState('idle')
   const [debugCopyState, setDebugCopyState] = useState('idle')
@@ -396,6 +400,22 @@ export default function PromptOutput({
       return next
     })
   }, [])
+
+  const loadGallery = useCallback(async () => {
+    setGalleryLoading(true)
+    try {
+      const result = await listGeneratedImages({ limit: 20 })
+      setGalleryImages(result.items || [])
+    } catch {
+      setGalleryImages([])
+    } finally {
+      setGalleryLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (showGallery) loadGallery()
+  }, [showGallery, loadGallery])
 
   const handleValidateLmStudio = useCallback(async () => {
     if (!lmStudioBaseUrl) {
@@ -1077,6 +1097,62 @@ export default function PromptOutput({
                 </div>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      <div className={styles.galleryWrap}>
+        <div className={styles.galleryToggleRow}>
+          <button
+            className={styles.revertBtn}
+            onClick={() => setShowGallery((v) => !v)}
+          >
+            {showGallery ? 'Hide images' : `Generated images${galleryImages.length > 0 ? ` (${galleryImages.length})` : ''}`}
+          </button>
+          {showGallery && (
+            <button
+              className={styles.ruleFixBtn}
+              onClick={loadGallery}
+              disabled={galleryLoading}
+            >
+              ↻ Refresh
+            </button>
+          )}
+        </div>
+        {showGallery && (
+          <div className={styles.galleryPanel}>
+            {galleryLoading && (
+              <p className={styles.galleryEmpty}>Loading…</p>
+            )}
+            {!galleryLoading && galleryImages.length === 0 && (
+              <p className={styles.galleryEmpty}>No generated images yet. Run the casting pipeline first.</p>
+            )}
+            {!galleryLoading && galleryImages.length > 0 && (
+              <div className={styles.galleryGrid}>
+                {galleryImages.map((img) => (
+                  <a
+                    key={img.id}
+                    href={`/api/generated-image-view?id=${img.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.galleryItem}
+                    title={[img.viewType, img.characterId].filter(Boolean).join(' · ')}
+                  >
+                    <img
+                      src={`/api/generated-image-view?id=${img.id}`}
+                      alt={img.viewType || 'generated'}
+                      className={styles.galleryThumb}
+                      loading="lazy"
+                    />
+                    {img.viewType && (
+                      <span className={styles.galleryCaption}>
+                        {img.viewType.replace(/_/g, ' ')}
+                      </span>
+                    )}
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
