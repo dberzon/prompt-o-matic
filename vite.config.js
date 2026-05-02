@@ -49,6 +49,7 @@ import {
   updateActorAudition,
   updateActorCandidate,
   updateBankEntry,
+  updateCharacter,
   updateGeneratedImageRecord,
 } from './api/lib/db/repositories.js'
 import { createVectorRuntime } from './api/lib/vector/runtime.js'
@@ -259,6 +260,25 @@ function apiDevPlugin(env) {
         } finally {
           runtime?.close?.()
         }
+      })
+
+      server.middlewares.use('/api/character-rename', async (req, res) => {
+        if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
+        let runtime = null
+        try {
+          const body = await readJsonBody(req)
+          const characterId = body?.characterId
+          const name = typeof body?.name === 'string' && body.name.trim() ? body.name.trim() : null
+          if (!characterId) { sendJsonMiddleware(res, 400, { error: 'Missing characterId' }); return }
+          if (!name) { sendJsonMiddleware(res, 400, { error: 'Missing or empty name' }); return }
+          runtime = createVectorRuntime({ env })
+          const updated = updateCharacter(runtime.db, characterId, { name })
+          if (!updated) { sendJsonMiddleware(res, 404, { error: 'Character not found' }); return }
+          sendJsonMiddleware(res, 200, { ok: true, item: updated })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_RENAME_ERROR' })
+        } finally { runtime?.close?.() }
       })
 
       server.middlewares.use('/api/character-batch', async (req, res) => {

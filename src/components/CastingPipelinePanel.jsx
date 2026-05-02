@@ -7,6 +7,7 @@ import {
   listCharacterBatches,
   listCharacters,
   rejectBatchCandidate,
+  renameCharacter,
   saveBatchCandidate,
 } from '../lib/api/characterBatches.js'
 import { compilePromptPacksForCharacter, listPromptPacksForCharacter } from '../lib/api/promptPacks.js'
@@ -135,6 +136,13 @@ export default function CastingPipelinePanel() {
   const [batchGenGender, setBatchGenGender] = useState('')
   const [batchGenerating, setBatchGenerating] = useState(false)
   const [batchGenError, setBatchGenError] = useState(null)
+
+  // ── Character management (j6k) ────────────────────────────────────────────
+  const [archivedIds, setArchivedIds] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('casting_room_archived_chars') || '[]')) } catch { return new Set() }
+  })
+  const [renamingCharacterId, setRenamingCharacterId] = useState(null)
+  const [renameValue, setRenameValue] = useState('')
 
   // ── Dev tools ─────────────────────────────────────────────────────────────
   const [comfyStatus, setComfyStatus] = useState(null)
@@ -520,6 +528,38 @@ export default function CastingPipelinePanel() {
     finally { setActionLoading(false) }
   }
 
+  // ── Character management handlers (j6k) ──────────────────────────────────
+  function handleArchive(charId) {
+    setArchivedIds((prev) => {
+      const next = new Set(prev)
+      next.add(charId)
+      localStorage.setItem('casting_room_archived_chars', JSON.stringify([...next]))
+      return next
+    })
+    if (selectedCharacterId === charId) setSelectedCharacterId('')
+  }
+
+  function handleRestore(charId) {
+    setArchivedIds((prev) => {
+      const next = new Set(prev)
+      next.delete(charId)
+      localStorage.setItem('casting_room_archived_chars', JSON.stringify([...next]))
+      return next
+    })
+  }
+
+  async function handleRenameCharacter() {
+    if (!renamingCharacterId || !renameValue.trim()) return
+    setActionLoading(true); setError(''); setSuccess('')
+    try {
+      await renameCharacter(renamingCharacterId, renameValue.trim())
+      setSavedCharacters((prev) => prev.map((c) => c.id === renamingCharacterId ? { ...c, name: renameValue.trim() } : c))
+      setRenamingCharacterId(null)
+      setSuccess(`Renamed to "${renameValue.trim()}"`)
+    } catch (err) { setError(err?.message || 'Rename failed') }
+    finally { setActionLoading(false) }
+  }
+
   // ── Batch generation handler (hvz) ───────────────────────────────────────
   async function handleGenerateBatch() {
     setBatchGenerating(true); setBatchGenError(null); setError(''); setSuccess('')
@@ -787,9 +827,9 @@ export default function CastingPipelinePanel() {
       <section className={styles.section}>
         <h3>Active Character</h3>
         <div className={styles.row}>
-          <select value={selectedCharacterId} onChange={(e) => setSelectedCharacterId(e.target.value)} className={styles.select}>
+          <select value={selectedCharacterId} onChange={(e) => { setSelectedCharacterId(e.target.value); setRenamingCharacterId(null) }} className={styles.select}>
             <option value="">Select character…</option>
-            {savedCharacters.map((c) => (
+            {savedCharacters.filter((c) => !archivedIds.has(c.id)).map((c) => (
               <option key={c.id} value={c.id}>{c.name}{c.age ? `, ${c.age}` : ''} ({c.id.slice(0, 8)}…)</option>
             ))}
           </select>
@@ -797,6 +837,48 @@ export default function CastingPipelinePanel() {
             {promptPacks.length > 0 ? 'Recompile Packs' : 'Compile Prompt Packs'}
           </button>
         </div>
+
+        {selectedCharacterId && !archivedIds.has(selectedCharacterId) && (
+          <div className={styles.row}>
+            {renamingCharacterId === selectedCharacterId ? (
+              <>
+                <input
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleRenameCharacter(); if (e.key === 'Escape') setRenamingCharacterId(null) }}
+                  style={{ flex: 1 }}
+                  autoFocus
+                />
+                <button disabled={actionLoading || !renameValue.trim()} onClick={handleRenameCharacter}>Save name</button>
+                <button onClick={() => setRenamingCharacterId(null)}>Cancel</button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => { setRenamingCharacterId(selectedCharacterId); setRenameValue(savedCharacters.find((c) => c.id === selectedCharacterId)?.name || '') }}>
+                  Rename
+                </button>
+                <button onClick={() => handleArchive(selectedCharacterId)}>Archive</button>
+              </>
+            )}
+          </div>
+        )}
+
+        {archivedIds.size > 0 && (
+          <details style={{ marginTop: 6 }}>
+            <summary className={styles.subtle} style={{ cursor: 'pointer', userSelect: 'none' }}>
+              ▸ Archived characters ({archivedIds.size})
+            </summary>
+            <div style={{ marginTop: 6 }}>
+              {savedCharacters.filter((c) => archivedIds.has(c.id)).map((c) => (
+                <div key={c.id} className={styles.row}>
+                  <span className={styles.subtle}>{c.name}{c.age ? `, ${c.age}` : ''}</span>
+                  <button onClick={() => handleRestore(c.id)}>Restore</button>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
+
         {promptPacks.length > 0 && (
           <select value={selectedPromptPackId} onChange={(e) => setSelectedPromptPackId(e.target.value)} className={styles.select}>
             <option value="">Select prompt pack…</option>

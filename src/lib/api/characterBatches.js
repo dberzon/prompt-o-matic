@@ -32,3 +32,7 @@ export function generateBatch({ request, options = {}, provider = {} } = {}) {
   return apiPost('/api/characters-generate-batch', { request, options: { persistBatch: true, ...options }, provider })
 }
 
+export function renameCharacter(characterId, name) {
+  return apiPost('/api/character-rename', { characterId, name })
+}
+

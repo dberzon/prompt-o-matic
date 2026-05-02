@@ -1,136 +1,126 @@
 # Casting Room — Step-by-Step User Guide
 
-This guide walks you through both casting workflows end-to-end.
+Two casting workflows are available:
 
-- **Journey A — Cast from Bank**: Generate audition candidates directly from a Character Bank entry using LM Studio. The fastest path to seeing generated images.
-- **Journey B — Batch Pipeline**: Review a pre-generated batch of character candidates, approve or reject them, then promote to an Active Character.
+- **Journey A — Cast from Bank**: Pick a casting brief, click Generate Auditions. LM Studio produces character profiles; Comfy renders front and profile portraits automatically.
+- **Journey B — Batch Pipeline**: Generate or select a batch of AI-produced candidates, review them, and promote the ones you want to a character profile.
 
-Both journeys converge at the **Active Character → Portfolio → Gallery** stage.
+Both journeys converge at **Active Character → Portfolio → Gallery**.
 
 ---
 
 ## Prerequisites
 
-Before opening the Casting Room, make sure these are in place:
+| Requirement | Required for | How to check |
+|---|---|---|
+| Dev server running | Both | `npm run dev` → open http://localhost:5173 |
+| LM Studio running, model loaded | Journey A + Batch generation | LM Studio app open, serving on local port |
+| `LMSTUDIO_BASE_URL` in `.env.local` | Journey A + Batch | Points to LM Studio (e.g. `http://localhost:1234`) |
+| `LMSTUDIO_MODEL` in `.env.local` | Journey A + Batch | Exact model name shown in LM Studio |
+| `ENABLE_COMFY_API=true` in `.env.local` | Image generation | Required for ComfyUI integration |
+| `COMFYUI_BASE_URL` in `.env.local` | Image generation | Points to ComfyUI (e.g. `http://localhost:8188`) |
+| `ENABLE_CHARACTER_BATCH_API=true` in `.env.local` | Journey B | Required to list/generate batches |
 
-| Requirement | How to check |
-|---|---|
-| Dev server running | `npm run dev` → open http://localhost:5173 |
-| LM Studio running | LM Studio app open, a model loaded and serving on its local port |
-| `.env.local` has `LMSTUDIO_BASE_URL` | Points to LM Studio's API (e.g. `http://localhost:1234`) |
-| `.env.local` has `LMSTUDIO_MODEL` | Set to the exact model name shown in LM Studio (e.g. `Gemma-4-E4B-...`) |
-| ComfyUI running (for image generation) | ComfyUI app open and serving (default `http://localhost:8188`) |
-| `.env.local` has `ENABLE_COMFY_API=true` | Required for ComfyUI integration; restart dev server after changing |
-| `.env.local` has `COMFYUI_BASE_URL` | Points to ComfyUI (e.g. `http://localhost:8188`) |
-
-> **Note**: Restart the dev server (`Ctrl+C` then `npm run dev`) after changing any `.env.local` values — the API is loaded as Vite middleware at startup and does not hot-reload.
-
-> **Batch Pipeline only**: also requires `ENABLE_CHARACTER_BATCH_API=true` in `.env.local` and batches pre-generated via the API (`POST /api/characters-generate-batch`).
+> **Restart the dev server** (`Ctrl+C` then `npm run dev`) after any `.env.local` change — the API loads as Vite middleware at startup and does not hot-reload.
 
 ---
 
 ## Journey A — Cast from Bank
 
-### Step 1: Create a Character Bank Entry
+### Step 1: Create a Casting Brief
 
 1. Click the **Character Builder** tab.
-2. Fill in the character's **Name** (e.g. `Lena Sholk`).
-3. Write a **Description** — describe their look, age, energy, and any casting notes. The richer this text, the better the LM Studio output.
-4. Click **Save**. The character is now in the bank with a `@snake_case` slug (e.g. `@lena_sholk`).
+2. Fill in **Name** (e.g. `Lena Sholk`) and a **Description** — the more specific the look, age, energy, and tone, the better the LM Studio output.
+3. Click **Save**. The brief is stored with a `@snake_case` slug (e.g. `@lena_sholk`).
 
-> Slugs must be `snake_case` ASCII. The app auto-converts on save.
+If the brief already exists, skip to Step 2.
 
 ---
 
 ### Step 2: Open the Casting Room
 
-Click the **Casting Room** tab. The panel loads:
-- Character Bank entries (from the bank you just populated)
-- Existing batches (Batch Pipeline section)
-- ComfyUI workflow list
+Click the **Casting Room** tab. The panel loads casting briefs, batches, and the ComfyUI workflow list.
 
-If you see a load error, check that the dev server is running and `.env.local` is correct.
+If you see a load error check the dev server logs and verify `.env.local`.
 
 ---
 
-### Step 3: Select a Character in "Cast from Bank"
+### Step 3: Select a Brief and Workflow
 
-Under **Cast from Bank**, open the dropdown and select your character. You will see their name and description preview below the dropdown.
+Under **Cast from Bank**:
 
-If the dropdown shows "No bank characters yet", go back to Character Builder and save at least one entry.
+1. Pick your casting brief from the dropdown (`@slug — Name`). The name and description appear below as a preview.
+2. Select a **workflow** from the dropdown below the brief selector. Only valid workflows appear by default. If the list is empty, ComfyUI isn't connected or no workflows are loaded.
 
 ---
 
 ### Step 4: Generate Auditions
 
-1. Set **Count** (1–10, default 3). This is how many distinct actor candidates the LLM will generate.
+1. Set **Count** (1–10, default 3) — how many distinct actor candidates the LLM generates.
 2. Click **Generate Auditions**.
-   - The button changes to **Generating…** while LM Studio creates character profiles.
-   - Each profile is validated against the character schema. If a profile fails validation, that slot is skipped.
-   - For each valid profile, two Comfy jobs are queued automatically: `front portrait` and `profile portrait`.
-3. When generation finishes you see results like:
-   ```
-   3 generated · 0 failed
-   images appear automatically when ready
-   ```
+   - The LLM creates N character profiles from your brief.
+   - Each profile is validated and saved to the database.
+   - Two Comfy jobs are queued per candidate: `front portrait` and `profile portrait`.
+3. The result summary appears: `N generated · M failed`.
+4. A note confirms: *"Front portrait and profile portrait are queued for each candidate. To generate other views use Portfolio below — uncheck front and profile to avoid duplicates."*
+5. The first successfully generated character is automatically selected in **Active Character**.
 
-> **What happens under the hood**: The app calls LM Studio with a structured prompt that includes your bank entry's name and description. LM Studio returns N character profiles as JSON. Each profile is saved to the database as a new character, then two ComfyUI prompt packs are compiled and queued.
+> If generation fails for all candidates, check the LM Studio log for errors and retry.
 
 ---
 
 ### Step 5: Watch Images Appear Automatically
 
-After generation, the **⟳ checking Comfy…** indicator appears. The app polls ComfyUI every 8 seconds.
+After generation the **⟳ checking Comfy…** indicator appears. The panel polls ComfyUI every 8 seconds.
 
-Each candidate pair shows:
-- A short pair ID and character ID
-- One card per view (`front portrait`, `profile portrait`)
-- A status badge per view:
-  - **⟳ pending** — job queued, not started
-  - **⟳ running…** — ComfyUI is rendering
-  - **✓ ready** — image generated and ingested
-  - **✗ failed** — ComfyUI job failed
+Each candidate pair shows status badges per view:
+- **⟳ pending** — job queued, not started
+- **⟳ running…** — ComfyUI is rendering
+- **✓ ready** — image generated and ingested automatically
+- **✗ failed** — ComfyUI job failed
 
-When a job succeeds, the image is automatically ingested and appears inline. You do not need to click anything.
+Images appear inline as jobs complete. Polling stops when all jobs are terminal (success or failed).
 
-Polling stops automatically once all jobs are in a terminal state (`success` or `failed`).
+> **Tab navigation**: job state is saved in `sessionStorage`. If you switch tabs and return, the panel restores pending jobs and resumes polling automatically.
 
 ---
 
-### Step 6: Approve or Reject Each View
+### Step 6: Review Each View
 
-Under each view card you will see **Approve** and **Reject** buttons.
+Under each candidate pair you see one card per view. Once all jobs for a pair are terminal:
 
-- **Approve** — marks this view's audition record as approved.
-- **Reject** — opens a prompt for an optional rejection reason, then marks it rejected.
+- **Select this look** — marks this specific view's audition record as selected.
+- **Pass** — prompts for an optional reason, then marks it passed.
 
-You can approve and reject independently per view within the same candidate pair.
+You can select and pass views independently within the same pair.
 
 ---
 
 ### Step 7: Request More Takes (optional)
 
-After you approve at least one view in a candidate pair, a **More takes** panel appears below that pair.
+Once all Comfy jobs for a pair finish (success or failed), a **More takes** panel appears below that pair — regardless of whether you have selected any view.
 
-1. Tick the views you want (checkboxes for all 6 view types: `front portrait`, `three quarter portrait`, `profile portrait`, `full body`, `audition still`, `cinematic scene`).
-2. Click **Queue Takes**.
-3. The new jobs are queued and the existing audit poller picks them up — progress appears as `N/total ready`.
-
-> "More takes" uses the same character profile already saved to the database. It simply compiles new prompt packs for the chosen views and queues them.
+1. Tick the views you want (all 6 available: front portrait, three quarter portrait, profile portrait, full body, audition still, cinematic scene).
+2. Click **Queue Takes**. New jobs are queued and the existing poller picks them up.
+3. Progress shows as `N/total ready`.
 
 ---
 
 ## Journey B — Batch Pipeline
 
-This path assumes batches have been generated via the API (e.g. via `POST /api/characters-generate-batch` with `persistBatch: true`). If no batches exist, the section shows "No batches found."
+### Step 1: Generate or Select a Batch
 
----
+Under **Batch Pipeline**:
 
-### Step 1: Select a Batch
+- To create a new batch, click **+ Generate Batch**. Fill in:
+  - **Age** range (min–max, e.g. 25–45)
+  - **Count** (how many candidates to generate, 1–50)
+  - **Gender** (mixed, male, female, non-binary)
+  - **Tone** (optional — e.g. `gritty noir thriller`)
+  - Click **Generate**. This calls LM Studio and may take 30–90 seconds. The batch list refreshes automatically on success.
+- Or select an existing batch from the dropdown.
 
-Under **Batch Pipeline**, open the dropdown. Each entry shows a short batch ID and its status (e.g. `pending`, `complete`).
-
-Select a batch. The list of candidates loads below.
+> Requires `ENABLE_CHARACTER_BATCH_API=true`. If the Generate button fails with a permissions error, add the flag to `.env.local` and restart.
 
 ---
 
@@ -138,89 +128,91 @@ Select a batch. The list of candidates loads below.
 
 Each candidate card shows:
 - **Name** and **age**
-- **Review status** (e.g. `pending`, `approved`, `rejected`)
-- **Classification** (e.g. `accepted`, `needsMutation`, `rejected` — set by the similarity check at generation time)
-- **Cinematic archetype** (a one-line descriptor from the LLM)
+- **Review status**: `pending` / `approved` / `rejected`
+- **Similarity check**: `unique` (safe to use), `needs change` (close to existing characters), `too similar` (auto-flagged as duplicate)
+- **Cinematic archetype**
 
-For each candidate, choose:
-- **Approve** — moves `reviewStatus` to `approved`
-- **Reject** — moves `reviewStatus` to `rejected`
+For each candidate:
+- **Cast this character** — marks `reviewStatus` as approved.
+- **Dismiss** — rejects the candidate.
 
 ---
 
 ### Step 3: Save as Active Character
 
-Once a candidate is approved, the **Save → Active Character** button becomes enabled.
-
-Click it. The candidate's character profile is saved to the database, and the **Active Character** section auto-selects it. You will see a success banner: `Saved as Active Character: <name>`.
+Once a candidate is approved (review status: approved), the **Save → Active Character** button becomes enabled. Click it. The character is saved to the database and automatically selected in the **Active Character** section.
 
 ---
 
 ## Active Character → Portfolio → Gallery
 
-Both journeys converge here. You now have a character in the database and can generate a full portfolio.
+Both journeys arrive here. You now have a character in the database.
 
 ---
 
-### Step 4: Compile Prompt Packs
+### Step 1: Manage the Character (optional)
 
-Under **Active Character**:
+With the character selected in **Active Character**:
 
-1. The dropdown shows all saved characters (name, age, short ID). Your newly saved character should be selected.
-2. Click **Compile Prompt Packs**. The app compiles one prompt pack per view for this character using the selected ComfyUI workflow, then lists them.
-3. A success banner shows `Compiled N prompt pack(s).`
-
-> If you already compiled packs in a previous session, click **Load Existing** instead to reload without recompiling.
+- **Rename** — click Rename, type a new name, press Enter or **Save name**.
+- **Archive** — click Archive to hide the character from the dropdown without deleting it. Archived characters and their images remain in the database. Use the **▸ Archived characters** section below the dropdown to restore them.
 
 ---
 
-### Step 5: Queue the Portfolio
+### Step 2: Prompt Packs
+
+When you select a character, the panel automatically checks for existing prompt packs and loads them. If packs exist, the button reads **Recompile Packs** (regenerates them). If no packs exist, it reads **Compile Prompt Packs** (generates for the first time).
+
+> Journey A characters have their packs compiled during audition generation — they will usually appear immediately.
+
+---
+
+### Step 3: Queue the Portfolio
 
 Under **Portfolio**:
 
-1. Select a **Workflow** from the dropdown. Only valid workflows appear by default — tick "show invalid" to see all.
-2. Tick the **views** you want to generate. Default selection is:
+1. The workflow dropdown shows the currently selected workflow (shared with Journey A's selector).
+2. Tick the **views** to render. Default selection:
    - `front portrait` ✓
    - `three quarter portrait` ✓
    - `profile portrait` ✓
    - `full body` ✓
    - `audition still` ✓
-   - `cinematic scene` ☐ (off by default — slow/heavy)
-3. Click **Queue Portfolio**.
-4. The **⟳ checking Comfy…** indicator appears and the job list shows status badges for each queued view.
-
-Images are automatically ingested as jobs succeed. The poller stops when all jobs are terminal.
+   - `cinematic scene` ☐ (off by default)
+3. **Journey A users**: front and profile portrait are already in the Gallery from Step 4. Uncheck them here to avoid duplicate renders.
+4. Click **Queue Portfolio**.
+5. **⟳ checking Comfy…** appears and each view shows a status badge. Images are ingested automatically as jobs complete.
 
 ---
 
-### Step 6: Review the Gallery
+### Step 4: Review the Gallery
 
 Under **Gallery**:
 
-1. Images for the active character appear automatically as they are ingested. Click **Refresh** to reload manually.
-2. Each image card shows:
-   - View type (e.g. `front_portrait`)
-   - Seed number
-   - Approval status (`pending` or `✓`)
-3. Click **Approve** or **Reject** for each image to record your decision.
+The header shows **Showing images for: [Character Name]** so you always know whose images you're looking at. If you switch the Active Character dropdown, the gallery updates to show that character's images.
+
+Each image card shows view type, seed, and approval state.
+
+- **Keep** — marks the image as approved.
+- **Discard** — rejects it with reason "Rejected manually".
+
+Click **Refresh** to reload the gallery manually if needed.
 
 ---
 
 ## Developer Tools
 
-The **▸ Developer Tools** section is collapsed by default. Expand it when troubleshooting.
+Expand **▸ Developer Tools** (collapsed by default) for low-level access.
 
-| Tool | What it does |
+| Tool | Use when |
 |---|---|
-| **Comfy status** | Shows whether ComfyUI is reachable and its base URL |
-| **Refresh Panel** | Re-fetches all panel data (batches, workflows, characters) |
-| **Validate Workflow** | Runs a validation check on the selected workflow and prints the result |
-| **Dry-run Pack** | Compiles a prompt pack and sends it to the ComfyUI workflow without queuing — useful to check the prompt text |
-| **Queue Single Pack** | Queues exactly one prompt pack and prints the returned Comfy prompt ID |
-| **Check Job Status** | Fetches status for the last queued prompt ID |
-| **Ingest Outputs** | Manually ingests outputs for the last queued prompt ID into the gallery |
-
-> Use **Dry-run Pack** first when testing a new workflow to verify the prompt mapping without burning a render slot.
+| **Comfy status** | Check whether ComfyUI is reachable |
+| **Refresh Panel** | Re-fetch all batches, workflows, characters |
+| **Validate Workflow** | Check a workflow mapping before rendering |
+| **Dry-run Pack** | Preview the compiled prompt without queuing a job |
+| **Queue Single Pack** | Queue exactly one prompt pack; returns the Comfy prompt ID |
+| **Check Job Status** | Poll status for the last queued prompt ID |
+| **Ingest Outputs** | Manually ingest outputs if auto-ingest failed |
 
 ---
 
@@ -228,11 +220,12 @@ The **▸ Developer Tools** section is collapsed by default. Expand it when trou
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| "Local LM Studio error: 400" | LM Studio does not accept `json_object` response format | LM Studio 0.3+ requires `json_schema`. Already patched in `api/lib/llm/providers/lmStudioProvider.js`. Restart dev server. |
-| `qwenPromptSeed` validation error | Non-Qwen model returned a number for this field | Already patched: field is coerced or dropped. Restart dev server. |
-| "Bank unavailable" in Cast from Bank | Bank entries failed to load | Check dev server logs. Ensure DB file exists (`api/db/` directory). |
-| Images never appear (stuck at ⟳ pending) | ComfyUI not running or `COMFYUI_BASE_URL` wrong | Expand Developer Tools → check Comfy status line. |
-| "BANK_ENTRY_NOT_FOUND" after Generate Auditions | Selected bank entry was deleted or DB was reset | Re-select a valid entry from the dropdown. |
-| "Failed: schema_invalid" in audition results | LLM output missing required character fields | Try again — LLMs occasionally produce malformed JSON. The app retries per candidate. |
-| Batch Pipeline shows "No batches found" | No batches have been generated yet | Generate batches via `POST /api/characters-generate-batch` with `persistBatch: true`. Requires `ENABLE_CHARACTER_BATCH_API=true`. |
-| "Queue Portfolio" button disabled | No character selected, no workflow selected, or no views ticked | Check all three. |
+| "Local LM Studio error: 400" | Older `json_object` response format | Already patched. Restart dev server. |
+| `qwenPromptSeed` validation error | Non-Qwen model returned a number | Already patched. Restart dev server. |
+| "No casting briefs yet" in Cast from Bank | No briefs saved | Go to Character Builder tab and save one. |
+| Images never appear (stuck at ⟳ pending) | ComfyUI not running or wrong URL | Expand Developer Tools → check Comfy status line. |
+| Generate Batch fails with permissions error | Feature flag missing | Add `ENABLE_CHARACTER_BATCH_API=true` to `.env.local`, restart. |
+| Queue Portfolio button disabled | No character, no workflow, or no views ticked | Check all three. |
+| Gallery shows images for wrong character | Active Character dropdown changed | Check "Showing images for:" label in gallery header. |
+| Archived character missing from dropdown | Archived via the Archive button | Expand "▸ Archived characters" below the dropdown and click Restore. |
+| Pending jobs not resuming after tab switch | sessionStorage cleared (private browsing?) | Use Developer Tools → Ingest Outputs manually, or reload and re-queue. |
