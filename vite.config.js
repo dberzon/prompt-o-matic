@@ -238,11 +238,21 @@ function apiDevPlugin(env) {
         let runtime = null
         try {
           assertCharacterBatchOperationAllowed('list-characters', env)
-          const url = new URL(req.url || '', 'http://localhost')
+                    const url = new URL(req.url || '', 'http://localhost')
           const projectId = url.searchParams.get('projectId') || undefined
+          const gender = url.searchParams.get('gender') || undefined
+          const search = url.searchParams.get('search') || undefined
+          const ageMin = url.searchParams.has('ageMin') ? Number(url.searchParams.get('ageMin')) : undefined
+          const ageMax = url.searchParams.has('ageMax') ? Number(url.searchParams.get('ageMax')) : undefined
           runtime = createVectorRuntime({ env })
-          const items = listCharacters(runtime.db, { projectId })
-          sendJsonMiddleware(res, 200, { ok: true, items })
+          const items = listCharacters(runtime.db, {
+            projectId,
+            gender,
+            search,
+            ageMin: Number.isFinite(ageMin) ? ageMin : undefined,
+            ageMax: Number.isFinite(ageMax) ? ageMax : undefined,
+          })
+          sendJsonMiddleware(res, 200, { ok: true, items, total: items.length })
         } catch (err) {
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTERS_LIST_ERROR' })
@@ -838,6 +848,57 @@ function apiDevPlugin(env) {
         } catch (err) {
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_PORTFOLIO_QUEUE_ERROR' })
+        } finally {
+          runtime?.close?.()
+        }
+      })
+
+      server.middlewares.use('/api/actor-more-takes', async (req, res) => {
+        if (req.method !== 'POST') {
+          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
+          return
+        }
+        let runtime = null
+        try {
+          assertPromptPackOperationAllowed('compile-character', env)
+          assertComfyOperationAllowed('queue', env)
+          const body = await readJsonBody(req)
+          runtime = createVectorRuntime({ env })
+
+          let characterId = body?.characterId ?? null
+          if (!characterId && body?.actorCandidateId) {
+            const candidate = getActorCandidate(runtime.db, body.actorCandidateId)
+            if (!candidate) {
+              sendJsonMiddleware(res, 404, { error: 'Actor candidate not found' })
+              return
+            }
+            try {
+              const notesData = typeof candidate.notes === 'string' ? JSON.parse(candidate.notes) : candidate.notes
+              characterId = notesData?.characterId ?? null
+            } catch {
+              sendJsonMiddleware(res, 422, { error: 'Actor candidate notes do not contain a characterId' })
+              return
+            }
+          }
+
+          if (!characterId) {
+            sendJsonMiddleware(res, 400, { error: 'characterId or actorCandidateId is required' })
+            return
+          }
+
+          const service = createComfyService({ env })
+          const result = await queueCharacterPortfolio({
+            db: runtime.db,
+            comfyService: service,
+            characterId,
+            views: body?.views,
+            workflowId: body?.workflowId,
+            options: body?.options || {},
+          })
+          sendJsonMiddleware(res, 200, result)
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'ACTOR_MORE_TAKES_ERROR' })
         } finally {
           runtime?.close?.()
         }

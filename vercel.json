@@ -39,6 +39,9 @@
     },
     "api/vector-reindex-characters.js": {
       "maxDuration": 60
+    },
+    "api/actor-more-takes.js": {
+      "maxDuration": 60
     }
   },
   "env": {

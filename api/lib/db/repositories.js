@@ -106,7 +106,29 @@ export function listCharacters(db, filters = {}) {
     ORDER BY created_at DESC
     ${limitSql}
   `).all(...values)
-  return rows.map(rowToPayload)
+
+  let items = rows.map(rowToPayload)
+
+  if (filters.gender) {
+    const g = filters.gender.toLowerCase()
+    items = items.filter((c) => (c?.genderPresentation ?? '').toLowerCase().includes(g))
+  }
+  if (Number.isFinite(filters.ageMin)) {
+    items = items.filter((c) => typeof c?.age === 'number' && c.age >= filters.ageMin)
+  }
+  if (Number.isFinite(filters.ageMax)) {
+    items = items.filter((c) => typeof c?.age === 'number' && c.age <= filters.ageMax)
+  }
+  if (filters.search) {
+    const q = filters.search.toLowerCase()
+    items = items.filter((c) => {
+      const name = (c?.name ?? '').toLowerCase()
+      const archetype = (c?.cinematicArchetype ?? '').toLowerCase()
+      return name.includes(q) || archetype.includes(q)
+    })
+  }
+
+  return items
 }
 
 export function updateCharacter(db, id, patch) {

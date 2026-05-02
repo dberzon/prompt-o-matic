@@ -24,11 +24,57 @@ import {
   listGeneratedImages,
   rejectGeneratedImage,
 } from '../lib/api/generatedImages.js'
-import { buildCharacterPortfolioPlan, queueCharacterPortfolio } from '../lib/api/portfolio.js'
+import { buildCharacterPortfolioPlan, queueCharacterPortfolio, queueMoreTakes } from '../lib/api/portfolio.js'
 import { generateAudition } from '../lib/api/audition.js'
 import { approveActorAudition, rejectActorAudition } from '../lib/api/actorAuditions.js'
 import { listBankEntries } from '../lib/api/characterBank.js'
 import styles from './CastingPipelinePanel.module.css'
+
+const ALL_VIEWS = ['front_portrait', 'three_quarter_portrait', 'profile_portrait', 'full_body', 'audition_still', 'cinematic_scene']
+
+function MoreTakesPanel({ characterId, busy, error, result, onQueue }) {
+  const [selected, setSelected] = useState(new Set())
+
+  const toggle = (v) => setSelected((prev) => {
+    const next = new Set(prev)
+    next.has(v) ? next.delete(v) : next.add(v)
+    return next
+  })
+
+  return (
+    <div className={styles.moreTakes}>
+      <div className={styles.subtle}><strong>More takes</strong> — queue additional views for this character</div>
+      <div className={styles.row} style={{ flexWrap: 'wrap', gap: 6 }}>
+        {ALL_VIEWS.map((v) => (
+          <label key={v} className={styles.viewChip} style={{ opacity: busy ? 0.5 : 1 }}>
+            <input
+              type="checkbox"
+              checked={selected.has(v)}
+              onChange={() => toggle(v)}
+              disabled={busy}
+            />
+            {' '}{v.replace(/_/g, ' ')}
+          </label>
+        ))}
+      </div>
+      <div className={styles.row}>
+        <button
+          type="button"
+          disabled={busy || selected.size === 0}
+          onClick={() => onQueue(characterId, [...selected])}
+        >
+          {busy ? 'Queuing…' : 'Queue Takes'}
+        </button>
+        {error && <span className={styles.error}>{error}</span>}
+        {result && (
+          <span className={styles.subtle}>
+            Queued {result.summary?.success ?? 0} / {result.summary?.total ?? 0}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function ErrorBanner({ message }) {
   if (!message) return null
@@ -292,6 +338,26 @@ export default function CastingPipelinePanel() {
       setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, error: null, status: 'rejected' } }))
     } catch (err) {
       setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, error: err?.message || 'Reject failed' } }))
+    }
+  }
+
+
+  const [moreTakesState, setMoreTakesState] = useState({}) // keyed by characterId
+
+  const handleMoreTakes = async (characterId, selectedViews) => {
+    if (!characterId || !selectedViews?.length) return
+    setMoreTakesState((prev) => ({ ...prev, [characterId]: { busy: true, error: null, result: null } }))
+    try {
+      const result = await queueMoreTakes({ characterId, views: selectedViews })
+      setMoreTakesState((prev) => ({
+        ...prev,
+        [characterId]: { busy: false, error: null, result },
+      }))
+    } catch (err) {
+      setMoreTakesState((prev) => ({
+        ...prev,
+        [characterId]: { busy: false, error: err?.message || 'Queue failed', result: null },
+      }))
     }
   }
 
@@ -701,6 +767,15 @@ export default function CastingPipelinePanel() {
                             </div>
                           ))}
                         </div>
+                        {result.views?.some((v) => auditionItemActions[v.auditionId]?.status === 'approved') && (
+                          <MoreTakesPanel
+                            characterId={result.characterId}
+                            busy={moreTakesState[result.characterId]?.busy}
+                            error={moreTakesState[result.characterId]?.error}
+                            result={moreTakesState[result.characterId]?.result}
+                            onQueue={handleMoreTakes}
+                          />
+                        )}
                       </>
                     ) : (
                       <span className={styles.error}>Failed: {result.error} ({result.code})</span>

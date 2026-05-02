@@ -1,0 +1,86 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 0;
+}
+
+.search {
+  flex: 1;
+  min-width: 180px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.search:focus {
+  border-color: var(--border-2);
+}
+
+.genderChips {
+  display: flex;
+  gap: 6px;
+}
+
+.chip {
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+}
+
+.chip:hover {
+  color: var(--text);
+  border-color: var(--border-2);
+}
+
+.chipActive {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.ageRange {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ageLabel {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.ageInput {
+  width: 60px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 8px;
+  outline: none;
+  text-align: center;
+}
+
+.ageInput:focus {
+  border-color: var(--border-2);
+}
+
+.ageSep {
+  color: var(--text-3);
+  font-size: 11px;
+}

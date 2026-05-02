@@ -20,6 +20,7 @@ import BatchExplorer from './components/BatchExplorer.jsx'
 import EmbeddedSetup from './components/EmbeddedSetup.jsx'
 import CharacterBuilder from './components/CharacterBuilder.jsx'
 import CastingPipelinePanel from './components/CastingPipelinePanel.jsx'
+import ActorBankView from './components/ActorBank/ActorBankView.jsx'
 import MobilePromptBar from './components/MobilePromptBar.jsx'
 import styles from './App.module.css'
 
@@ -774,6 +775,12 @@ export default function App() {
         >
           Casting Room
         </button>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'actorBank' ? styles.tabBtnActive : ''}`}
+          onClick={() => setActiveTab('actorBank')}
+        >
+          Actor Bank
+        </button>
       </div>
 
       {activeTab === 'builder' ? <div className={styles.layout}>
@@ -949,9 +956,13 @@ export default function App() {
             embeddedStatus={embeddedStatus}
           />
         </div>
-      ) : (
+      ) : activeTab === 'pipeline' ? (
         <div className={styles.characterTab}>
           <CastingPipelinePanel />
+        </div>
+      ) : (
+        <div className={styles.characterTab}>
+          <ActorBankView />
         </div>
       )}
       <EmbeddedSetup

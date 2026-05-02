@@ -8,3 +8,7 @@ export function queueCharacterPortfolio(payload) {
   return apiPost('/api/character-portfolio-queue', payload)
 }
 
+export function queueMoreTakes(payload) {
+  return apiPost('/api/actor-more-takes', payload)
+}
+
