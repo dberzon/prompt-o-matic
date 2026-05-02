@@ -193,6 +193,36 @@ describe('lmStudioProvider — empty / thinking-only response', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Thinking-block stripping
+// ---------------------------------------------------------------------------
+
+describe('lmStudioProvider — think-block stripping', () => {
+  it('strips a <think>...</think> block from the start of content', async () => {
+    const fetchImpl = makeOkFetch('<think>\nsome reasoning here\n</think>\npolished cinematic output')
+    const result = await lmStudioProvider({ userMessage: USER, fetchImpl, env: {}, systemPrompt: SYS })
+    expect(result).toBe('polished cinematic output')
+  })
+
+  it('strips multiple <think> blocks', async () => {
+    const fetchImpl = makeOkFetch('<think>a</think> great <think>b</think> shot')
+    const result = await lmStudioProvider({ userMessage: USER, fetchImpl, env: {}, systemPrompt: SYS })
+    expect(result).toBe('great  shot')
+  })
+
+  it('returns content unchanged when no think blocks present', async () => {
+    const fetchImpl = makeOkFetch('clean polished output')
+    const result = await lmStudioProvider({ userMessage: USER, fetchImpl, env: {}, systemPrompt: SYS })
+    expect(result).toBe('clean polished output')
+  })
+
+  it('throws "Empty response" when content is only a <think> block', async () => {
+    const fetchImpl = makeOkFetch('<think>all reasoning, no output</think>')
+    await expect(lmStudioProvider({ userMessage: USER, fetchImpl, env: {}, systemPrompt: SYS }))
+      .rejects.toMatchObject({ message: 'Empty response from local provider', status: 502 })
+  })
+})
+
+// ---------------------------------------------------------------------------
 // HTTP errors
 // ---------------------------------------------------------------------------
 

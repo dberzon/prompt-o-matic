@@ -328,9 +328,18 @@ export default function App() {
     )
   ), [])
 
-$1
-
-$1
+  const toggleChip = useCallback((groupId, value) => {
+    setChips(prev => {
+      const current = prev[groupId] ?? []
+      const has = current.includes(value)
+      const next = has ? current.filter(v => v !== value) : [...current, value]
+      if (next.length === 0) {
+        const { [groupId]: _, ...rest } = prev
+        return rest
+      }
+      return { ...prev, [groupId]: next }
+    })
+  }, [])
 
   const saveCustomDirector = useCallback((entry) => {
     setCustomDirectors(prev => {
@@ -348,6 +357,18 @@ $1
   const deleteCustomDirector = useCallback((key) => {
     setSelectedDir(prev => (prev === key ? null : prev))
     setCustomDirectors(prev => prev.filter(d => d.key !== key))
+  }, [])
+
+  const mergeChips = useCallback((chipMap) => {
+    setChips(prev => {
+      const next = { ...prev }
+      for (const [subsectionId, values] of Object.entries(chipMap)) {
+        const existing = new Set(prev[subsectionId] ?? [])
+        values.forEach(v => existing.add(v))
+        next[subsectionId] = [...existing]
+      }
+      return next
+    })
   }, [])
 
   const captureApplyState = useCallback(() => ({

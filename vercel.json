@@ -9,6 +9,36 @@
     },
     "api/polish-health.js": {
       "maxDuration": 10
+    },
+    "api/characters.js": {
+      "maxDuration": 30
+    },
+    "api/characters-generate-batch.js": {
+      "maxDuration": 60
+    },
+    "api/character-batch.js": {
+      "maxDuration": 60
+    },
+    "api/character-batch-candidates.js": {
+      "maxDuration": 30
+    },
+    "api/character-batch-refill.js": {
+      "maxDuration": 60
+    },
+    "api/optimize-character.js": {
+      "maxDuration": 30
+    },
+    "api/analyze-reference-image.js": {
+      "maxDuration": 30
+    },
+    "api/comfy-queue-prompt-pack.js": {
+      "maxDuration": 30
+    },
+    "api/comfy-queue-character.js": {
+      "maxDuration": 30
+    },
+    "api/vector-reindex-characters.js": {
+      "maxDuration": 60
     }
   },
   "env": {

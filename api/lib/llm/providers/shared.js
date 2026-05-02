@@ -17,3 +17,9 @@ export function parseOllamaText(data) {
   if (typeof data?.message?.content === 'string') return data.message.content.trim()
   return ''
 }
+
+
+export function stripThinkBlocks(text) {
+  if (typeof text !== 'string') return text
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim()
+}

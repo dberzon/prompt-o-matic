@@ -361,6 +361,7 @@ export async function runPolish({
   return {
     polished: normalizePolishedText(polished, payload.frontPrefix),
     provider: providerSelection.provider,
+    engine: providerSelection.resolvedFrom,
     fallback: providerSelection.fallback ?? null,
   }
 }

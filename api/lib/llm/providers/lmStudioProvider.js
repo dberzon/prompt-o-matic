@@ -1,4 +1,4 @@
-import { DEFAULT_LMSTUDIO_MODEL, DEFAULT_LMSTUDIO_URL, envRead } from './shared.js'
+import { DEFAULT_LMSTUDIO_MODEL, DEFAULT_LMSTUDIO_URL, envRead, stripThinkBlocks } from './shared.js'
 
 export async function lmStudioProvider({ userMessage, fetchImpl, env, payload = {}, systemPrompt }) {
   const baseUrl = String(payload?.lmStudioBaseUrl || envRead(env, 'LMSTUDIO_BASE_URL') || DEFAULT_LMSTUDIO_URL).replace(/\/+$/, '')
@@ -38,7 +38,7 @@ export async function lmStudioProvider({ userMessage, fetchImpl, env, payload = 
     }
 
     const data = await response.json()
-    const text = data?.choices?.[0]?.message?.content?.trim()
+    const text = stripThinkBlocks(data?.choices?.[0]?.message?.content?.trim() ?? '')
     if (!text) {
       console.error('[lmstudio] empty content, raw response:', JSON.stringify(data))
       const err = new Error('Empty response from local provider')
