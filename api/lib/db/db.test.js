@@ -151,6 +151,57 @@ describe('sqlite canonical storage', () => {
     db.close()
   })
 
+  it('listCharacters: filters by search (name match)', () => {
+    const { db } = createTempDb()
+    createCharacter(db, { ...validCharacterProfile, id: 'char_s1', name: 'Elena' })
+    createCharacter(db, { ...validCharacterProfile, id: 'char_s2', name: 'Marcus' })
+    const results = listCharacters(db, { search: 'marc' })
+    expect(results.map((c) => c.id)).toEqual(['char_s2'])
+    db.close()
+  })
+
+  it('listCharacters: filters by search (cinematicArchetype match)', () => {
+    const { db } = createTempDb()
+    createCharacter(db, { ...validCharacterProfile, id: 'char_a1', cinematicArchetype: 'quiet observer' })
+    createCharacter(db, { ...validCharacterProfile, id: 'char_a2', cinematicArchetype: 'lone enforcer' })
+    const results = listCharacters(db, { search: 'enforcer' })
+    expect(results.map((c) => c.id)).toEqual(['char_a2'])
+    db.close()
+  })
+
+  it('listCharacters: filters by gender (substring match)', () => {
+    const { db } = createTempDb()
+    createCharacter(db, { ...validCharacterProfile, id: 'char_g1', genderPresentation: 'female' })
+    createCharacter(db, { ...validCharacterProfile, id: 'char_g2', genderPresentation: 'male' })
+    const female = listCharacters(db, { gender: 'female' })
+    expect(female.map((c) => c.id)).toEqual(['char_g1'])
+    db.close()
+  })
+
+  it('listCharacters: filters by ageMin and ageMax', () => {
+    const { db } = createTempDb()
+    const base = { ...validCharacterProfile }
+    createCharacter(db, { ...base, id: 'char_age1', age: 20, apparentAgeRange: { min: 18, max: 22 } })
+    createCharacter(db, { ...base, id: 'char_age2', age: 35, apparentAgeRange: { min: 33, max: 37 } })
+    createCharacter(db, { ...base, id: 'char_age3', age: 50, apparentAgeRange: { min: 48, max: 53 } })
+    const mid = listCharacters(db, { ageMin: 30, ageMax: 40 })
+    expect(mid.map((c) => c.id)).toEqual(['char_age2'])
+    const young = listCharacters(db, { ageMax: 25 })
+    expect(young.map((c) => c.id)).toEqual(['char_age1'])
+    db.close()
+  })
+
+  it('listCharacters: combines search and gender filters', () => {
+    const { db } = createTempDb()
+    const base = { ...validCharacterProfile }
+    createCharacter(db, { ...base, id: 'char_c1', name: 'Aria', genderPresentation: 'female' })
+    createCharacter(db, { ...base, id: 'char_c2', name: 'Aria', genderPresentation: 'male' })
+    createCharacter(db, { ...base, id: 'char_c3', name: 'Ben', genderPresentation: 'female' })
+    const results = listCharacters(db, { search: 'aria', gender: 'female' })
+    expect(results.map((c) => c.id)).toEqual(['char_c1'])
+    db.close()
+  })
+
   it('blocks sqlite initialization in APP_MODE=cloud', () => {
     expect(() => createSqliteDatabase({ env: { APP_MODE: 'cloud' }, dbPath: ':memory:' })).toThrow(
       'SQLite canonical storage is local-studio only',
