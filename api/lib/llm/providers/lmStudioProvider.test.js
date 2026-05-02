@@ -76,10 +76,10 @@ describe('lmStudioProvider — request body', () => {
     expect(fetch.calls[0].body.stream).toBe(false)
   })
 
-  it('sends max_tokens: 2000 by default', async () => {
+  it('sends max_tokens: 4000 by default', async () => {
     const fetch = captureBody(makeOkFetch('ok'))
     await lmStudioProvider({ userMessage: USER, fetchImpl: fetch, env: {}, systemPrompt: SYS })
-    expect(fetch.calls[0].body.max_tokens).toBe(2000)
+    expect(fetch.calls[0].body.max_tokens).toBe(4000)
   })
 
   it('respects LMSTUDIO_MAX_TOKENS env var', async () => {
@@ -88,10 +88,10 @@ describe('lmStudioProvider — request body', () => {
     expect(fetch.calls[0].body.max_tokens).toBe(500)
   })
 
-  it('falls back to 2000 when LMSTUDIO_MAX_TOKENS is invalid', async () => {
+  it('falls back to 4000 when LMSTUDIO_MAX_TOKENS is invalid', async () => {
     const fetch = captureBody(makeOkFetch('ok'))
     await lmStudioProvider({ userMessage: USER, fetchImpl: fetch, env: { LMSTUDIO_MAX_TOKENS: 'bad' }, systemPrompt: SYS })
-    expect(fetch.calls[0].body.max_tokens).toBe(2000)
+    expect(fetch.calls[0].body.max_tokens).toBe(4000)
   })
 
   it('prefixes user message with /no_think by default', async () => {
@@ -130,6 +130,30 @@ describe('lmStudioProvider — request body', () => {
       systemPrompt: SYS,
     })
     expect(fetch.calls[0].body.model).toBe('payload-model')
+  })
+
+  it('sends enable_thinking:false when noThink is true (default)', async () => {
+    const fetch = captureBody(makeOkFetch('ok'))
+    await lmStudioProvider({ userMessage: USER, fetchImpl: fetch, env: {}, systemPrompt: SYS })
+    expect(fetch.calls[0].body.enable_thinking).toBe(false)
+  })
+
+  it('omits enable_thinking when LMSTUDIO_NO_THINK=false', async () => {
+    const fetch = captureBody(makeOkFetch('ok'))
+    await lmStudioProvider({ userMessage: USER, fetchImpl: fetch, env: { LMSTUDIO_NO_THINK: 'false' }, systemPrompt: SYS })
+    expect(fetch.calls[0].body.enable_thinking).toBeUndefined()
+  })
+
+  it('sends response_format json_object when payload.responseFormat=json', async () => {
+    const fetch = captureBody(makeOkFetch('ok'))
+    await lmStudioProvider({ userMessage: USER, fetchImpl: fetch, env: {}, payload: { responseFormat: 'json' }, systemPrompt: SYS })
+    expect(fetch.calls[0].body.response_format).toEqual({ type: 'json_object' })
+  })
+
+  it('omits response_format when payload.responseFormat is not json', async () => {
+    const fetch = captureBody(makeOkFetch('ok'))
+    await lmStudioProvider({ userMessage: USER, fetchImpl: fetch, env: {}, systemPrompt: SYS })
+    expect(fetch.calls[0].body.response_format).toBeUndefined()
   })
 })
 
