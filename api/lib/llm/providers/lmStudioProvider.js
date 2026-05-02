@@ -14,8 +14,11 @@ export async function lmStudioProvider({ userMessage, fetchImpl, env, payload = 
   const userContent = noThink ? `/no_think\n${userMessage}` : userMessage
 
   // When the caller requests JSON output, enable LM Studio's structured JSON mode.
+  // Newer LM Studio versions require json_schema instead of json_object.
   const wantJson = payload?.responseFormat === 'json'
-  const responseFormat = wantJson ? { type: 'json_object' } : undefined
+  const responseFormat = wantJson
+    ? { type: 'json_schema', json_schema: { name: 'output', schema: { type: 'object', additionalProperties: true }, strict: false } }
+    : undefined
 
   const requestBody = {
     model,

@@ -52,6 +52,13 @@ function normalizeCandidateProfile(candidate, request, nowIso = new Date().toISO
   const apparent = raw.apparentAgeRange && typeof raw.apparentAgeRange === 'object'
     ? raw.apparentAgeRange
     : { min: request.ageMin, max: request.ageMax }
+  // Non-Qwen models emit qwenPromptSeed as a number; coerce to string or drop.
+  const rawSeed = raw.qwenPromptSeed
+  const qwenPromptSeed = typeof rawSeed === 'string' && rawSeed.trim()
+    ? rawSeed
+    : typeof rawSeed === 'number'
+      ? String(rawSeed)
+      : undefined
   return {
     ...raw,
     id: raw.id || randomUUID(),
@@ -63,6 +70,7 @@ function normalizeCandidateProfile(candidate, request, nowIso = new Date().toISO
     createdAt: raw.createdAt || nowIso,
     updatedAt: raw.updatedAt || nowIso,
     embeddingStatus: raw.embeddingStatus || 'not_indexed',
+    ...(qwenPromptSeed !== undefined ? { qwenPromptSeed } : { qwenPromptSeed: undefined }),
   }
 }
 

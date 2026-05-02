@@ -147,7 +147,7 @@ describe('lmStudioProvider — request body', () => {
   it('sends response_format json_object when payload.responseFormat=json', async () => {
     const fetch = captureBody(makeOkFetch('ok'))
     await lmStudioProvider({ userMessage: USER, fetchImpl: fetch, env: {}, payload: { responseFormat: 'json' }, systemPrompt: SYS })
-    expect(fetch.calls[0].body.response_format).toEqual({ type: 'json_object' })
+    expect(fetch.calls[0].body.response_format).toEqual({ type: 'json_schema', json_schema: { name: 'output', schema: { type: 'object', additionalProperties: true }, strict: false } })
   })
 
   it('omits response_format when payload.responseFormat is not json', async () => {

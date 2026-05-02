@@ -61,6 +61,13 @@ export async function runAudition({
 
     try {
       // Validate and persist the character profile once per pair.
+      // Coerce qwenPromptSeed: non-Qwen models emit it as a number; stringify or drop it.
+      const rawQwenSeed = rawProfile?.qwenPromptSeed
+      const qwenPromptSeed = typeof rawQwenSeed === 'string' && rawQwenSeed.trim()
+        ? rawQwenSeed
+        : typeof rawQwenSeed === 'number'
+          ? String(rawQwenSeed)
+          : undefined
       const candidatePayload = {
         ...rawProfile,
         id: randomUUID(),
@@ -68,6 +75,7 @@ export async function runAudition({
         updatedAt: nowIso,
         embeddingStatus: 'not_indexed',
         name: rawProfile?.name || bankEntry.name,
+        ...(qwenPromptSeed !== undefined ? { qwenPromptSeed } : { qwenPromptSeed: undefined }),
       }
       const validated = parseCharacterProfile(candidatePayload)
       const character = createCharacter(db, validated)

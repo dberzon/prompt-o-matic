@@ -31,7 +31,7 @@ export function buildBankEntryAuditionPrompt({ bankEntry, count }) {
     '- distinctiveFeatures (array of non-empty strings, length >= 1)',
     '- visualKeywords (array of non-empty strings, length >= 1)',
     '',
-    'Optional fields you may include: genderPresentation, ethnicityOrRegionalLook, cheekbones, skinTexture, qwenPromptSeed.',
+    'Optional fields you may include: genderPresentation, ethnicityOrRegionalLook, cheekbones, skinTexture.',
     '',
     'Do NOT include id, createdAt, updatedAt, embeddingStatus — those will be filled server-side.',
     '',

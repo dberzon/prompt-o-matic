@@ -12,7 +12,7 @@ export function buildBatchCandidateGenerationPrompt({ request, totalCandidates }
       'name, age, apparentAgeRange {min,max}, genderPresentation, ethnicityOrRegionalLook,',
       'faceShape, eyes, eyebrows, nose, lips, jawline, cheekbones, skinTone, skinTexture,',
       'hairColor, hairLength, hairTexture, hairstyle, bodyType, heightImpression, posture,',
-      'distinctiveFeatures[], wardrobeBase, cinematicArchetype, personalityEnergy, visualKeywords[], qwenPromptSeed',
+      'distinctiveFeatures[], wardrobeBase, cinematicArchetype, personalityEnergy, visualKeywords[]',
     ].join(' '),
     `Age range constraint: ${request.ageMin}-${request.ageMax}`,
     request.genderPresentation ? `Gender presentation: ${request.genderPresentation}` : 'Gender presentation: mixed allowed',
