@@ -17,6 +17,7 @@ export async function runAudition({
   bankEntryId,
   count = 3,
   views = DEFAULT_VIEWS,
+  workflowId,
   llmGenerate,
   comfyService = null,
 }) {
@@ -96,6 +97,7 @@ export async function runAudition({
               comfyJob = await comfyService.queuePromptPackById({
                 db,
                 promptPackId: promptPack.id,
+                workflowId: workflowId || undefined,
                 allowWorkflowFallback: true,
               })
             } catch (queueErr) {

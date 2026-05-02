@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   approveBatchCandidate,
+  generateBatch,
   getCharacterBatch,
   listBatchCandidates,
   listCharacterBatches,
@@ -124,6 +125,16 @@ export default function CastingPipelinePanel() {
   // ── Gallery ───────────────────────────────────────────────────────────────
   const [generatedImages, setGeneratedImages] = useState([])
   const [imageLoadErrors, setImageLoadErrors] = useState({})
+
+  // ── Batch generation form (hvz) ───────────────────────────────────────────
+  const [batchFormOpen, setBatchFormOpen] = useState(false)
+  const [batchGenAgeMin, setBatchGenAgeMin] = useState(25)
+  const [batchGenAgeMax, setBatchGenAgeMax] = useState(45)
+  const [batchGenCount, setBatchGenCount] = useState(10)
+  const [batchGenTone, setBatchGenTone] = useState('')
+  const [batchGenGender, setBatchGenGender] = useState('')
+  const [batchGenerating, setBatchGenerating] = useState(false)
+  const [batchGenError, setBatchGenError] = useState(null)
 
   // ── Dev tools ─────────────────────────────────────────────────────────────
   const [comfyStatus, setComfyStatus] = useState(null)
@@ -254,6 +265,32 @@ export default function CastingPipelinePanel() {
 
   useEffect(() => () => { clearInterval(auditPollRef.current); clearInterval(portfolioPollRef.current) }, [])
 
+  // ── Restore polling state across tab navigation (72j) ────────────────────
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('casting_room_audit_state')
+      if (raw) {
+        const { results, statuses } = JSON.parse(raw)
+        if (Array.isArray(results) && results.length) {
+          setAuditionResults(results)
+          setAuditionStatuses(statuses || {})
+          const hasPending = Object.values(statuses || {}).some((s) => s !== 'success' && s !== 'failed')
+          if (hasPending) startAuditPoll()
+        }
+      }
+    } catch { /* ignore corrupt storage */ }
+    try {
+      const raw = sessionStorage.getItem('casting_room_portfolio_state')
+      if (raw) {
+        const { jobs } = JSON.parse(raw)
+        if (Array.isArray(jobs) && jobs.length) {
+          setPortfolioJobs(jobs)
+          startPortfolioPoll()
+        }
+      }
+    } catch { /* ignore */ }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Data loading ──────────────────────────────────────────────────────────
   async function initialLoad() {
     setLoading(true); setError(''); setSuccess('')
@@ -307,13 +344,29 @@ export default function CastingPipelinePanel() {
   useEffect(() => { refreshBatch(selectedBatchId) }, [selectedBatchId])
   useEffect(() => { if (selectedCharacterId || selectedPromptPackId) refreshGallery() }, [selectedCharacterId, selectedPromptPackId])
 
+  // 7yi: Auto-load prompt packs whenever the active character changes.
+  useEffect(() => {
+    if (!selectedCharacterId) { setPromptPacks([]); setSelectedPromptPackId(''); return }
+    listPromptPacksForCharacter(selectedCharacterId)
+      .then((listed) => {
+        setPromptPacks(listed.items || [])
+        if (listed.items?.length) setSelectedPromptPackId(listed.items[0].id)
+      })
+      .catch(() => { /* non-critical; user can compile manually */ })
+  }, [selectedCharacterId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Cast from Bank handlers ───────────────────────────────────────────────
   const handleGenerateAudition = async () => {
     if (!selectedBankEntryId) { setAuditionError('Select a bank character first'); return }
     setAuditionRunning(true); setAuditionError(null)
     ingestedRef.current = new Set()
     try {
-      const data = await generateAudition({ bankEntryId: selectedBankEntryId, count: auditionCount })
+      sessionStorage.removeItem('casting_room_audit_state')
+      const data = await generateAudition({
+        bankEntryId: selectedBankEntryId,
+        count: auditionCount,
+        workflowId: selectedWorkflowId || undefined,
+      })
       setAuditionResults(data?.results || [])
       setAuditionRunMeta({ requested: data?.requested, successful: data?.successful, failed: data?.failed })
       setAuditionImages({}); setAuditionItemActions({}); setMoreTakesState({})
@@ -324,6 +377,7 @@ export default function CastingPipelinePanel() {
       }
       setAuditionStatuses(initialStatuses)
       if (Object.keys(initialStatuses).length) startAuditPoll()
+      try { sessionStorage.setItem('casting_room_audit_state', JSON.stringify({ results: data?.results || [], statuses: initialStatuses })) } catch { /* ignore */ }
 
       // 9p1: Refresh character list so Journey A characters appear in Active Character dropdown.
       // 9p1+ef3: Auto-select first successfully generated character if none already selected.
@@ -448,6 +502,7 @@ export default function CastingPipelinePanel() {
       }))
       setPortfolioJobs(jobs); setPortfolioJobsStatus(null)
       for (const j of jobs) ingestedRef.current.delete(j.promptId)
+      try { sessionStorage.setItem('casting_room_portfolio_state', JSON.stringify({ jobs })) } catch { /* ignore */ }
       setSuccess(`Portfolio queued: ${result.summary?.success || 0} views.`)
       if (jobs.length) startPortfolioPoll()
     } catch (err) { setError(err.message || 'Failed to queue portfolio.') }
@@ -463,6 +518,30 @@ export default function CastingPipelinePanel() {
       await refreshGallery(); setSuccess(`Image ${action}d.`)
     } catch (err) { setError(err.message || `Failed to ${action} image.`) }
     finally { setActionLoading(false) }
+  }
+
+  // ── Batch generation handler (hvz) ───────────────────────────────────────
+  async function handleGenerateBatch() {
+    setBatchGenerating(true); setBatchGenError(null); setError(''); setSuccess('')
+    try {
+      await generateBatch({
+        request: {
+          count: batchGenCount,
+          ageMin: batchGenAgeMin,
+          ageMax: batchGenAgeMax,
+          ...(batchGenGender ? { genderPresentation: batchGenGender } : {}),
+          ...(batchGenTone ? { projectTone: batchGenTone } : {}),
+          outputViews: ['front_portrait', 'profile_portrait'],
+          diversityRequirements: [],
+        },
+        options: { persistBatch: true, checkSimilarity: true },
+      })
+      setBatchFormOpen(false)
+      const batchResult = await listCharacterBatches()
+      setBatches(batchResult.items || [])
+      setSuccess('Batch generated — select it below to review candidates.')
+    } catch (err) { setBatchGenError(err?.message || 'Batch generation failed') }
+    finally { setBatchGenerating(false) }
   }
 
   // ── Dev-tools handlers ────────────────────────────────────────────────────
@@ -523,7 +602,7 @@ export default function CastingPipelinePanel() {
         {bankLoadError ? (
           <div className={styles.subtle}>Bank unavailable: {bankLoadError}</div>
         ) : bankEntries.length === 0 ? (
-          <div className={styles.subtle}>No bank characters yet. Add characters in the Character Builder tab.</div>
+          <div className={styles.subtle}>No casting briefs yet. Add one in the Character Builder tab.</div>
         ) : (
           <>
             <div className={styles.row}>
@@ -537,6 +616,12 @@ export default function CastingPipelinePanel() {
                 <strong>{selectedBankEntry.name}</strong> — {selectedBankEntry.optimizedDescription || selectedBankEntry.description}
               </div>
             )}
+            <div className={styles.row}>
+              <select value={selectedWorkflowId} onChange={(e) => setSelectedWorkflowId(e.target.value)} className={styles.select} disabled={auditionRunning}>
+                <option value="">Default workflow</option>
+                {selectableWorkflows.map((w) => <option key={w.workflowId} value={w.workflowId}>{w.workflowId}</option>)}
+              </select>
+            </div>
             <div className={styles.row}>
               <label>Count</label>
               <input type="number" min={1} max={10} value={auditionCount} style={{ width: 60 }}
@@ -589,11 +674,11 @@ export default function CastingPipelinePanel() {
                                   <div className={styles.row}>
                                     <button type="button" onClick={() => handleApproveAudition(v.auditionId)}
                                       disabled={auditionItemActions[v.auditionId]?.busy}>
-                                      {auditionItemActions[v.auditionId]?.status === 'approved' ? '✓ Approved' : 'Approve'}
+                                      {auditionItemActions[v.auditionId]?.status === 'approved' ? '✓ Selected' : 'Select this look'}
                                     </button>
                                     <button type="button" onClick={() => handleRejectAudition(v.auditionId)}
                                       disabled={auditionItemActions[v.auditionId]?.busy}>
-                                      {auditionItemActions[v.auditionId]?.status === 'rejected' ? '✗ Rejected' : 'Reject'}
+                                      {auditionItemActions[v.auditionId]?.status === 'rejected' ? '✗ Passed' : 'Pass'}
                                     </button>
                                     {auditionItemActions[v.auditionId]?.error && (
                                       <span className={styles.error}>{auditionItemActions[v.auditionId].error}</span>
@@ -624,8 +709,48 @@ export default function CastingPipelinePanel() {
       {/* ─── 2. BATCH PIPELINE ─────────────────────────────────────────── */}
       <section className={styles.section}>
         <h3>Batch Pipeline</h3>
+        <div className={styles.row}>
+          <button type="button" onClick={() => setBatchFormOpen((o) => !o)}>
+            {batchFormOpen ? '▾ Cancel' : '+ Generate Batch'}
+          </button>
+        </div>
+        {batchFormOpen && (
+          <div className={styles.item}>
+            <div className={styles.row}>
+              <label>Age</label>
+              <input type="number" min={16} max={100} value={batchGenAgeMin} style={{ width: 55 }}
+                onChange={(e) => setBatchGenAgeMin(Math.max(16, Math.min(100, Number(e.target.value) || 16)))} />
+              <span className={styles.subtle}>–</span>
+              <input type="number" min={16} max={100} value={batchGenAgeMax} style={{ width: 55 }}
+                onChange={(e) => setBatchGenAgeMax(Math.max(16, Math.min(100, Number(e.target.value) || 100)))} />
+              <label>Count</label>
+              <input type="number" min={1} max={50} value={batchGenCount} style={{ width: 55 }}
+                onChange={(e) => setBatchGenCount(Math.max(1, Math.min(50, Number(e.target.value) || 5)))} />
+            </div>
+            <div className={styles.row}>
+              <label>Gender</label>
+              <select value={batchGenGender} onChange={(e) => setBatchGenGender(e.target.value)} className={styles.select}>
+                <option value="">Mixed (any)</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="nonbinary">Non-binary</option>
+              </select>
+            </div>
+            <div className={styles.row}>
+              <label>Tone</label>
+              <input type="text" value={batchGenTone} placeholder="e.g. gritty noir thriller"
+                onChange={(e) => setBatchGenTone(e.target.value)} style={{ flex: 1 }} />
+            </div>
+            <div className={styles.row}>
+              <button type="button" onClick={handleGenerateBatch} disabled={batchGenerating}>
+                {batchGenerating ? 'Generating…' : 'Generate'}
+              </button>
+              {batchGenError && <span className={styles.error}>{batchGenError}</span>}
+            </div>
+          </div>
+        )}
         {batches.length === 0 ? (
-          <div className={styles.subtle}>No batches found.</div>
+          <div className={styles.subtle}>No batches yet — generate one above.</div>
         ) : (
           <select value={selectedBatchId} onChange={(e) => setSelectedBatchId(e.target.value)} className={styles.select}>
             <option value="">Select a batch…</option>
@@ -642,11 +767,11 @@ export default function CastingPipelinePanel() {
                   {candidate.candidate?.name || '(unnamed)'}{candidate.candidate?.age ? `, age ${candidate.candidate.age}` : ''}
                 </div>
                 <div className={styles.subtle}>
-                  {candidate.reviewStatus} · {candidate.classification} · {candidate.candidate?.cinematicArchetype || ''}
+                  {candidate.reviewStatus} · {({ accepted: 'unique', needsMutation: 'needs change', rejected: 'too similar' })[candidate.classification] || candidate.classification} · {candidate.candidate?.cinematicArchetype || ''}
                 </div>
                 <div className={styles.row}>
-                  <button disabled={actionLoading} onClick={() => handleCandidateAction('approve', candidate.id)}>Approve</button>
-                  <button disabled={actionLoading} onClick={() => handleCandidateAction('reject', candidate.id)}>Reject</button>
+                  <button disabled={actionLoading} onClick={() => handleCandidateAction('approve', candidate.id)}>Cast this character</button>
+                  <button disabled={actionLoading} onClick={() => handleCandidateAction('reject', candidate.id)}>Dismiss</button>
                   <button disabled={actionLoading || candidate.reviewStatus !== 'approved'} onClick={() => handleCandidateAction('save', candidate.id)}>
                     Save → Active Character
                   </button>
@@ -669,10 +794,7 @@ export default function CastingPipelinePanel() {
             ))}
           </select>
           <button disabled={actionLoading || !selectedCharacterId} onClick={handleCompileAndListPromptPacks}>
-            Compile Prompt Packs
-          </button>
-          <button disabled={actionLoading || !selectedCharacterId} onClick={handleLoadPromptPacks}>
-            Load Existing
+            {promptPacks.length > 0 ? 'Recompile Packs' : 'Compile Prompt Packs'}
           </button>
         </div>
         {promptPacks.length > 0 && (
@@ -741,9 +863,9 @@ export default function CastingPipelinePanel() {
           </button>
           <span className={styles.subtle}>
             {selectedCharacterId
-              ? `${savedCharacters.find((c) => c.id === selectedCharacterId)?.name || selectedCharacterId.slice(0, 8)}…`
-              : selectedPromptPackId ? `pack ${selectedPromptPackId.slice(0, 8)}…`
-              : 'select a character or pack above'}
+              ? `Showing images for: ${savedCharacters.find((c) => c.id === selectedCharacterId)?.name || selectedCharacterId.slice(0, 8)}`
+              : selectedPromptPackId ? `Showing images for pack ${selectedPromptPackId.slice(0, 8)}…`
+              : 'select a character above'}
           </span>
         </div>
         {generatedImages.length === 0 ? (
@@ -760,8 +882,8 @@ export default function CastingPipelinePanel() {
                 />
                 {imageLoadErrors[item.id] && <div className={styles.error}>Preview unavailable</div>}
                 <div className={styles.row}>
-                  <button disabled={actionLoading} onClick={() => handleGeneratedImageReview('approve', item.id)}>Approve</button>
-                  <button disabled={actionLoading} onClick={() => handleGeneratedImageReview('reject', item.id)}>Reject</button>
+                  <button disabled={actionLoading} onClick={() => handleGeneratedImageReview('approve', item.id)}>Keep</button>
+                  <button disabled={actionLoading} onClick={() => handleGeneratedImageReview('reject', item.id)}>Discard</button>
                 </div>
               </div>
             ))}

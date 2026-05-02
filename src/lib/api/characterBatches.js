@@ -28,3 +28,7 @@ export function saveBatchCandidate(candidateId) {
   return apiPost('/api/character-batch-candidate-save', { candidateId })
 }
 
+export function generateBatch({ request, options = {}, provider = {} } = {}) {
+  return apiPost('/api/characters-generate-batch', { request, options: { persistBatch: true, ...options }, provider })
+}
+

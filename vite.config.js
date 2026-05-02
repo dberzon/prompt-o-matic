@@ -691,6 +691,9 @@ function apiDevPlugin(env) {
           const views = Array.isArray(body?.views) && body.views.length > 0
             ? body.views
             : ['front_portrait', 'profile_portrait']
+          const workflowId = typeof body?.workflowId === 'string' && body.workflowId.trim()
+            ? body.workflowId.trim()
+            : undefined
 
           runtime = createVectorRuntime({ env })
 
@@ -725,6 +728,7 @@ function apiDevPlugin(env) {
             bankEntryId,
             count,
             views,
+            workflowId,
             llmGenerate,
             comfyService,
           })
