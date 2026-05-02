@@ -324,6 +324,20 @@ export default function CastingPipelinePanel() {
       }
       setAuditionStatuses(initialStatuses)
       if (Object.keys(initialStatuses).length) startAuditPoll()
+
+      // 9p1: Refresh character list so Journey A characters appear in Active Character dropdown.
+      // 9p1+ef3: Auto-select first successfully generated character if none already selected.
+      const newSuccessCharIds = (data?.results || []).filter((r) => r.ok && r.characterId).map((r) => r.characterId)
+      try {
+        const charsResult = await listCharacters()
+        const chars = (charsResult.items || []).filter((c) => c?.id)
+        setSavedCharacters((prev) => {
+          const map = new Map(prev.map((c) => [c.id, c]))
+          for (const c of chars) map.set(c.id, { id: c.id, name: c.name || '(unnamed)', age: c.age })
+          return [...map.values()]
+        })
+        if (!selectedCharacterId && newSuccessCharIds[0]) setSelectedCharacterId(newSuccessCharIds[0])
+      } catch { /* non-critical — characters appear after page refresh if this fails */ }
     } catch (err) { setAuditionError(err?.message || 'Audition generation failed') }
     finally { setAuditionRunning(false) }
   }
@@ -541,6 +555,12 @@ export default function CastingPipelinePanel() {
                   {auditionRunMeta?.successful ?? 0} generated · {auditionRunMeta?.failed ?? 0} failed
                   {isPollingAudit ? ' — images appear automatically when ready' : ''}
                 </div>
+                {Object.keys(auditionStatuses).length > 0 && (
+                  <div className={styles.subtle}>
+                    Front portrait and profile portrait are queued for each candidate above.
+                    To generate other views (full body, cinematic scene, etc.) use Portfolio below — uncheck front and profile to avoid duplicates.
+                  </div>
+                )}
                 {auditionResults.map((result, index) => (
                   <div key={result.pairId || `failed-${index}`} className={styles.item}>
                     {result.ok ? (
@@ -584,7 +604,11 @@ export default function CastingPipelinePanel() {
                             </div>
                           ))}
                         </div>
-                        {result.views?.some((v) => auditionItemActions[v.auditionId]?.status === 'approved') && (
+                        {result.ok && !auditionRunning && result.views?.every((v) => {
+                          if (!v.ok || !v.comfyPromptId) return true
+                          const s = auditionStatuses[v.comfyPromptId]
+                          return s === 'success' || s === 'failed'
+                        }) && (
                           <MoreTakesPanel characterId={result.characterId} moreTakesState={moreTakesState} onQueue={handleMoreTakes} />
                         )}
                       </>
