@@ -222,7 +222,7 @@ Steps:
 2. Select a ComfyUI workflow
 3. Click **Generate Auditions** — LM Studio generates N character profiles
 4. Two ComfyUI jobs queue per candidate: front-facing and profile portrait
-5. Panel polls ComfyUI every 8 seconds; images ingest automatically
+5. Panel polls ComfyUI automatically; images ingest when ready
 6. Review each candidate: **Select this look** or **Pass**
 7. Optionally click **More Takes** to generate additional views of a selected candidate
 
@@ -315,7 +315,7 @@ Casting Room — Cast from Bank
   └── Generate Auditions
         └── LM Studio: generate N character profiles
         └── ComfyUI: queue front + profile portrait per candidate
-        └── Auto-poll every 8s → auto-ingest on completion
+        └── Auto-poll → auto-ingest on completion
   └── Review candidates
         ├── Select this look  →  candidate marked selected
         └── Pass             →  candidate skipped
@@ -581,11 +581,11 @@ CHROMA_URL=http://127.0.0.1:8000
 SQLITE_DB_PATH=./data/qpb-local.sqlite
 
 # Feature flags
-ENABLE_CHARACTER_BATCH_API=true
-ENABLE_PROMPT_PACK_API=true
-ENABLE_COMFY_API=true
-ENABLE_GENERATED_IMAGES_API=true
-ENABLE_VECTOR_MAINTENANCE_API=true
+ENABLE_CHARACTER_BATCH_API=true     # batch generation, candidate review, Journey B pipeline
+ENABLE_PROMPT_PACK_API=true         # prompt pack compilation and listing
+ENABLE_COMFY_API=true               # ComfyUI job queuing, polling, and ingestion
+ENABLE_GENERATED_IMAGES_API=true    # gallery: list, approve/keep, reject/discard, view images
+ENABLE_VECTOR_MAINTENANCE_API=true  # similarity search and character vector index
 ```
 
 ---

@@ -121,3 +121,7 @@ CREATE INDEX IF NOT EXISTS idx_actor_auditions_actor_candidate_id ON actor_audit
 CREATE INDEX IF NOT EXISTS idx_actor_auditions_bank_entry_id ON actor_auditions(bank_entry_id);
 CREATE INDEX IF NOT EXISTS idx_actor_auditions_status ON actor_auditions(status);
 `
+
+export const MIGRATIONS = [
+  'ALTER TABLE characters ADD COLUMN archived_at TEXT',
+]

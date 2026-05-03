@@ -94,6 +94,11 @@ export function listCharacters(db, filters = {}) {
     clauses.push('embedding_status = ?')
     values.push(filters.embeddingStatus)
   }
+  if (filters.includeArchived === 'only') {
+    clauses.push('archived_at IS NOT NULL')
+  } else if (!filters.includeArchived) {
+    clauses.push('(archived_at IS NULL)')
+  }
   const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
   const limit = Number.isInteger(filters.limit) ? filters.limit : null
   const limitSql = limit && limit > 0 ? 'LIMIT ?' : ''
@@ -160,6 +165,16 @@ export function updateCharacter(db, id, patch) {
 
 export function deleteCharacter(db, id) {
   const result = db.prepare('DELETE FROM characters WHERE id = ?').run(id)
+  return result.changes > 0
+}
+
+export function archiveCharacter(db, id) {
+  const result = db.prepare('UPDATE characters SET archived_at = ? WHERE id = ?').run(nowIso(), id)
+  return result.changes > 0
+}
+
+export function restoreCharacter(db, id) {
+  const result = db.prepare('UPDATE characters SET archived_at = NULL WHERE id = ?').run(id)
   return result.changes > 0
 }
 
@@ -540,6 +555,14 @@ export function rejectBatchCandidate(db, id, reason = null) {
     reviewStatus: 'rejected',
     classification: 'rejected',
     reviewNote: reason || null,
+  })
+}
+
+export function reconsiderBatchCandidate(db, id) {
+  return updateBatchCandidate(db, id, {
+    reviewStatus: 'pending',
+    classification: 'accepted',
+    reviewNote: null,
   })
 }
 

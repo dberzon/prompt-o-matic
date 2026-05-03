@@ -16,7 +16,9 @@ export function buildBatchCandidateGenerationPrompt({ request, totalCandidates }
     ].join(' '),
     `Age range constraint: ${request.ageMin}-${request.ageMax}`,
     request.genderPresentation ? `Gender presentation: ${request.genderPresentation}` : 'Gender presentation: mixed allowed',
-    request.projectTone ? `Project tone: ${request.projectTone}` : 'Project tone: cinematic audition casting',
+    request.projectTone
+      ? `Project tone: ${request.projectTone}. Bias characters toward this aesthetic — e.g. "gritty noir" favors angular faces, worn features, dark archetypes; "editorial" favors unconventional distinctive looks; "raw" favors naturalistic imperfect features; "cinematic" favors dramatic archetypal faces with strong screen presence.`
+      : 'Project tone: cinematic audition casting. Favor strong screen presence and dramatic archetypal faces.',
     'Diversity requirements:',
     diversityList,
     `Output views context: ${request.outputViews.join(', ')}`,

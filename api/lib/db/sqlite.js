@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import Database from 'better-sqlite3'
-import { CREATE_TABLES_SQL } from './schema.js'
+import { CREATE_TABLES_SQL, MIGRATIONS } from './schema.js'
 
 const DEFAULT_DB_PATH = './data/qpb-local.sqlite'
 
@@ -30,4 +30,7 @@ export function createSqliteDatabase({ env = process.env, dbPath } = {}) {
 
 export function initializeDatabase(db) {
   db.exec(CREATE_TABLES_SQL)
+  for (const migration of MIGRATIONS) {
+    try { db.exec(migration) } catch { /* column already exists */ }
+  }
 }

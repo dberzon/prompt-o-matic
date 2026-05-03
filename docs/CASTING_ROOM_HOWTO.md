@@ -71,7 +71,7 @@ Under **Cast from Bank**:
 
 ### Step 5: Watch Images Appear Automatically
 
-After generation the **⟳ checking Comfy…** indicator appears. The panel polls ComfyUI every 8 seconds.
+After generation the **⟳ checking Comfy…** indicator appears. The panel polls ComfyUI automatically.
 
 Each candidate pair shows status badges per view:
 - **⟳ pending** — job queued, not started

@@ -36,3 +36,15 @@ export function renameCharacter(characterId, name) {
   return apiPost('/api/character-rename', { characterId, name })
 }
 
+export function archiveCharacter(characterId) {
+  return apiPost('/api/character-archive', { characterId })
+}
+
+export function restoreCharacter(characterId) {
+  return apiPost('/api/character-restore', { characterId })
+}
+
+export function reconsiderBatchCandidate(candidateId) {
+  return apiPost('/api/character-batch-candidate-reconsider', { candidateId })
+}
+

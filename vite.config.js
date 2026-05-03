@@ -51,6 +51,9 @@ import {
   updateBankEntry,
   updateCharacter,
   updateGeneratedImageRecord,
+  archiveCharacter,
+  restoreCharacter,
+  reconsiderBatchCandidate,
 } from './api/lib/db/repositories.js'
 import { createVectorRuntime } from './api/lib/vector/runtime.js'
 import { assertGeneratedImagesOperationAllowed } from './api/lib/generatedImages/access.js'
@@ -245,6 +248,8 @@ function apiDevPlugin(env) {
           const search = url.searchParams.get('search') || undefined
           const ageMin = url.searchParams.has('ageMin') ? Number(url.searchParams.get('ageMin')) : undefined
           const ageMax = url.searchParams.has('ageMax') ? Number(url.searchParams.get('ageMax')) : undefined
+          const includeArchivedParam = url.searchParams.get('includeArchived') || ''
+          const includeArchived = includeArchivedParam === 'only' ? 'only' : includeArchivedParam === 'true' ? true : false
           runtime = createVectorRuntime({ env })
           const items = listCharacters(runtime.db, {
             projectId,
@@ -252,6 +257,7 @@ function apiDevPlugin(env) {
             search,
             ageMin: Number.isFinite(ageMin) ? ageMin : undefined,
             ageMax: Number.isFinite(ageMax) ? ageMax : undefined,
+            includeArchived,
           })
           sendJsonMiddleware(res, 200, { ok: true, items, total: items.length })
         } catch (err) {
@@ -278,6 +284,40 @@ function apiDevPlugin(env) {
         } catch (err) {
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_RENAME_ERROR' })
+        } finally { runtime?.close?.() }
+      })
+
+      server.middlewares.use('/api/character-archive', async (req, res) => {
+        if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
+        let runtime = null
+        try {
+          const body = await readJsonBody(req)
+          const characterId = body?.characterId
+          if (!characterId) { sendJsonMiddleware(res, 400, { error: 'Missing characterId' }); return }
+          runtime = createVectorRuntime({ env })
+          const ok = archiveCharacter(runtime.db, characterId)
+          if (!ok) { sendJsonMiddleware(res, 404, { error: 'Character not found' }); return }
+          sendJsonMiddleware(res, 200, { ok: true })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_ARCHIVE_ERROR' })
+        } finally { runtime?.close?.() }
+      })
+
+      server.middlewares.use('/api/character-restore', async (req, res) => {
+        if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
+        let runtime = null
+        try {
+          const body = await readJsonBody(req)
+          const characterId = body?.characterId
+          if (!characterId) { sendJsonMiddleware(res, 400, { error: 'Missing characterId' }); return }
+          runtime = createVectorRuntime({ env })
+          const ok = restoreCharacter(runtime.db, characterId)
+          if (!ok) { sendJsonMiddleware(res, 404, { error: 'Character not found' }); return }
+          sendJsonMiddleware(res, 200, { ok: true })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_RESTORE_ERROR' })
         } finally { runtime?.close?.() }
       })
 
@@ -385,6 +425,24 @@ function apiDevPlugin(env) {
         } finally {
           runtime?.close?.()
         }
+      })
+
+      server.middlewares.use('/api/character-batch-candidate-reconsider', async (req, res) => {
+        if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
+        let runtime = null
+        try {
+          assertCharacterBatchOperationAllowed('candidate-reconsider', env)
+          const body = await readJsonBody(req)
+          const candidateId = body?.candidateId
+          if (!candidateId) { sendJsonMiddleware(res, 400, { error: 'Missing candidateId' }); return }
+          runtime = createVectorRuntime({ env })
+          const item = reconsiderBatchCandidate(runtime.db, candidateId)
+          if (!item) { sendJsonMiddleware(res, 404, { error: 'Candidate not found' }); return }
+          sendJsonMiddleware(res, 200, { ok: true, item })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_BATCH_CANDIDATE_RECONSIDER_ERROR' })
+        } finally { runtime?.close?.() }
       })
 
       server.middlewares.use('/api/character-batch-candidate-save', async (req, res) => {

@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   approveBatchCandidate,
+  archiveCharacter,
   generateBatch,
   getCharacterBatch,
   listBatchCandidates,
   listCharacterBatches,
   listCharacters,
+  reconsiderBatchCandidate,
   rejectBatchCandidate,
   renameCharacter,
+  restoreCharacter,
   saveBatchCandidate,
 } from '../lib/api/characterBatches.js'
 import { compilePromptPacksForCharacter, listPromptPacksForCharacter } from '../lib/api/promptPacks.js'
@@ -137,12 +140,12 @@ export default function CastingPipelinePanel() {
   const [batchGenerating, setBatchGenerating] = useState(false)
   const [batchGenError, setBatchGenError] = useState(null)
 
-  // ── Character management (j6k) ────────────────────────────────────────────
-  const [archivedIds, setArchivedIds] = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('casting_room_archived_chars') || '[]')) } catch { return new Set() }
-  })
+  // ── Character management ──────────────────────────────────────────────────
+  const [archivedCharacters, setArchivedCharacters] = useState([])
   const [renamingCharacterId, setRenamingCharacterId] = useState(null)
   const [renameValue, setRenameValue] = useState('')
+  const [showDismissed, setShowDismissed] = useState(false)
+  const activeCharSectionRef = useRef(null)
 
   // ── Dev tools ─────────────────────────────────────────────────────────────
   const [comfyStatus, setComfyStatus] = useState(null)
@@ -303,8 +306,10 @@ export default function CastingPipelinePanel() {
   async function initialLoad() {
     setLoading(true); setError(''); setSuccess('')
     try {
-      const [batchResult, workflowResult, comfyResult, charsResult] = await Promise.all([
-        listCharacterBatches(), listComfyWorkflows(), getComfyStatus(), listCharacters().catch(() => ({ items: [] })),
+      const [batchResult, workflowResult, comfyResult, charsResult, archivedResult] = await Promise.all([
+        listCharacterBatches(), listComfyWorkflows(), getComfyStatus(),
+        listCharacters().catch(() => ({ items: [] })),
+        listCharacters({ includeArchived: 'only' }).catch(() => ({ items: [] })),
       ])
       setBatches(batchResult.items || [])
       setWorkflows(workflowResult.workflows || [])
@@ -315,6 +320,7 @@ export default function CastingPipelinePanel() {
         for (const c of chars) map.set(c.id, { id: c.id, name: c.name || '(unnamed)', age: c.age })
         return [...map.values()]
       })
+      setArchivedCharacters((archivedResult.items || []).filter((c) => c?.id).map((c) => ({ id: c.id, name: c.name || '(unnamed)', age: c.age })))
       if (!selectedWorkflowId) {
         const def = (workflowResult.workflows || []).find((w) => w.valid)
         if (def) setSelectedWorkflowId(def.workflowId)
@@ -409,6 +415,7 @@ export default function CastingPipelinePanel() {
     try {
       await approveActorAudition(auditionId)
       setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, status: 'approved' } }))
+      setTimeout(() => activeCharSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100)
     } catch (err) { setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, error: err?.message || 'Approve failed' } })) }
   }
 
@@ -446,6 +453,7 @@ export default function CastingPipelinePanel() {
     try {
       if (action === 'approve') await approveBatchCandidate(candidateId)
       if (action === 'reject') await rejectBatchCandidate(candidateId, 'Rejected manually')
+      if (action === 'reconsider') await reconsiderBatchCandidate(candidateId)
       if (action === 'save') {
         const saved = await saveBatchCandidate(candidateId)
         const newId = saved?.item?.savedCharacterId
@@ -528,24 +536,24 @@ export default function CastingPipelinePanel() {
     finally { setActionLoading(false) }
   }
 
-  // ── Character management handlers (j6k) ──────────────────────────────────
-  function handleArchive(charId) {
-    setArchivedIds((prev) => {
-      const next = new Set(prev)
-      next.add(charId)
-      localStorage.setItem('casting_room_archived_chars', JSON.stringify([...next]))
-      return next
-    })
-    if (selectedCharacterId === charId) setSelectedCharacterId('')
+  // ── Character management handlers ─────────────────────────────────────────
+  async function handleArchive(charId) {
+    try {
+      await archiveCharacter(charId)
+      const char = savedCharacters.find((c) => c.id === charId)
+      setSavedCharacters((prev) => prev.filter((c) => c.id !== charId))
+      if (char) setArchivedCharacters((prev) => prev.some((c) => c.id === char.id) ? prev : [...prev, char])
+      if (selectedCharacterId === charId) setSelectedCharacterId('')
+    } catch (err) { setError(err?.message || 'Archive failed') }
   }
 
-  function handleRestore(charId) {
-    setArchivedIds((prev) => {
-      const next = new Set(prev)
-      next.delete(charId)
-      localStorage.setItem('casting_room_archived_chars', JSON.stringify([...next]))
-      return next
-    })
+  async function handleRestore(charId) {
+    try {
+      await restoreCharacter(charId)
+      const char = archivedCharacters.find((c) => c.id === charId)
+      setArchivedCharacters((prev) => prev.filter((c) => c.id !== charId))
+      if (char) setSavedCharacters((prev) => prev.some((c) => c.id === char.id) ? prev : [...prev, char])
+    } catch (err) { setError(err?.message || 'Restore failed') }
   }
 
   async function handleRenameCharacter() {
@@ -724,6 +732,9 @@ export default function CastingPipelinePanel() {
                                       <span className={styles.error}>{auditionItemActions[v.auditionId].error}</span>
                                     )}
                                   </div>
+                                  {auditionItemActions[v.auditionId]?.status === 'approved' && (
+                                    <div className={styles.subtle}>Character ready — select them in Active Character ↓</div>
+                                  )}
                                 </>
                               ) : <span className={styles.error}>{v.error}</span>}
                             </div>
@@ -778,8 +789,11 @@ export default function CastingPipelinePanel() {
             </div>
             <div className={styles.row}>
               <label>Tone</label>
-              <input type="text" value={batchGenTone} placeholder="e.g. gritty noir thriller"
+              <input type="text" value={batchGenTone} placeholder="e.g. gritty noir, editorial, raw"
                 onChange={(e) => setBatchGenTone(e.target.value)} style={{ flex: 1 }} />
+            </div>
+            <div className={styles.subtle} style={{ marginBottom: 4 }}>
+              Tone biases character aesthetics — cinematic favors screen presence, editorial favors distinctive unconventional looks, raw favors naturalistic imperfect features.
             </div>
             <div className={styles.row}>
               <button type="button" onClick={handleGenerateBatch} disabled={batchGenerating}>
@@ -799,37 +813,57 @@ export default function CastingPipelinePanel() {
         )}
         {selectedBatch && <div className={styles.subtle}>Batch {selectedBatch.id} · {selectedBatch.status}</div>}
         {selectedBatchId && candidates.length === 0 && <div className={styles.subtle}>No candidates in this batch.</div>}
-        {candidates.length > 0 && (
-          <div className={styles.list}>
-            {candidates.map((candidate) => (
-              <div className={styles.item} key={candidate.id}>
-                <div className={styles.itemTitle}>
-                  {candidate.candidate?.name || '(unnamed)'}{candidate.candidate?.age ? `, age ${candidate.candidate.age}` : ''}
-                </div>
-                <div className={styles.subtle}>
-                  {candidate.reviewStatus} · {({ accepted: 'unique', needsMutation: 'needs change', rejected: 'too similar' })[candidate.classification] || candidate.classification} · {candidate.candidate?.cinematicArchetype || ''}
-                </div>
+        {candidates.length > 0 && (() => {
+          const dismissedCount = candidates.filter((c) => c.reviewStatus === 'rejected').length
+          const displayed = candidates.filter((c) => showDismissed || c.reviewStatus !== 'rejected')
+          return (
+            <>
+              {dismissedCount > 0 && (
                 <div className={styles.row}>
-                  <button disabled={actionLoading} onClick={() => handleCandidateAction('approve', candidate.id)}>Cast this character</button>
-                  <button disabled={actionLoading} onClick={() => handleCandidateAction('reject', candidate.id)}>Dismiss</button>
-                  <button disabled={actionLoading || candidate.reviewStatus !== 'approved'} onClick={() => handleCandidateAction('save', candidate.id)}>
-                    Save → Active Character
+                  <button type="button" onClick={() => setShowDismissed((v) => !v)}>
+                    {showDismissed ? 'Hide dismissed' : `Show dismissed (${dismissedCount})`}
                   </button>
-                  {candidate.savedCharacterId && <span className={styles.subtle}>saved ✓</span>}
                 </div>
+              )}
+              <div className={styles.list}>
+                {displayed.map((candidate) => (
+                  <div className={styles.item} key={candidate.id} style={candidate.reviewStatus === 'rejected' ? { opacity: 0.6 } : undefined}>
+                    <div className={styles.itemTitle}>
+                      {candidate.candidate?.name || '(unnamed)'}{candidate.candidate?.age ? `, age ${candidate.candidate.age}` : ''}
+                    </div>
+                    <div className={styles.subtle}>
+                      {candidate.reviewStatus} · {({ accepted: 'unique', needsMutation: 'needs change', rejected: 'too similar' })[candidate.classification] || candidate.classification} · {candidate.candidate?.cinematicArchetype || ''}
+                    </div>
+                    <div className={styles.row}>
+                      {candidate.reviewStatus !== 'rejected' && (
+                        <>
+                          <button disabled={actionLoading} onClick={() => handleCandidateAction('approve', candidate.id)}>Cast this character</button>
+                          <button disabled={actionLoading} onClick={() => handleCandidateAction('reject', candidate.id)}>Dismiss</button>
+                          <button disabled={actionLoading || candidate.reviewStatus !== 'approved'} onClick={() => handleCandidateAction('save', candidate.id)}>
+                            Save → Active Character
+                          </button>
+                        </>
+                      )}
+                      {candidate.reviewStatus === 'rejected' && (
+                        <button disabled={actionLoading} onClick={() => handleCandidateAction('reconsider', candidate.id)}>Reconsider</button>
+                      )}
+                      {candidate.savedCharacterId && <span className={styles.subtle}>saved ✓</span>}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        )}
+            </>
+          )
+        })()}
       </section>
 
       {/* ─── 3. ACTIVE CHARACTER ───────────────────────────────────────── */}
-      <section className={styles.section}>
+      <section className={styles.section} ref={activeCharSectionRef}>
         <h3>Active Character</h3>
         <div className={styles.row}>
           <select value={selectedCharacterId} onChange={(e) => { setSelectedCharacterId(e.target.value); setRenamingCharacterId(null) }} className={styles.select}>
             <option value="">Select character…</option>
-            {savedCharacters.filter((c) => !archivedIds.has(c.id)).map((c) => (
+            {savedCharacters.map((c) => (
               <option key={c.id} value={c.id}>{c.name}{c.age ? `, ${c.age}` : ''} ({c.id.slice(0, 8)}…)</option>
             ))}
           </select>
@@ -838,7 +872,7 @@ export default function CastingPipelinePanel() {
           </button>
         </div>
 
-        {selectedCharacterId && !archivedIds.has(selectedCharacterId) && (
+        {selectedCharacterId && (
           <div className={styles.row}>
             {renamingCharacterId === selectedCharacterId ? (
               <>
@@ -863,13 +897,13 @@ export default function CastingPipelinePanel() {
           </div>
         )}
 
-        {archivedIds.size > 0 && (
+        {archivedCharacters.length > 0 && (
           <details style={{ marginTop: 6 }}>
             <summary className={styles.subtle} style={{ cursor: 'pointer', userSelect: 'none' }}>
-              ▸ Archived characters ({archivedIds.size})
+              ▸ Archived characters ({archivedCharacters.length})
             </summary>
             <div style={{ marginTop: 6 }}>
-              {savedCharacters.filter((c) => archivedIds.has(c.id)).map((c) => (
+              {archivedCharacters.map((c) => (
                 <div key={c.id} className={styles.row}>
                   <span className={styles.subtle}>{c.name}{c.age ? `, ${c.age}` : ''}</span>
                   <button onClick={() => handleRestore(c.id)}>Restore</button>
@@ -892,6 +926,13 @@ export default function CastingPipelinePanel() {
       {/* ─── 4. PORTFOLIO ──────────────────────────────────────────────── */}
       <section className={styles.section}>
         <h3>Portfolio</h3>
+        {selectedCharacterId && (
+          <div className={styles.subtle}>
+            {generatedImages.filter((img) => img.characterId === selectedCharacterId).length > 0
+              ? 'This character has audition images — queue Portfolio to add more views.'
+              : 'No images yet — queue Portfolio to generate this character\'s first set.'}
+          </div>
+        )}
         <div className={styles.row}>
           <select value={selectedWorkflowId} onChange={(e) => setSelectedWorkflowId(e.target.value)} className={styles.select}>
             <option value="">Select workflow…</option>
