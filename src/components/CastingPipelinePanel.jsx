@@ -466,10 +466,11 @@ export default function CastingPipelinePanel() {
           })
           setSelectedCharacterId(newId)
           setSuccess(`Saved as Active Character: ${cand?.name || newId}`)
+          setTimeout(() => activeCharSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100)
         }
       }
       await refreshBatch(selectedBatchId)
-      if (action !== 'save') setSuccess(`Candidate ${action}d.`)
+      if (action !== 'save') setSuccess(action === 'reconsider' ? 'Candidate reconsidered.' : `Candidate ${action}d.`)
     } catch (err) { setError(err.message || `Failed to ${action} candidate.`) }
     finally { setActionLoading(false) }
   }
@@ -587,7 +588,8 @@ export default function CastingPipelinePanel() {
       setBatchFormOpen(false)
       const batchResult = await listCharacterBatches()
       setBatches(batchResult.items || [])
-      setSuccess('Batch generated — select it below to review candidates.')
+      if (batchResult.items?.[0]?.id) setSelectedBatchId(batchResult.items[0].id)
+      setSuccess('Batch generated — reviewing candidates below.')
     } catch (err) { setBatchGenError(err?.message || 'Batch generation failed') }
     finally { setBatchGenerating(false) }
   }
@@ -808,7 +810,12 @@ export default function CastingPipelinePanel() {
         ) : (
           <select value={selectedBatchId} onChange={(e) => setSelectedBatchId(e.target.value)} className={styles.select}>
             <option value="">Select a batch…</option>
-            {batches.map((batch) => <option key={batch.id} value={batch.id}>{batch.id.slice(0, 12)}… ({batch.status})</option>)}
+            {batches.map((batch) => {
+              const date = batch.createdAt ? new Date(batch.createdAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : batch.id.slice(0, 8)
+              const count = batch.request?.count ?? '?'
+              const tone = batch.request?.projectTone ? ` · ${batch.request.projectTone}` : ''
+              return <option key={batch.id} value={batch.id}>{date} — {count} chars{tone} ({batch.status})</option>
+            })}
           </select>
         )}
         {selectedBatch && <div className={styles.subtle}>Batch {selectedBatch.id} · {selectedBatch.status}</div>}
@@ -835,19 +842,24 @@ export default function CastingPipelinePanel() {
                       {candidate.reviewStatus} · {({ accepted: 'unique', needsMutation: 'needs change', rejected: 'too similar' })[candidate.classification] || candidate.classification} · {candidate.candidate?.cinematicArchetype || ''}
                     </div>
                     <div className={styles.row}>
-                      {candidate.reviewStatus !== 'rejected' && (
+                      {candidate.reviewStatus === 'pending' && (
                         <>
                           <button disabled={actionLoading} onClick={() => handleCandidateAction('approve', candidate.id)}>Cast this character</button>
                           <button disabled={actionLoading} onClick={() => handleCandidateAction('reject', candidate.id)}>Dismiss</button>
-                          <button disabled={actionLoading || candidate.reviewStatus !== 'approved'} onClick={() => handleCandidateAction('save', candidate.id)}>
-                            Save → Active Character
-                          </button>
                         </>
+                      )}
+                      {candidate.reviewStatus === 'approved' && (
+                        <>
+                          <button disabled={actionLoading} onClick={() => handleCandidateAction('save', candidate.id)}>Save → Active Character</button>
+                          <button disabled={actionLoading} onClick={() => handleCandidateAction('reject', candidate.id)}>Dismiss</button>
+                        </>
+                      )}
+                      {candidate.reviewStatus === 'saved' && (
+                        <span className={styles.subtle}>Saved ✓</span>
                       )}
                       {candidate.reviewStatus === 'rejected' && (
                         <button disabled={actionLoading} onClick={() => handleCandidateAction('reconsider', candidate.id)}>Reconsider</button>
                       )}
-                      {candidate.savedCharacterId && <span className={styles.subtle}>saved ✓</span>}
                     </div>
                   </div>
                 ))}
