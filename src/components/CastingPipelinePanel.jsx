@@ -818,14 +818,26 @@ export default function CastingPipelinePanel() {
             })}
           </select>
         )}
-        {selectedBatch && <div className={styles.subtle}>Batch {selectedBatch.id} · {selectedBatch.status}</div>}
+        {selectedBatch && (
+          <div className={styles.subtle}>
+            {selectedBatch.summary?.totalCandidates ?? 0} candidate{(selectedBatch.summary?.totalCandidates ?? 0) !== 1 ? 's' : ''} · status: {selectedBatch.status}
+            {selectedBatch.summary?.byReviewStatus?.pending > 0 && ` · ${selectedBatch.summary.byReviewStatus.pending} pending review`}
+          </div>
+        )}
         {selectedBatchId && candidates.length === 0 && <div className={styles.subtle}>No candidates in this batch.</div>}
         {candidates.length > 0 && (() => {
           const dismissedCount = candidates.filter((c) => c.reviewStatus === 'rejected').length
-          const displayed = candidates.filter((c) => showDismissed || c.reviewStatus !== 'rejected')
+          const allDismissed = dismissedCount === candidates.length
+          const displayed = candidates.filter((c) => allDismissed || showDismissed || c.reviewStatus !== 'rejected')
+          const classLabel = { accepted: 'unique', needsMutation: 'needs change', rejected: 'too similar' }
           return (
             <>
-              {dismissedCount > 0 && (
+              {allDismissed && (
+                <div className={styles.subtle}>
+                  All {dismissedCount} candidate{dismissedCount !== 1 ? 's' : ''} were auto-dismissed (too similar to existing characters or failed LLM validation). Click Reconsider on any to review them.
+                </div>
+              )}
+              {!allDismissed && dismissedCount > 0 && (
                 <div className={styles.row}>
                   <button type="button" onClick={() => setShowDismissed((v) => !v)}>
                     {showDismissed ? 'Hide dismissed' : `Show dismissed (${dismissedCount})`}
@@ -839,7 +851,7 @@ export default function CastingPipelinePanel() {
                       {candidate.candidate?.name || '(unnamed)'}{candidate.candidate?.age ? `, age ${candidate.candidate.age}` : ''}
                     </div>
                     <div className={styles.subtle}>
-                      {candidate.reviewStatus} · {({ accepted: 'unique', needsMutation: 'needs change', rejected: 'too similar' })[candidate.classification] || candidate.classification} · {candidate.candidate?.cinematicArchetype || ''}
+                      {candidate.reviewStatus} · {classLabel[candidate.classification] || candidate.classification}{candidate.reviewNote ? ` · ${candidate.reviewNote}` : ''} · {candidate.candidate?.cinematicArchetype || ''}
                     </div>
                     <div className={styles.row}>
                       {candidate.reviewStatus === 'pending' && (
