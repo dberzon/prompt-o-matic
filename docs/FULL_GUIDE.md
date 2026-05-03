@@ -28,6 +28,39 @@ The following work was completed in the most recent sessions (newest first).
 
 ---
 
+### P4 — Flow Fixes and Documentation Sync (May 3 2026)
+
+**Archive state migrated from localStorage to SQLite:**
+- Added `archived_at` column to the `characters` table via auto-migration on startup.
+- New API endpoints: `POST /api/character-archive` and `POST /api/character-restore`.
+- `listCharacters` excludes archived characters by default; `?includeArchived=only` returns archived list.
+- `casting_room_archived_chars` localStorage key is no longer used.
+
+**Journey A promotion confirmed and UI feedback added:**
+- Audit confirmed Journey A characters are created in the `characters` table at generation time and already appear in the Active Character dropdown.
+- After clicking **Select this look**, the page now scrolls to the Active Character section and displays: *"Character ready — select them in Active Character ↓"*
+
+**Journey B Dismiss made reversible:**
+- Dismiss was already a soft-delete (status update only). Added UI controls to surface this.
+- Dismissed candidates are now hidden by default; a **Show dismissed (N)** toggle reveals them.
+- Each dismissed candidate shows a **Reconsider** button that resets its status to pending.
+- New API endpoint: `POST /api/character-batch-candidate-reconsider`.
+
+**Portfolio section shows arrival context:**
+- Active Character → Portfolio section now shows conditional copy: if the character has existing gallery images, "Your candidate has audition images — queue Portfolio to add more views." If no images exist, "No images yet — queue Portfolio to generate this character's first set."
+
+**Project tone field wired to LLM with tooltip:**
+- The Tone field in the Journey B batch form now has a tooltip explaining what it does.
+- The LLM batch generation prompt now gives explicit aesthetic guidance per tone value (cinematic, editorial, raw, gritty noir, etc.).
+
+**Feature flags documented:**
+- All five `ENABLE_*` feature flags in `.env.local` are now documented with descriptions in Section 5.
+
+**Polling interval removed from user-facing copy:**
+- References to "every 8 seconds" removed from `CASTING_ROOM_HOWTO.md` and this guide; polling indicator shows "⟳ checking Comfy…" with no interval specified.
+
+---
+
 ### P3 — Character Management (May 3 2026)
 
 **Character rename:**
@@ -38,7 +71,7 @@ The following work was completed in the most recent sessions (newest first).
 **Character archive / restore:**
 - An **Archive** button hides a character from the Active Character dropdown without deleting it.
 - Archived characters appear in a collapsible "Archived characters" panel with a **Restore** button.
-- Archive state is stored in `localStorage`.
+- Archive state is persisted to SQLite via an `archived_at` column — survives browser clears and is cloud-compatible.
 
 **How-to guide rewritten:**
 - `docs/CASTING_ROOM_HOWTO.md` was fully rewritten to reflect all vocabulary, button names, and flow changes introduced in P1–P3.
@@ -80,7 +113,7 @@ All Approve/Reject language was replaced with clearer, context-specific labels:
 
 - **More Takes gate:** The More Takes panel now unlocks only when ComfyUI reaches a terminal state (completed/failed), not when the user manually approves a candidate.
 - **Journey A ghost images:** Fixed double-render caused by audition jobs being queued twice (once on generate, once on auto-queue).
-- **Journey A character bleed:** Characters generated in Journey A no longer appear in the Active Character dropdown (which is reserved for Journey B approved characters).
+- **Journey A promotion:** Characters generated in Journey A are created in the database at generation time and appear in the Active Character dropdown after the user clicks **Select this look**.
 - **Auto-poll + auto-ingest:** Audition and portfolio images now ingest automatically when ComfyUI finishes — no manual "Ingest" click required.
 - **LM Studio timeout fixes:** JSON mode, `enable_thinking` suppression, and configurable `max_tokens` added to prevent silent failures with larger LM Studio models.
 - **Casting Room layout restructure:** Panels reorganized into a clearer top-to-bottom flow matching the actual work sequence.
@@ -317,13 +350,14 @@ Casting Room — Cast from Bank
         └── ComfyUI: queue front + profile portrait per candidate
         └── Auto-poll → auto-ingest on completion
   └── Review candidates
-        ├── Select this look  →  candidate marked selected
+        ├── Select this look  →  character saved to DB, appears in Active Character ↓
+        │                        confirmation message shown, page scrolls to Active Character
         └── Pass             →  candidate skipped
   └── (optional) More Takes
         └── Queue additional views for the selected candidate
         └── Auto-ingest
 
-Active Character section
+Active Character section  (Journey A arrives with audition images already in Gallery)
   └── Prompt packs auto-load
   └── Queue Portfolio
         └── Select views (front, 3/4, profile, full body, audition, scene)
@@ -351,10 +385,11 @@ Casting Room — Batch Pipeline
         ├── needs change  →  review before casting
         └── too similar   →  likely duplicate
   └── Cast this character  →  saved to database
-  └── Dismiss             →  removed from batch
+  └── Dismiss             →  hidden from batch (recoverable via "Show dismissed" toggle)
+                              click Reconsider to return candidate to pending review
 
-Active Character section
-  └── (same as Journey A from here)
+Active Character section  (Journey B arrives with no images — Queue Portfolio to generate first set)
+  └── Prompt packs auto-load
 ```
 
 ---

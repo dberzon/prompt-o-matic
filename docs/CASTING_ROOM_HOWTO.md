@@ -89,7 +89,7 @@ Images appear inline as jobs complete. Polling stops when all jobs are terminal 
 
 Under each candidate pair you see one card per view. Once all jobs for a pair are terminal:
 
-- **Select this look** — marks this specific view's audition record as selected.
+- **Select this look** — saves the character to the database and makes them available in the **Active Character** section below. A confirmation message appears and the page scrolls down to Active Character.
 - **Pass** — prompts for an optional reason, then marks it passed.
 
 You can select and pass views independently within the same pair.
@@ -134,7 +134,7 @@ Each candidate card shows:
 
 For each candidate:
 - **Cast this character** — marks `reviewStatus` as approved.
-- **Dismiss** — rejects the candidate.
+- **Dismiss** — hides the candidate from the list (soft-delete, data is preserved). Dismissed candidates can be recovered: click **Show dismissed (N)** to reveal them, then click **Reconsider** to return a candidate to pending review.
 
 ---
 
