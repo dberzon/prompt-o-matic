@@ -84,6 +84,7 @@ export default function CastingPipelinePanel() {
   const [actionLoading, setActionLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [batchFeedback, setBatchFeedback] = useState(null) // { type: 'error'|'success', message }
 
   // ── Cast from Bank ────────────────────────────────────────────────────────
   const [bankEntries, setBankEntries] = useState([])
@@ -449,7 +450,7 @@ export default function CastingPipelinePanel() {
 
   // ── Batch pipeline handlers ───────────────────────────────────────────────
   async function handleCandidateAction(action, candidateId) {
-    setActionLoading(true); setError(''); setSuccess('')
+    setActionLoading(true); setError(''); setSuccess(''); setBatchFeedback(null)
     try {
       if (action === 'approve') await approveBatchCandidate(candidateId)
       if (action === 'reject') await rejectBatchCandidate(candidateId, 'Rejected manually')
@@ -465,13 +466,20 @@ export default function CastingPipelinePanel() {
             return [...map.values()]
           })
           setSelectedCharacterId(newId)
-          setSuccess(`Saved as Active Character: ${cand?.name || newId}`)
-          setTimeout(() => activeCharSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100)
+          const charName = cand?.name || null
+          setBatchFeedback({ type: 'success', message: `Character saved${charName ? `: ${charName}` : ''}. Scroll down to Active Character to rename and generate images.` })
+          setTimeout(() => activeCharSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)
+        } else {
+          setBatchFeedback({ type: 'error', message: 'Save completed but no character ID returned — check server logs.' })
         }
       }
       await refreshBatch(selectedBatchId)
-      if (action !== 'save') setSuccess(action === 'reconsider' ? 'Candidate reconsidered.' : `Candidate ${action}d.`)
-    } catch (err) { setError(err.message || `Failed to ${action} candidate.`) }
+      if (action !== 'save') setBatchFeedback({ type: 'success', message: action === 'reconsider' ? 'Candidate returned to pending review.' : `Candidate ${action}d.` })
+    } catch (err) {
+      const msg = err.message || `Failed to ${action} candidate.`
+      setError(msg)
+      setBatchFeedback({ type: 'error', message: msg })
+    }
     finally { setActionLoading(false) }
   }
 
@@ -822,6 +830,11 @@ export default function CastingPipelinePanel() {
           <div className={styles.subtle}>
             {selectedBatch.summary?.totalCandidates ?? 0} candidate{(selectedBatch.summary?.totalCandidates ?? 0) !== 1 ? 's' : ''} · status: {selectedBatch.status}
             {selectedBatch.summary?.byReviewStatus?.pending > 0 && ` · ${selectedBatch.summary.byReviewStatus.pending} pending review`}
+          </div>
+        )}
+        {batchFeedback && (
+          <div className={batchFeedback.type === 'error' ? styles.error : styles.success} style={{ marginTop: 8 }}>
+            {batchFeedback.message}
           </div>
         )}
         {selectedBatchId && candidates.length === 0 && <div className={styles.subtle}>No candidates in this batch.</div>}

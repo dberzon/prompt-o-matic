@@ -18,7 +18,7 @@ const ageRangeSchema = z.object({
   max: z.number().int().min(16).max(100),
 }).refine((value) => value.min <= value.max, {
   message: 'apparentAgeRange.min must be <= apparentAgeRange.max',
-}).strict()
+})
 
 export const CharacterProfileSchema = z.object({
   id: nonEmpty,
@@ -55,7 +55,7 @@ export const CharacterProfileSchema = z.object({
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
   approved: z.boolean().optional(),
-}).strict()
+})
 
 export const QwenImagePromptPackSchema = z.object({
   id: nonEmpty.optional(),
