@@ -116,7 +116,16 @@ export async function runBatchCharacterGeneration({
   })
 
   const parsedPayload = parseJsonFromLlmText(llmOutputText)
-  const rawCandidates = Array.isArray(parsedPayload) ? parsedPayload : [parsedPayload]
+  // LLMs often wrap the array: { "candidates": [...] } or { "characters": [...] }
+  let rawCandidates
+  if (Array.isArray(parsedPayload)) {
+    rawCandidates = parsedPayload
+  } else if (parsedPayload && typeof parsedPayload === 'object') {
+    const firstArray = Object.values(parsedPayload).find(Array.isArray)
+    rawCandidates = firstArray ?? [parsedPayload]
+  } else {
+    rawCandidates = [parsedPayload]
+  }
 
   const accepted = []
   const rejected = []
