@@ -91,3 +91,28 @@
 .retryBtn:hover {
   background: rgba(201, 96, 96, 0.12);
 }
+
+.skeletonDetail {
+  width: 100%;
+  height: 320px;
+  background: var(--surface-2);
+  border-radius: var(--radius-md);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.backBtnInline {
+  background: none;
+  border: none;
+  color: var(--text-2);
+  font-size: 13px;
+  padding: 4px 0;
+  cursor: pointer;
+}
+
+.backBtnInline:hover {
+  color: var(--accent);
+}
+
+.detailLoadingBar {
+  margin-bottom: 24px;
+}

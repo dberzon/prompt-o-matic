@@ -44,6 +44,7 @@ import {
   listActorAuditions,
   listActorCandidates,
   listBankEntries,
+  getCharacter,
   listCharacters,
   listGeneratedImageRecords,
   updateActorAudition,
@@ -251,6 +252,20 @@ function apiDevPlugin(env) {
           const includeArchivedParam = url.searchParams.get('includeArchived') || ''
           const includeArchived = includeArchivedParam === 'only' ? 'only' : includeArchivedParam === 'true' ? true : false
           runtime = createVectorRuntime({ env })
+          const singleId = url.searchParams.get('id') || ''
+          if (singleId) {
+            const character = getCharacter(runtime.db, singleId)
+            if (!character) {
+              sendJsonMiddleware(res, 404, { error: 'Character not found' })
+              return
+            }
+            const images = listGeneratedImageRecords(runtime.db, { characterId: singleId }).map((img) => ({
+              ...img,
+              imageUrl: `/api/generated-image-view?id=${encodeURIComponent(img.id)}`,
+            }))
+            sendJsonMiddleware(res, 200, { ok: true, item: { ...character, images } })
+            return
+          }
           const items = listCharacters(runtime.db, {
             projectId,
             gender,
@@ -259,7 +274,20 @@ function apiDevPlugin(env) {
             ageMax: Number.isFinite(ageMax) ? ageMax : undefined,
             includeArchived,
           })
-          sendJsonMiddleware(res, 200, { ok: true, items, total: items.length })
+          const allImages = listGeneratedImageRecords(runtime.db, {})
+          const imagesByChar = {}
+          for (const img of allImages) {
+            const cid = img.characterId
+            if (!cid) continue
+            if (!imagesByChar[cid]) imagesByChar[cid] = []
+            imagesByChar[cid].push(img)
+          }
+          const enriched = items.map((c) => {
+            const imgs = imagesByChar[c.id] || []
+            const thumb = imgs.find((i) => i.viewType === 'front_portrait') ?? imgs[0] ?? null
+            return { ...c, thumbnailUrl: thumb ? `/api/generated-image-view?id=${encodeURIComponent(thumb.id)}` : null }
+          })
+          sendJsonMiddleware(res, 200, { ok: true, items: enriched, total: enriched.length })
         } catch (err) {
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTERS_LIST_ERROR' })
