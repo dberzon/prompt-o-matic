@@ -33,7 +33,7 @@ import { listBankEntries } from '../lib/api/characterBank.js'
 import styles from './CastingPipelinePanel.module.css'
 import CharacterCard from './CastingRoom/CharacterCard.jsx'
 
-const POLL_MS = 8000
+const POLL_MS = 20000 // backup interval; SSE triggers immediate ticks
 const ALL_VIEWS = ['front_portrait', 'three_quarter_portrait', 'profile_portrait', 'full_body', 'audition_still', 'cinematic_scene']
 
 function StatusBadge({ status }) {
@@ -80,7 +80,7 @@ function MoreTakesPanel({ characterId, moreTakesState, onQueue }) {
 function ErrorBanner({ message }) { return message ? <div className={styles.error}>{message}</div> : null }
 function SuccessBanner({ message }) { return message ? <div className={styles.success}>{message}</div> : null }
 
-function RenderStatusBar({ isPollingAudit, isPollingPortfolio, auditionStatuses, portfolioJobsStatus, moreTakesState }) {
+function RenderStatusBar({ isPollingAudit, isPollingPortfolio, auditionStatuses, portfolioJobsStatus, moreTakesState, isSSEConnected }) {
   const auditTotal = Object.keys(auditionStatuses).length
   const auditDone = Object.values(auditionStatuses).filter((s) => s === 'success' || s === 'failed').length
   const portfolioItems = portfolioJobsStatus?.items || []
@@ -95,9 +95,9 @@ function RenderStatusBar({ isPollingAudit, isPollingPortfolio, auditionStatuses,
   return (
     <div className={styles.statusBar}>
       <span className={`${styles.statusBarDot} ${done >= total ? styles.statusBarDotDone : ''}`} />
-      <span>Rendering · {done}/{total} complete</span>
+      <span>Rendering · {done}/{total} complete{isSSEConnected ? ' · live' : ' · polling'}</span>
       <div className={styles.statusBarSegments}>
-        {auditTotal > 0 && <span className={styles.statusBarSegment}>Audition: {auditDone}/{auditTotal}</span>}
+        {auditTotal > 0 && <span className={styles.statusBarSegment}>⚡ Audition: {auditDone}/{auditTotal}</span>}
         {portfolioTotal > 0 && <span className={styles.statusBarSegment}>Portfolio: {portfolioDone}/{portfolioTotal}</span>}
         {mtTotal > 0 && <span className={styles.statusBarSegment}>More takes: {mtDone}/{mtTotal}</span>}
       </div>
@@ -191,6 +191,11 @@ export default function CastingPipelinePanel() {
   const portfolioPollRef = useRef(null)
   const portfolioTickRef = useRef(null)
   const ingestedRef = useRef(new Set())
+
+  // ── SSE real-time render updates ──────────────────────────────────────────
+  const [isSSEConnected, setIsSSEConnected] = useState(false)
+  const sseRef = useRef(null)
+  const sseTickTimer = useRef(null)
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const selectedBankEntry = useMemo(() => bankEntries.find((e) => e.id === selectedBankEntryId) || null, [bankEntries, selectedBankEntryId])
@@ -306,6 +311,36 @@ export default function CastingPipelinePanel() {
   }
 
   useEffect(() => () => { clearInterval(auditPollRef.current); clearInterval(portfolioPollRef.current) }, [])
+
+  // ── SSE subscription — triggers immediate poll ticks when renders complete ─
+  useEffect(() => {
+    const active = isPollingAudit || isPollingPortfolio
+    if (!active) {
+      if (sseRef.current) { sseRef.current.close(); sseRef.current = null; setIsSSEConnected(false) }
+      return
+    }
+    if (sseRef.current) return
+    try {
+      const source = new EventSource('/api/render-events')
+      sseRef.current = source
+      source.onopen = () => setIsSSEConnected(true)
+      source.addEventListener('render-update', () => {
+        if (sseTickTimer.current) return
+        sseTickTimer.current = setTimeout(() => {
+          sseTickTimer.current = null
+          auditTickRef.current?.()
+          portfolioTickRef.current?.()
+        }, 250)
+      })
+      source.onerror = () => {
+        source.close(); sseRef.current = null; setIsSSEConnected(false)
+      }
+    } catch { /* EventSource not supported — polling fallback is active */ }
+    return () => {
+      sseRef.current?.close(); sseRef.current = null; setIsSSEConnected(false)
+      clearTimeout(sseTickTimer.current); sseTickTimer.current = null
+    }
+  }, [isPollingAudit, isPollingPortfolio]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Restore polling state across tab navigation (72j) ────────────────────
   useEffect(() => {
@@ -751,6 +786,7 @@ export default function CastingPipelinePanel() {
         auditionStatuses={auditionStatuses}
         portfolioJobsStatus={portfolioJobsStatus}
         moreTakesState={moreTakesState}
+        isSSEConnected={isSSEConnected}
       />
       <ErrorBanner message={error} />
       <SuccessBanner message={success} />

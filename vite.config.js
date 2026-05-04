@@ -77,6 +77,40 @@ import {
   sendJsonMiddleware,
 } from './api/lib/http.js'
 
+// ── SSE render watcher (singleton across all requests) ────────────────────────
+const sseClients = new Set()
+const seenPromptIds = new Map() // promptId → timestamp (for sliding-window cleanup)
+let comfyWatcherTimer = null
+
+function broadcastSSE(data) {
+  const payload = `event: render-update\ndata: ${JSON.stringify(data)}\n\n`
+  for (const client of [...sseClients]) {
+    try { client.write(payload) } catch { sseClients.delete(client) }
+  }
+}
+
+function startComfyWatcher(comfyBaseUrl) {
+  if (comfyWatcherTimer) return
+  comfyWatcherTimer = setInterval(async () => {
+    if (sseClients.size === 0) return
+    try {
+      const res = await fetch(`${comfyBaseUrl}/history?max_items=40`, { signal: AbortSignal.timeout(3000) })
+      if (!res.ok) return
+      const history = await res.json()
+      const now = Date.now()
+      for (const [id, ts] of seenPromptIds) { if (now - ts > 600_000) seenPromptIds.delete(id) }
+      for (const [promptId, job] of Object.entries(history)) {
+        if (seenPromptIds.has(promptId)) continue
+        if (job.status?.completed) {
+          seenPromptIds.set(promptId, now)
+          const hasError = Object.values(job.status?.messages || {}).some((m) => m?.[0] === 'execution_error')
+          broadcastSSE({ promptId, status: hasError ? 'failed' : 'success' })
+        }
+      }
+    } catch { /* ComfyUI unavailable — retry next tick */ }
+  }, 2000)
+}
+
 function apiDevPlugin(env) {
   return {
     name: 'api-dev-polish',
@@ -334,6 +368,23 @@ function apiDevPlugin(env) {
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_LIFECYCLE_ERROR' })
         } finally { runtime?.close?.() }
+      })
+
+      server.middlewares.use('/api/render-events', (req, res) => {
+        if (req.method !== 'GET') { res.statusCode = 405; res.end(); return }
+        const comfyBaseUrl = env.COMFY_BASE_URL || 'http://127.0.0.1:8188'
+        startComfyWatcher(comfyBaseUrl)
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+        })
+        res.write(': SSE connected\n\n')
+        sseClients.add(res)
+        const heartbeat = setInterval(() => {
+          try { res.write(': heartbeat\n\n') } catch { clearInterval(heartbeat); sseClients.delete(res) }
+        }, 15_000)
+        req.on('close', () => { clearInterval(heartbeat); sseClients.delete(res) })
       })
 
       server.middlewares.use('/api/character-rename', async (req, res) => {

@@ -113,18 +113,20 @@ export function createComfyService({ env = process.env, fetchImpl = fetch } = {}
   }
 
   async function queueWorkflow(payload) {
+    const body = {
+      prompt: payload.prompt,
+      client_id: `qpb_${randomUUID()}`,
+    }
+    if (payload.front) body.front = true
     const data = await fetchJsonWithTimeout(`${comfyBaseUrl}/prompt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: payload.prompt,
-        client_id: `qpb_${randomUUID()}`,
-      }),
+      body: JSON.stringify(body),
     }, fetchImpl, timeoutMs)
     return data
   }
 
-  async function queuePromptPack({ promptPack, seed, workflowId, dimensions, dryRun = false, allowWorkflowFallback = false }) {
+  async function queuePromptPack({ promptPack, seed, workflowId, dimensions, dryRun = false, allowWorkflowFallback = false, front = false }) {
     const payload = buildComfyPromptPayload({
       promptPack,
       seed,
@@ -151,7 +153,7 @@ export function createComfyService({ env = process.env, fetchImpl = fetch } = {}
         prompt: payload.prompt,
       }
     }
-    const queued = await queueWorkflow(payload)
+    const queued = await queueWorkflow({ ...payload, front })
     return {
       promptId: queued.prompt_id || queued.promptId || null,
       number: queued.number ?? null,
@@ -237,7 +239,7 @@ export function createComfyService({ env = process.env, fetchImpl = fetch } = {}
   }
 
   async function queuePromptPackById({
-    db, promptPackId, seed, workflowId, dimensions, dryRun = false, allowWorkflowFallback = false,
+    db, promptPackId, seed, workflowId, dimensions, dryRun = false, allowWorkflowFallback = false, front = false,
   }) {
     const promptPack = getPromptPack(db, promptPackId)
     if (!promptPack) {
@@ -252,6 +254,7 @@ export function createComfyService({ env = process.env, fetchImpl = fetch } = {}
       dimensions,
       dryRun,
       allowWorkflowFallback,
+      front,
     })
     return { promptPackId, ...queued }
   }

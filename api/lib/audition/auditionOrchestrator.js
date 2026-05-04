@@ -100,6 +100,7 @@ export async function runAudition({
                 promptPackId: promptPack.id,
                 workflowId: workflowId || undefined,
                 allowWorkflowFallback: true,
+                front: true,
               })
             } catch (queueErr) {
               comfyJob = { error: queueErr?.message || 'Comfy queue failed' }
