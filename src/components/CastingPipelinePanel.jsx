@@ -646,9 +646,10 @@ export default function CastingPipelinePanel() {
         const characterId = saved?.item?.savedCharacterId
         if (!characterId) continue
         const cand = saved?.item?.candidate
+        patchCharacterLifecycle(characterId, 'preview').catch(() => { /* non-critical */ })
         setSavedCharacters((prev) => {
           const map = new Map(prev.map((c) => [c.id, c]))
-          map.set(characterId, { id: characterId, name: cand?.name || '(unnamed)', age: cand?.age, lifecycleStatus: 'auditioned' })
+          map.set(characterId, { id: characterId, name: cand?.name || '(unnamed)', age: cand?.age, lifecycleStatus: 'preview' })
           return [...map.values()]
         })
         const result = await queueCharacterPortfolio({
@@ -1135,10 +1136,29 @@ export default function CastingPipelinePanel() {
       {/* ─── 3. ACTIVE CHARACTER ───────────────────────────────────────── */}
       <section className={styles.section} ref={activeCharSectionRef}>
         <h3>Active Character</h3>
+        {(() => {
+          const previewChars = savedCharacters.filter((c) => c.lifecycleStatus === 'preview')
+          if (!previewChars.length) return null
+          return (
+            <div className={styles.row}>
+              <span className={styles.subtle}>{previewChars.length} preview character{previewChars.length !== 1 ? 's' : ''} (from batch previews)</span>
+              <button
+                type="button"
+                onClick={async () => {
+                  for (const c of previewChars) { try { await archiveCharacter(c.id) } catch { /* silent */ } }
+                  setSavedCharacters((prev) => prev.filter((c) => c.lifecycleStatus !== 'preview'))
+                  if (previewChars.some((c) => c.id === selectedCharacterId)) setSelectedCharacterId('')
+                }}
+              >
+                Clean up
+              </button>
+            </div>
+          )
+        })()}
         <div className={styles.row}>
           <select value={selectedCharacterId} onChange={(e) => { setSelectedCharacterId(e.target.value); setRenamingCharacterId(null) }} className={styles.select}>
             <option value="">Select character…</option>
-            {savedCharacters.map((c) => {
+            {savedCharacters.filter((c) => c.lifecycleStatus !== 'preview').map((c) => {
               const lcLabel = c.lifecycleStatus === 'portfolio_pending' ? ' ⏳' : c.lifecycleStatus === 'ready' ? ' ✓' : ''
               return <option key={c.id} value={c.id}>{c.name}{c.age ? `, ${c.age}` : ''}{lcLabel} ({c.id.slice(0, 8)}…)</option>
             })}

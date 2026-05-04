@@ -352,7 +352,7 @@ function apiDevPlugin(env) {
 
       server.middlewares.use('/api/character-lifecycle', async (req, res) => {
         if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
-        const VALID = ['draft', 'auditioned', 'portfolio_pending', 'ready', 'finalized']
+        const VALID = ['draft', 'auditioned', 'portfolio_pending', 'ready', 'finalized', 'preview']
         let runtime = null
         try {
           const body = await readJsonBody(req)
