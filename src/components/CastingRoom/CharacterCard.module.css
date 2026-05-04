@@ -193,3 +193,16 @@
   color: #e05c5c;
   align-self: center;
 }
+
+.actionHint {
+  font-size: 11px;
+  color: var(--accent, #a78bfa);
+  align-self: center;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.classTag[data-variant='saved'] {
+  color: #3cc864;
+  font-weight: 600;
+}

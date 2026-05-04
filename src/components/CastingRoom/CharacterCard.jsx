@@ -26,8 +26,10 @@ export default function CharacterCard({
   lifecycleStatus,
   previewImageUrl,
   classificationLabel,
+  classificationLabelVariant,
   actions = [],
   actionError,
+  actionHint,
   dimmed = false,
   children,
 }) {
@@ -70,7 +72,7 @@ export default function CharacterCard({
             </div>
           )}
           {classificationLabel && (
-            <div className={styles.classTag}>{classificationLabel}</div>
+            <div className={styles.classTag} data-variant={classificationLabelVariant || undefined}>{classificationLabel}</div>
           )}
         </div>
       </div>
@@ -91,6 +93,7 @@ export default function CharacterCard({
             </button>
           ))}
           {actionError && <span className={styles.actionError}>{actionError}</span>}
+          {actionHint && <span className={styles.actionHint}>{actionHint}</span>}
         </div>
       )}
 

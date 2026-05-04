@@ -109,6 +109,7 @@ export default function CastingPipelinePanel() {
   // ── Global UI state ───────────────────────────────────────────────────────
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
+  const [candidateActionId, setCandidateActionId] = useState(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [batchFeedback, setBatchFeedback] = useState(null) // { type: 'error'|'success', message }
@@ -559,7 +560,7 @@ export default function CastingPipelinePanel() {
 
   // ── Batch pipeline handlers ───────────────────────────────────────────────
   async function handleCandidateAction(action, candidateId) {
-    setActionLoading(true); setError(''); setSuccess(''); setBatchFeedback(null)
+    setCandidateActionId(candidateId); setError(''); setSuccess(''); setBatchFeedback(null)
     try {
       if (action === 'approve') await approveBatchCandidate(candidateId)
       if (action === 'reject') await rejectBatchCandidate(candidateId, 'Rejected manually')
@@ -591,7 +592,7 @@ export default function CastingPipelinePanel() {
       setError(msg)
       setBatchFeedback({ type: 'error', message: msg })
     }
-    finally { setActionLoading(false) }
+    finally { setCandidateActionId(null) }
   }
 
   // ── Active character handlers ─────────────────────────────────────────────
@@ -999,17 +1000,21 @@ export default function CastingPipelinePanel() {
               )}
               <div className={styles.list}>
                 {displayed.map((candidate) => {
+                  const isBusy = candidateActionId === candidate.id
                   const batchActions = []
+                  let approvalHint
                   if (candidate.reviewStatus === 'pending') {
-                    batchActions.push({ label: 'Cast this character', onClick: () => handleCandidateAction('approve', candidate.id), disabled: actionLoading, variant: 'primary' })
-                    batchActions.push({ label: 'Dismiss', onClick: () => handleCandidateAction('reject', candidate.id), disabled: actionLoading, variant: 'danger' })
+                    batchActions.push({ label: isBusy ? 'Casting…' : 'Cast this character', onClick: () => handleCandidateAction('approve', candidate.id), disabled: isBusy, variant: 'primary' })
+                    batchActions.push({ label: 'Dismiss', onClick: () => handleCandidateAction('reject', candidate.id), disabled: isBusy, variant: 'danger' })
                   } else if (candidate.reviewStatus === 'approved') {
-                    batchActions.push({ label: 'Save → Active Character', onClick: () => handleCandidateAction('save', candidate.id), disabled: actionLoading, variant: 'primary' })
-                    batchActions.push({ label: 'Dismiss', onClick: () => handleCandidateAction('reject', candidate.id), disabled: actionLoading, variant: 'danger' })
+                    batchActions.push({ label: isBusy ? 'Saving…' : 'Save → Active Character', onClick: () => handleCandidateAction('save', candidate.id), disabled: isBusy, variant: 'primary' })
+                    batchActions.push({ label: 'Dismiss', onClick: () => handleCandidateAction('reject', candidate.id), disabled: isBusy, variant: 'danger' })
+                    approvalHint = 'Ready to add to your cast — click Save to confirm.'
                   } else if (candidate.reviewStatus === 'rejected') {
-                    batchActions.push({ label: 'Reconsider', onClick: () => handleCandidateAction('reconsider', candidate.id), disabled: actionLoading })
+                    batchActions.push({ label: 'Reconsider', onClick: () => handleCandidateAction('reconsider', candidate.id), disabled: isBusy })
                   }
-                  const clLabel = candidate.reviewStatus === 'saved'
+                  const isSaved = candidate.reviewStatus === 'saved'
+                  const clLabel = isSaved
                     ? 'Saved ✓'
                     : `${candidate.reviewStatus} · ${classLabel[candidate.classification] || candidate.classification}${candidate.reviewNote ? ` · ${candidate.reviewNote}` : ''}`
                   return (
@@ -1018,7 +1023,9 @@ export default function CastingPipelinePanel() {
                       character={candidate.candidate}
                       dimmed={candidate.reviewStatus === 'rejected'}
                       classificationLabel={clLabel}
+                      classificationLabelVariant={isSaved ? 'saved' : undefined}
                       actions={batchActions}
+                      actionHint={approvalHint}
                     />
                   )
                 })}
