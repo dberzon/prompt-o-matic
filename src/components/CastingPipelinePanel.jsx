@@ -160,6 +160,11 @@ export default function CastingPipelinePanel() {
   const [generatedImages, setGeneratedImages] = useState([])
   const [imageLoadErrors, setImageLoadErrors] = useState({})
 
+  // ── Batch preview renders ─────────────────────────────────────────────────
+  const [batchPreviewJobs, setBatchPreviewJobs] = useState({}) // candidateId → { characterId, promptId, promptPackId, status }
+  const [batchPreviewImages, setBatchPreviewImages] = useState({}) // candidateId → image URL
+  const [previewsGenerating, setPreviewsGenerating] = useState(false)
+
   // ── Batch generation form (hvz) ───────────────────────────────────────────
   const [batchFormOpen, setBatchFormOpen] = useState(false)
   const [batchGenAgeMin, setBatchGenAgeMin] = useState(25)
@@ -225,6 +230,11 @@ export default function CastingPipelinePanel() {
         }
       }
     }
+    for (const [candidateId, job] of Object.entries(batchPreviewJobs)) {
+      if (job.promptId && job.status !== 'success' && job.status !== 'failed') {
+        jobs.push({ promptId: job.promptId, promptPackId: job.promptPackId, characterId: job.characterId, viewType: 'front_portrait', type: 'batchPreview', candidateId })
+      }
+    }
     if (jobs.length === 0) {
       clearInterval(auditPollRef.current); auditPollRef.current = null; setIsPollingAudit(false); return
     }
@@ -258,6 +268,23 @@ export default function CastingPipelinePanel() {
         })
       }
 
+      // Update batch-preview job statuses
+      const bpUpdates = {}
+      for (const j of jobs.filter((j) => j.type === 'batchPreview')) {
+        if (statusMap[j.promptId] && statusMap[j.promptId] !== batchPreviewJobs[j.candidateId]?.status) {
+          bpUpdates[j.candidateId] = statusMap[j.promptId]
+        }
+      }
+      if (Object.keys(bpUpdates).length) {
+        setBatchPreviewJobs((prev) => {
+          const next = { ...prev }
+          for (const [cid, status] of Object.entries(bpUpdates)) {
+            if (next[cid]) next[cid] = { ...next[cid], status }
+          }
+          return next
+        })
+      }
+
       // Auto-ingest newly succeeded jobs
       const toIngest = jobs.filter((j) => statusMap[j.promptId] === 'success' && !ingestedRef.current.has(j.promptId))
       if (toIngest.length) {
@@ -270,6 +297,17 @@ export default function CastingPipelinePanel() {
             try { const list = await listGeneratedImages({ characterId: cId }); imageMap[cId] = list?.items || [] } catch { /* silent */ }
           }
           setAuditionImages((prev) => ({ ...prev, ...imageMap }))
+          // Populate batch preview image URLs for completed preview jobs
+          const previewIngests = toIngest.filter((j) => j.type === 'batchPreview')
+          if (previewIngests.length) {
+            const previewImgUpdates = {}
+            for (const j of previewIngests) {
+              const imgs = imageMap[j.characterId] || []
+              const first = imgs.find((img) => !img.viewType || img.viewType === 'front_portrait') || imgs[0]
+              if (first) previewImgUpdates[j.candidateId] = `/api/generated-image-view?id=${encodeURIComponent(first.id)}`
+            }
+            if (Object.keys(previewImgUpdates).length) setBatchPreviewImages((prev) => ({ ...prev, ...previewImgUpdates }))
+          }
         } catch { /* images will appear on next successful tick */ }
       }
 
@@ -594,6 +632,39 @@ export default function CastingPipelinePanel() {
       setBatchFeedback({ type: 'error', message: msg })
     }
     finally { setCandidateActionId(null) }
+  }
+
+  async function handleGeneratePreviews() {
+    if (!selectedWorkflowId) return
+    const targets = candidates.filter((c) => c.reviewStatus !== 'rejected' && !batchPreviewJobs[c.id])
+    if (!targets.length) return
+    setPreviewsGenerating(true)
+    const newJobs = {}
+    for (const candidate of targets) {
+      try {
+        const saved = await saveBatchCandidate(candidate.id)
+        const characterId = saved?.item?.savedCharacterId
+        if (!characterId) continue
+        const cand = saved?.item?.candidate
+        setSavedCharacters((prev) => {
+          const map = new Map(prev.map((c) => [c.id, c]))
+          map.set(characterId, { id: characterId, name: cand?.name || '(unnamed)', age: cand?.age, lifecycleStatus: 'auditioned' })
+          return [...map.values()]
+        })
+        const result = await queueCharacterPortfolio({
+          characterId, views: ['front_portrait'], workflowId: selectedWorkflowId,
+          options: { persistPromptPacks: true, aspectRatio: '2:3', styleProfile: 'cinematic casting portrait' },
+        })
+        const queued = (result.queued || []).filter((item) => item.ok && item.result?.promptId)
+        if (queued.length) {
+          newJobs[candidate.id] = { characterId, promptId: queued[0].result.promptId, promptPackId: queued[0].promptPackId, status: 'pending' }
+        }
+      } catch { /* skip candidate on error */ }
+    }
+    setBatchPreviewJobs((prev) => ({ ...prev, ...newJobs }))
+    if (Object.keys(newJobs).length) startAuditPoll()
+    await refreshBatch(selectedBatchId)
+    setPreviewsGenerating(false)
   }
 
   // ── Active character handlers ─────────────────────────────────────────────
@@ -999,6 +1070,22 @@ export default function CastingPipelinePanel() {
                   </button>
                 </div>
               )}
+              {!allDismissed && selectedWorkflowId && (
+                <div className={styles.row}>
+                  <button
+                    type="button"
+                    disabled={previewsGenerating || candidates.filter((c) => c.reviewStatus !== 'rejected' && !batchPreviewJobs[c.id]).length === 0}
+                    onClick={handleGeneratePreviews}
+                  >
+                    {previewsGenerating ? 'Queuing previews…' : 'Generate Previews'}
+                  </button>
+                  {Object.keys(batchPreviewJobs).length > 0 && (
+                    <span className={styles.subtle}>
+                      {Object.values(batchPreviewJobs).filter((j) => j.status === 'success').length}/{Object.keys(batchPreviewJobs).length} preview{Object.keys(batchPreviewJobs).length !== 1 ? 's' : ''} ready
+                    </span>
+                  )}
+                </div>
+              )}
               <div className={styles.list}>
                 {displayed.map((candidate) => {
                   const isBusy = candidateActionId === candidate.id
@@ -1018,6 +1105,7 @@ export default function CastingPipelinePanel() {
                   const clLabel = isSaved
                     ? 'Saved ✓'
                     : `${candidate.reviewStatus} · ${classLabel[candidate.classification] || candidate.classification}${candidate.reviewNote ? ` · ${candidate.reviewNote}` : ''}`
+                  const previewImageUrl = batchPreviewImages[candidate.id] || null
                   return (
                     <CharacterCard
                       key={candidate.id}
@@ -1027,6 +1115,7 @@ export default function CastingPipelinePanel() {
                       classificationLabelVariant={isSaved ? 'saved' : undefined}
                       actions={batchActions}
                       actionHint={approvalHint}
+                      previewImageUrl={previewImageUrl}
                     />
                   )
                 })}
