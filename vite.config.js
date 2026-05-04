@@ -46,6 +46,7 @@ import {
   listBankEntries,
   getCharacter,
   listCharacters,
+  deleteCharacter,
   listGeneratedImageRecords,
   updateActorAudition,
   updateActorCandidate,
@@ -236,6 +237,25 @@ function apiDevPlugin(env) {
       })
 
       server.middlewares.use('/api/characters', async (req, res) => {
+        if (req.method === 'DELETE') {
+          let runtime = null
+          try {
+            assertCharacterBatchOperationAllowed('list-characters', env)
+            const url = new URL(req.url || '', 'http://localhost')
+            const id = url.searchParams.get('id') || ''
+            if (!id) { sendJsonMiddleware(res, 400, { error: 'Missing id' }); return }
+            runtime = createVectorRuntime({ env })
+            const deleted = deleteCharacter(runtime.db, id)
+            if (!deleted) { sendJsonMiddleware(res, 404, { error: 'Character not found' }); return }
+            sendJsonMiddleware(res, 200, { ok: true })
+          } catch (err) {
+            const normalized = normalizeHandlerError(err)
+            sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_DELETE_ERROR' })
+          } finally {
+            runtime?.close?.()
+          }
+          return
+        }
         if (req.method !== 'GET') {
           sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
           return
