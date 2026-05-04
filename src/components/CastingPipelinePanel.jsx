@@ -358,7 +358,15 @@ export default function CastingPipelinePanel() {
         try { await ingestComfyOutputsMany(ingestJobs); await refreshGallery() } catch { /* silent */ }
       }
       const allDone = (statusData?.items || []).every((item) => item.status === 'success' || item.status === 'failed' || !item.ok)
-      if (allDone) { clearInterval(portfolioPollRef.current); portfolioPollRef.current = null; setIsPollingPortfolio(false) }
+      if (allDone) {
+        clearInterval(portfolioPollRef.current); portfolioPollRef.current = null; setIsPollingPortfolio(false)
+        const allFailed = (statusData?.items || []).every((item) => item.status === 'failed' || !item.ok)
+        if (allFailed && portfolioJobs[0]?.characterId) {
+          const charId = portfolioJobs[0].characterId
+          patchCharacterLifecycle(charId, 'portfolio_failed').catch(() => {})
+          setSavedCharacters((prev) => prev.map((c) => c.id === charId ? { ...c, lifecycleStatus: 'portfolio_failed' } : c))
+        }
+      }
     } catch { /* keep polling */ }
   }
 
@@ -768,6 +776,7 @@ export default function CastingPipelinePanel() {
       setSuccess(`Portfolio queued: ${result.summary?.success || 0} views.`)
       if (jobs.length) startPortfolioPoll()
       patchCharacterLifecycle(selectedCharacterId, 'portfolio_pending').catch(() => { /* non-critical */ })
+      setSavedCharacters((prev) => prev.map((c) => c.id === selectedCharacterId ? { ...c, lifecycleStatus: 'portfolio_pending' } : c))
     } catch (err) { setError(err.message || 'Failed to queue portfolio.') }
     finally { setActionLoading(false) }
   }
@@ -1186,7 +1195,7 @@ export default function CastingPipelinePanel() {
           <select value={selectedCharacterId} onChange={(e) => { setSelectedCharacterId(e.target.value); setRenamingCharacterId(null) }} className={styles.select}>
             <option value="">Select character…</option>
             {savedCharacters.filter((c) => c.lifecycleStatus !== 'preview').map((c) => {
-              const lcLabel = c.lifecycleStatus === 'portfolio_pending' ? ' ⏳' : c.lifecycleStatus === 'ready' ? ' ✓' : ''
+              const lcLabel = c.lifecycleStatus === 'portfolio_pending' ? ' ⏳' : c.lifecycleStatus === 'portfolio_failed' ? ' ✗' : c.lifecycleStatus === 'ready' ? ' ✓' : ''
               return <option key={c.id} value={c.id}>{c.name}{c.age ? `, ${c.age}` : ''}{lcLabel} ({c.id.slice(0, 8)}…)</option>
             })}
           </select>
@@ -1327,6 +1336,15 @@ export default function CastingPipelinePanel() {
           >
             Queue Portfolio
           </button>
+          {savedCharacters.find((c) => c.id === selectedCharacterId)?.lifecycleStatus === 'portfolio_failed' && (
+            <button
+              disabled={!selectedWorkflowId || !selectedPortfolioViewList().length || actionLoading}
+              onClick={handleQueuePortfolio}
+              title="All renders failed — re-queue the same views"
+            >
+              ↺ Retry Portfolio
+            </button>
+          )}
           {isPollingPortfolio && <span className={styles.subtle}>⟳ checking Comfy…</span>}
         </div>
         {portfolioJobs.length > 0 && (
