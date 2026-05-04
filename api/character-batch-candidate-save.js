@@ -11,9 +11,10 @@ export default async function handler(req, res) {
   try {
     assertCharacterBatchOperationAllowed('candidate-save', process.env)
     runtime = createVectorRuntime({ env: process.env })
-    const item = saveCandidateAsCharacter(runtime.db, req.body || {})
-    if (!item) return sendJsonNode(res, 404, { error: 'Candidate not found' })
-    return sendJsonNode(res, 200, { ok: true, item })
+    const result = await saveCandidateAsCharacter(runtime, req.body || {})
+    if (!result) return sendJsonNode(res, 404, { error: 'Candidate not found' })
+    if (result.warning) return sendJsonNode(res, 200, { ok: false, warning: result.warning, matches: result.matches })
+    return sendJsonNode(res, 200, { ok: true, item: result })
   } catch (error) {
     const normalized = normalizeHandlerError(error)
     return sendJsonNode(res, normalized.status, { error: normalized.message, code: error?.code || 'CHARACTER_BATCH_CANDIDATE_SAVE_ERROR' })

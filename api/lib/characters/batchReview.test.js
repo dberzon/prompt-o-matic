@@ -85,19 +85,19 @@ describe('batch review repository/service', () => {
     db.close()
   })
 
-  it('saves approved candidate as character', () => {
+  it('saves approved candidate as character', async () => {
     const db = createTempDb()
     const batch = persistBatchFromGeneration(db, makeGenerationResult())
     const candidate = listBatchCandidates(db, batch.id).find((item) => item.classification === 'accepted')
     approveCandidate(db, { candidateId: candidate.id })
-    const saved = saveCandidateAsCharacter(db, { candidateId: candidate.id })
+    const saved = await saveCandidateAsCharacter({ db }, { candidateId: candidate.id })
     expect(saved.reviewStatus).toBe('saved')
     expect(saved.savedCharacterId).toBeTruthy()
     expect(getCharacter(db, saved.savedCharacterId)).not.toBeNull()
     db.close()
   })
 
-  it('rejects invalid candidate save', () => {
+  it('rejects invalid candidate save', async () => {
     const db = createTempDb()
     const batch = persistBatchFromGeneration(db, {
       ...makeGenerationResult(),
@@ -107,7 +107,7 @@ describe('batch review repository/service', () => {
     })
     const candidate = listBatchCandidates(db, batch.id)[0]
     approveCandidate(db, { candidateId: candidate.id })
-    expect(() => saveCandidateAsCharacter(db, { candidateId: candidate.id })).toThrow()
+    await expect(saveCandidateAsCharacter({ db }, { candidateId: candidate.id })).rejects.toThrow()
     db.close()
   })
 

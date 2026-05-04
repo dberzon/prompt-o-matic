@@ -4,6 +4,7 @@ import { parseJsonFromLlmText } from './jsonUtils.js'
 import { buildMutationPrompt } from './prompts.js'
 import { parseCharacterProfile } from './schemas.js'
 import { findSimilarCharacters } from '../vector/characterIndexing.js'
+import { triggerReindex } from '../characterLifecycle.js'
 import { runBatchCharacterGeneration } from './batchGeneration.js'
 import {
   approveBatchCandidate,
@@ -22,6 +23,7 @@ import {
 const CandidateActionSchema = z.object({
   candidateId: z.string().trim().min(1),
   reason: z.string().trim().min(1).optional(),
+  force: z.boolean().optional(),
 }).strict()
 
 const ListCandidatesQuerySchema = z.object({
@@ -147,10 +149,37 @@ export function rejectCandidate(db, payload) {
   return updated
 }
 
-export function saveCandidateAsCharacter(db, payload) {
+export async function saveCandidateAsCharacter({ db, vectorStore, embeddingProvider }, payload) {
   const parsed = CandidateActionSchema.parse(payload)
+
+  if (!parsed.force && vectorStore && embeddingProvider) {
+    const candidateRecord = getBatchCandidate(db, parsed.candidateId)
+    if (candidateRecord?.candidate) {
+      try {
+        const results = await findSimilarCharacters({
+          vectorStore,
+          embeddingProvider,
+          characterOrText: candidateRecord.candidate,
+          limit: 3,
+        })
+        const similar = results.filter((r) => typeof r.distance === 'number' && r.distance <= 0.28)
+        if (similar.length > 0) {
+          return { warning: 'similar_character_found', matches: similar }
+        }
+      } catch {
+        // vector store unavailable — skip check and proceed
+      }
+    }
+  }
+
   const updated = saveApprovedCandidateAsCharacter(db, parsed.candidateId)
-  if (updated) recalculateCharacterBatchSummary({ db, batchId: updated.batchId })
+  if (!updated) return null
+  recalculateCharacterBatchSummary({ db, batchId: updated.batchId })
+
+  if (vectorStore && embeddingProvider && updated.savedCharacterId) {
+    triggerReindex(db, updated.savedCharacterId, { vectorStore, embeddingProvider }).catch(() => {})
+  }
+
   return updated
 }
 

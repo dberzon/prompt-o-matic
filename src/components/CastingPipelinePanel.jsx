@@ -642,7 +642,20 @@ export default function CastingPipelinePanel() {
       if (action === 'reject') await rejectBatchCandidate(candidateId, 'Rejected manually')
       if (action === 'reconsider') await reconsiderBatchCandidate(candidateId)
       if (action === 'save') {
-        const saved = await saveBatchCandidate(candidateId)
+        let saved = await saveBatchCandidate(candidateId)
+        if (saved?.warning === 'similar_character_found') {
+          const names = (saved.matches || [])
+            .map((m) => m.metadata?.name || m.characterId)
+            .filter(Boolean)
+            .slice(0, 2)
+            .join(', ')
+          const msg = `This character is now similar to ${names || 'an existing character'} (recently added). Save anyway?`
+          if (!window.confirm(msg)) {
+            setCandidateActionId(null)
+            return
+          }
+          saved = await saveBatchCandidate(candidateId, { force: true })
+        }
         const newId = saved?.item?.savedCharacterId
         if (newId) {
           const cand = saved?.item?.candidate

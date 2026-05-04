@@ -24,8 +24,8 @@ export function rejectBatchCandidate(candidateId, reason) {
   return apiPost('/api/character-batch-candidate-reject', { candidateId, reason })
 }
 
-export function saveBatchCandidate(candidateId) {
-  return apiPost('/api/character-batch-candidate-save', { candidateId })
+export function saveBatchCandidate(candidateId, { force = false } = {}) {
+  return apiPost('/api/character-batch-candidate-save', { candidateId, force })
 }
 
 export function generateBatch({ request, options = {}, provider = {} } = {}) {
