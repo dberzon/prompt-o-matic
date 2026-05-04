@@ -2,7 +2,7 @@ import { normalizeHandlerError, sendJsonNode } from './lib/http.js'
 import { assertComfyOperationAllowed } from './lib/comfy/access.js'
 import { createComfyService } from './lib/comfy/comfyService.js'
 import { createVectorRuntime } from './lib/vector/runtime.js'
-import { getPromptPack } from './lib/db/repositories.js'
+import { getPromptPack, updateCharacter } from './lib/db/repositories.js'
 
 function classifyJobStatus(raw, promptId) {
   const historyEntry = raw?.history?.[promptId]
@@ -56,6 +56,10 @@ export default async function handler(req, res) {
           workflowVersion: job.workflowVersion || promptPack.comfyWorkflowId || 'qwen-image-2512-default',
           historyPayload: statusRaw.history,
         })
+        const charId = job.characterId || promptPack.characterId
+        if (charId) {
+          try { updateCharacter(runtime.db, charId, { lastRenderedAt: new Date().toISOString() }) } catch { /* non-critical */ }
+        }
         items.push({
           promptId,
           promptPackId,

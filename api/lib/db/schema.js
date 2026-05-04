@@ -127,4 +127,5 @@ export const MIGRATIONS = [
   "ALTER TABLE characters ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'auditioned'",
   'CREATE INDEX IF NOT EXISTS idx_characters_lifecycle ON characters(lifecycle_status)',
   'ALTER TABLE character_batch_candidates ADD COLUMN preview_image_url TEXT',
+  'ALTER TABLE characters ADD COLUMN last_rendered_at TEXT',
 ]

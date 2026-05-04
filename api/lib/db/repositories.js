@@ -116,11 +116,14 @@ export function listCharacters(db, filters = {}) {
   const limitSql = limit && limit > 0 ? 'LIMIT ?' : ''
   if (limitSql) values.push(limit)
 
+  const orderBy = filters.sortBy === 'last_rendered_at'
+    ? 'COALESCE(last_rendered_at, created_at) DESC'
+    : 'created_at DESC'
   const rows = db.prepare(`
     SELECT payload_json
     FROM characters
     ${whereSql}
-    ORDER BY created_at DESC
+    ORDER BY ${orderBy}
     ${limitSql}
   `).all(...values)
 
@@ -163,6 +166,7 @@ export function updateCharacter(db, id, patch) {
     SET project_id = @project_id,
         embedding_status = @embedding_status,
         lifecycle_status = @lifecycle_status,
+        last_rendered_at = @last_rendered_at,
         payload_json = @payload_json,
         updated_at = @updated_at
     WHERE id = @id
@@ -171,6 +175,7 @@ export function updateCharacter(db, id, patch) {
     project_id: record.projectId ?? null,
     embedding_status: record.embeddingStatus || 'not_indexed',
     lifecycle_status: record.lifecycleStatus || 'auditioned',
+    last_rendered_at: record.lastRenderedAt ?? null,
     payload_json: JSON.stringify(record),
     updated_at: record.updatedAt,
   })

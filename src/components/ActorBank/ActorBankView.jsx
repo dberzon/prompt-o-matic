@@ -31,6 +31,7 @@ export default function ActorBankView() {
       if (f.gender) params.set('gender', f.gender)
       if (f.ageMin !== '' && f.ageMin != null) params.set('ageMin', String(f.ageMin))
       if (f.ageMax !== '' && f.ageMax != null) params.set('ageMax', String(f.ageMax))
+      params.set('sortBy', 'last_rendered_at')
       const res = await fetch(`/api/characters?${params}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)

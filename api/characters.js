@@ -37,12 +37,14 @@ export default async function handler(req, res) {
     const search = typeof q.search === 'string' ? q.search : undefined
     const ageMin = q.ageMin !== undefined ? Number(q.ageMin) : undefined
     const ageMax = q.ageMax !== undefined ? Number(q.ageMax) : undefined
+    const sortBy = typeof q.sortBy === 'string' ? q.sortBy : undefined
     const items = listCharacters(runtime.db, {
       projectId,
       gender,
       search,
       ageMin: Number.isFinite(ageMin) ? ageMin : undefined,
       ageMax: Number.isFinite(ageMax) ? ageMax : undefined,
+      sortBy,
     })
     return sendJsonNode(res, 200, { ok: true, items, total: items.length })
   } catch (error) {

@@ -346,7 +346,10 @@ export default function CastingPipelinePanel() {
     if (!portfolioJobs.length) { clearInterval(portfolioPollRef.current); portfolioPollRef.current = null; setIsPollingPortfolio(false); return }
     const pending = portfolioJobs.filter((j) => {
       const prev = portfolioJobsStatus?.items?.find((s) => s.promptId === j.promptId)
-      return !prev || (prev.status !== 'success' && prev.status !== 'failed')
+      if (!prev) return true
+      if (prev.status === 'success') return false
+      if (prev.status === 'failed' && (j.retryCount ?? 0) >= 2) return false
+      return true // still running, or failed but retry-eligible
     })
     if (!pending.length) { clearInterval(portfolioPollRef.current); portfolioPollRef.current = null; setIsPollingPortfolio(false); return }
     try {
@@ -358,7 +361,29 @@ export default function CastingPipelinePanel() {
         for (const item of toIngest) ingestedRef.current.add(item.promptId)
         try { await ingestComfyOutputsMany(ingestJobs); await refreshGallery() } catch { /* silent */ }
       }
-      const allDone = (statusData?.items || []).every((item) => item.status === 'success' || item.status === 'failed' || !item.ok)
+      const toRetry = (statusData?.items || [])
+        .filter((item) => item.status === 'failed')
+        .map((item) => portfolioJobs.find((j) => j.promptId === item.promptId))
+        .filter((j) => j && (j.retryCount ?? 0) < 2)
+      let retriedJobs = null
+      if (toRetry.length) {
+        const replacements = new Map()
+        for (const j of toRetry) {
+          try {
+            const result = await queueComfyPromptPack({ promptPackId: j.promptPackId, workflowId: j.workflowVersion })
+            if (result?.promptId) replacements.set(j.promptId, { ...j, promptId: result.promptId, retryCount: (j.retryCount ?? 0) + 1 })
+          } catch { /* retry queue failed — leave as permanently failed */ }
+        }
+        if (replacements.size) {
+          retriedJobs = portfolioJobs.map((j) => replacements.has(j.promptId) ? replacements.get(j.promptId) : j)
+          setPortfolioJobs(retriedJobs)
+        }
+      }
+      const currentJobs = retriedJobs || portfolioJobs
+      const allDone = !retriedJobs && (statusData?.items || []).every((item) => {
+        const j = currentJobs.find((jj) => jj.promptId === item.promptId)
+        return item.status === 'success' || !item.ok || (item.status === 'failed' && (j?.retryCount ?? 0) >= 2)
+      })
       if (allDone) {
         clearInterval(portfolioPollRef.current); portfolioPollRef.current = null; setIsPollingPortfolio(false)
         const allFailed = (statusData?.items || []).every((item) => item.status === 'failed' || !item.ok)
