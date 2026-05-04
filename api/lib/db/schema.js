@@ -124,4 +124,6 @@ CREATE INDEX IF NOT EXISTS idx_actor_auditions_status ON actor_auditions(status)
 
 export const MIGRATIONS = [
   'ALTER TABLE characters ADD COLUMN archived_at TEXT',
+  "ALTER TABLE characters ADD COLUMN lifecycle_status TEXT NOT NULL DEFAULT 'auditioned'",
+  'CREATE INDEX IF NOT EXISTS idx_characters_lifecycle ON characters(lifecycle_status)',
 ]

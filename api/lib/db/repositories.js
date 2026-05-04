@@ -34,16 +34,18 @@ export function createCharacter(db, profile) {
   const payload = validateCharacterOrThrow({ ...profile, createdAt, updatedAt: profile.updatedAt || createdAt })
   const updatedAt = payload.updatedAt || createdAt
   const embeddingStatus = payload.embeddingStatus || 'not_indexed'
+  const lifecycleStatus = payload.lifecycleStatus || 'auditioned'
   const id = payload.id || randomUUID()
-  const record = { ...payload, id, createdAt, updatedAt, embeddingStatus }
+  const record = { ...payload, id, createdAt, updatedAt, embeddingStatus, lifecycleStatus }
 
   db.prepare(`
-    INSERT INTO characters (id, project_id, embedding_status, payload_json, created_at, updated_at)
-    VALUES (@id, @project_id, @embedding_status, @payload_json, @created_at, @updated_at)
+    INSERT INTO characters (id, project_id, embedding_status, lifecycle_status, payload_json, created_at, updated_at)
+    VALUES (@id, @project_id, @embedding_status, @lifecycle_status, @payload_json, @created_at, @updated_at)
   `).run({
     id: record.id,
     project_id: record.projectId ?? null,
     embedding_status: record.embeddingStatus,
+    lifecycle_status: record.lifecycleStatus,
     payload_json: JSON.stringify(record),
     created_at: record.createdAt,
     updated_at: record.updatedAt,
@@ -99,6 +101,16 @@ export function listCharacters(db, filters = {}) {
   } else if (!filters.includeArchived) {
     clauses.push('(archived_at IS NULL)')
   }
+  if (filters.lifecycleStatus) {
+    const statuses = Array.isArray(filters.lifecycleStatus) ? filters.lifecycleStatus : [filters.lifecycleStatus]
+    clauses.push(`lifecycle_status IN (${statuses.map(() => '?').join(',')})`)
+    values.push(...statuses)
+  }
+  if (filters.excludeLifecycleStatus) {
+    const statuses = Array.isArray(filters.excludeLifecycleStatus) ? filters.excludeLifecycleStatus : [filters.excludeLifecycleStatus]
+    clauses.push(`lifecycle_status NOT IN (${statuses.map(() => '?').join(',')})`)
+    values.push(...statuses)
+  }
   const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
   const limit = Number.isInteger(filters.limit) ? filters.limit : null
   const limitSql = limit && limit > 0 ? 'LIMIT ?' : ''
@@ -150,6 +162,7 @@ export function updateCharacter(db, id, patch) {
     UPDATE characters
     SET project_id = @project_id,
         embedding_status = @embedding_status,
+        lifecycle_status = @lifecycle_status,
         payload_json = @payload_json,
         updated_at = @updated_at
     WHERE id = @id
@@ -157,6 +170,7 @@ export function updateCharacter(db, id, patch) {
     id: record.id,
     project_id: record.projectId ?? null,
     embedding_status: record.embeddingStatus || 'not_indexed',
+    lifecycle_status: record.lifecycleStatus || 'auditioned',
     payload_json: JSON.stringify(record),
     updated_at: record.updatedAt,
   })

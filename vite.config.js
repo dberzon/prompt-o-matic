@@ -60,6 +60,13 @@ import {
   reconsiderBatchCandidate,
 } from './api/lib/db/repositories.js'
 import { createVectorRuntime } from './api/lib/vector/runtime.js'
+import {
+  setAuditioned as lcSetAuditioned,
+  setPreview as lcSetPreview,
+  setPortfolioPending as lcSetPortfolioPending,
+  setPortfolioFailed as lcSetPortfolioFailed,
+  setReady as lcSetReady,
+} from './api/lib/characterLifecycle.js'
 import { assertGeneratedImagesOperationAllowed } from './api/lib/generatedImages/access.js'
 import { assertVectorOperationAllowed, sanitizeVectorStatusForMode } from './api/lib/vector/access.js'
 import {
@@ -423,17 +430,23 @@ function apiDevPlugin(env) {
 
       server.middlewares.use('/api/character-lifecycle', async (req, res) => {
         if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
-        const VALID = ['draft', 'auditioned', 'portfolio_pending', 'ready', 'finalized', 'preview']
+        const LC_VALID = ['auditioned', 'preview', 'portfolio_pending', 'portfolio_failed', 'ready']
+        const LC_FNS = {
+          auditioned: lcSetAuditioned,
+          preview: lcSetPreview,
+          portfolio_pending: lcSetPortfolioPending,
+          portfolio_failed: lcSetPortfolioFailed,
+          ready: lcSetReady,
+        }
         let runtime = null
         try {
           const body = await readJsonBody(req)
           const characterId = body?.characterId
           const lifecycleStatus = body?.lifecycleStatus
           if (!characterId) { sendJsonMiddleware(res, 400, { error: 'Missing characterId' }); return }
-          if (!VALID.includes(lifecycleStatus)) { sendJsonMiddleware(res, 400, { error: `Invalid lifecycleStatus. Valid: ${VALID.join(', ')}` }); return }
+          if (!LC_VALID.includes(lifecycleStatus)) { sendJsonMiddleware(res, 400, { error: `Invalid lifecycleStatus. Valid: ${LC_VALID.join(', ')}` }); return }
           runtime = createVectorRuntime({ env })
-          const updated = updateCharacter(runtime.db, characterId, { lifecycleStatus })
-          if (!updated) { sendJsonMiddleware(res, 404, { error: 'Character not found' }); return }
+          const updated = LC_FNS[lifecycleStatus](runtime.db, characterId)
           sendJsonMiddleware(res, 200, { ok: true, item: updated })
         } catch (err) {
           const normalized = normalizeHandlerError(err)
