@@ -110,6 +110,7 @@ export default function CastingPipelinePanel() {
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
   const [candidateActionId, setCandidateActionId] = useState(null)
+  const [packCopied, setPackCopied] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [batchFeedback, setBatchFeedback] = useState(null) // { type: 'error'|'success', message }
@@ -1110,12 +1111,40 @@ export default function CastingPipelinePanel() {
         )}
 
         {promptPacks.length > 0 && (
-          <select value={selectedPromptPackId} onChange={(e) => setSelectedPromptPackId(e.target.value)} className={styles.select}>
-            <option value="">Select prompt pack…</option>
-            {promptPacks.map((pack) => (
-              <option key={pack.id} value={pack.id}>{pack.id.slice(0, 16)}… {pack.camera ? `· ${pack.camera}` : ''}</option>
-            ))}
-          </select>
+          <>
+            <div className={styles.row}>
+              <select value={selectedPromptPackId} onChange={(e) => { setSelectedPromptPackId(e.target.value); setPackCopied(false) }} className={styles.select}>
+                <option value="">Select prompt pack…</option>
+                {promptPacks.map((pack) => {
+                  const view = pack.consistencyTags?.[1] || pack.id.slice(0, 12)
+                  const label = view.replace(/_/g, ' ')
+                  return <option key={pack.id} value={pack.id}>{label}{pack.camera ? ` · ${pack.camera}` : ''}</option>
+                })}
+              </select>
+              {selectedPromptPack && (
+                <button
+                  onClick={() => {
+                    const text = [selectedPromptPack.positivePrompt, selectedPromptPack.negativePrompt ? `\n\n--- negative ---\n${selectedPromptPack.negativePrompt}` : ''].join('')
+                    navigator.clipboard.writeText(text).then(() => { setPackCopied(true); setTimeout(() => setPackCopied(false), 1500) })
+                  }}
+                >
+                  {packCopied ? 'Copied!' : 'Copy'}
+                </button>
+              )}
+            </div>
+            {selectedPromptPack && (
+              <div className={styles.packPreview}>
+                <div className={styles.packPreviewLabel}>positive</div>
+                {selectedPromptPack.positivePrompt}
+                {selectedPromptPack.negativePrompt && (
+                  <div className={styles.packPreviewNeg}>
+                    <div className={styles.packPreviewLabel}>negative</div>
+                    {selectedPromptPack.negativePrompt}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
         )}
       </section>
 
