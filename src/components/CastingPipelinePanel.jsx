@@ -549,7 +549,6 @@ export default function CastingPipelinePanel() {
           for (const c of chars) map.set(c.id, { id: c.id, name: c.name || '(unnamed)', age: c.age, lifecycleStatus: c.lifecycleStatus })
           return [...map.values()]
         })
-        if (!selectedCharacterId && newSuccessCharIds[0]) setSelectedCharacterId(newSuccessCharIds[0])
         for (const charId of newSuccessCharIds) backgroundCompilePromptPacks(charId)
       } catch { /* non-critical — characters appear after page refresh if this fails */ }
     } catch (err) { setAuditionError(err?.message || 'Audition generation failed') }
