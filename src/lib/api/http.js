@@ -50,6 +50,10 @@ export function apiPut(path, payload) {
   return request('PUT', path, payload)
 }
 
+export function apiPatch(path, payload) {
+  return request('PATCH', path, payload)
+}
+
 export function apiDelete(path, query) {
   return request('DELETE', path, null, query)
 }

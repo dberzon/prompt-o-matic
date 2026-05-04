@@ -867,3 +867,50 @@ export function deleteActorAudition(db, id) {
   const result = db.prepare('DELETE FROM actor_auditions WHERE id = ?').run(id)
   return result.changes > 0
 }
+
+export function upsertComfyJob(db, job) {
+  db.prepare(`
+    INSERT INTO comfy_jobs (id, prompt_id, character_id, view_type, job_type, prompt_pack_id, workflow_version, status, created_at)
+    VALUES (@id, @prompt_id, @character_id, @view_type, @job_type, @prompt_pack_id, @workflow_version, @status, @created_at)
+    ON CONFLICT(prompt_id) DO UPDATE SET status = excluded.status
+  `).run({
+    id: job.id || job.promptId,
+    prompt_id: job.promptId,
+    character_id: job.characterId || '',
+    view_type: job.viewType || job.view || '',
+    job_type: job.jobType || 'portfolio',
+    prompt_pack_id: job.promptPackId || null,
+    workflow_version: job.workflowVersion || null,
+    status: job.status || 'queued',
+    created_at: job.createdAt || new Date().toISOString(),
+  })
+}
+
+export function bulkUpsertComfyJobs(db, jobs) {
+  const insert = db.transaction((list) => { for (const j of list) upsertComfyJob(db, j) })
+  insert(jobs)
+}
+
+export function listActiveComfyJobs(db, jobType) {
+  const rows = jobType
+    ? db.prepare("SELECT * FROM comfy_jobs WHERE status NOT IN ('success','failed') AND job_type = ?").all(jobType)
+    : db.prepare("SELECT * FROM comfy_jobs WHERE status NOT IN ('success','failed')").all()
+  return rows.map((r) => ({
+    promptId: r.prompt_id,
+    characterId: r.character_id,
+    viewType: r.view_type,
+    view: r.view_type,
+    jobType: r.job_type,
+    promptPackId: r.prompt_pack_id,
+    workflowVersion: r.workflow_version,
+    status: r.status,
+    createdAt: r.created_at,
+  }))
+}
+
+export function bulkUpdateComfyJobStatus(db, promptIds, status) {
+  if (!promptIds.length) return
+  const completedAt = (status === 'success' || status === 'failed') ? new Date().toISOString() : null
+  const placeholders = promptIds.map(() => '?').join(',')
+  db.prepare(`UPDATE comfy_jobs SET status = ?, completed_at = ? WHERE prompt_id IN (${placeholders})`).run(status, completedAt, ...promptIds)
+}

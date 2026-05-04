@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from './http.js'
+import { apiGet, apiPost, apiPatch } from './http.js'
 
 export function getComfyStatus() {
   return apiGet('/api/comfy-status')
@@ -14,6 +14,19 @@ export function listComfyWorkflows() {
 
 export function validateComfyWorkflow(workflowId) {
   return apiPost('/api/comfy-validate-workflow', { workflowId })
+}
+
+export function listActiveComfyJobs(jobType) {
+  const query = jobType ? `?jobType=${encodeURIComponent(jobType)}` : ''
+  return apiGet(`/api/comfy-jobs${query}`)
+}
+
+export function saveComfyJobs(jobs) {
+  return apiPost('/api/comfy-jobs', { jobs })
+}
+
+export function markComfyJobsDone(promptIds, status) {
+  return apiPatch('/api/comfy-jobs', { promptIds, status })
 }
 
 export function queueComfyPromptPack({ promptPackId, workflowId, dryRun }) {

@@ -128,4 +128,16 @@ export const MIGRATIONS = [
   'CREATE INDEX IF NOT EXISTS idx_characters_lifecycle ON characters(lifecycle_status)',
   'ALTER TABLE character_batch_candidates ADD COLUMN preview_image_url TEXT',
   'ALTER TABLE characters ADD COLUMN last_rendered_at TEXT',
+  `CREATE TABLE IF NOT EXISTS comfy_jobs (
+    id TEXT PRIMARY KEY,
+    prompt_id TEXT NOT NULL UNIQUE,
+    character_id TEXT NOT NULL,
+    view_type TEXT NOT NULL,
+    job_type TEXT NOT NULL,
+    prompt_pack_id TEXT,
+    workflow_version TEXT,
+    status TEXT NOT NULL DEFAULT 'queued',
+    created_at TEXT NOT NULL,
+    completed_at TEXT
+  )`,
 ]

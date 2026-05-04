@@ -61,6 +61,9 @@ import {
   reconsiderBatchCandidate,
   getBatchCandidate,
   updateBatchCandidate,
+  listActiveComfyJobs,
+  bulkUpsertComfyJobs,
+  bulkUpdateComfyJobStatus,
 } from './api/lib/db/repositories.js'
 import { createVectorRuntime } from './api/lib/vector/runtime.js'
 import {
@@ -1440,6 +1443,37 @@ function apiDevPlugin(env) {
         } catch (err) {
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'COMFY_JOBS_STATUS_ERROR' })
+        }
+      })
+
+      server.middlewares.use('/api/comfy-jobs', async (req, res) => {
+        let runtime = null
+        try {
+          runtime = createVectorRuntime({ env })
+          if (req.method === 'GET') {
+            const jobType = typeof req.query?.jobType === 'string' ? req.query.jobType : undefined
+            const jobs = listActiveComfyJobs(runtime.db, jobType)
+            return sendJsonMiddleware(res, 200, { ok: true, jobs })
+          }
+          if (req.method === 'POST') {
+            const body = await readJsonBody(req)
+            const jobs = Array.isArray(body?.jobs) ? body.jobs : []
+            if (!jobs.length) return sendJsonMiddleware(res, 400, { error: 'jobs array required' })
+            bulkUpsertComfyJobs(runtime.db, jobs)
+            return sendJsonMiddleware(res, 200, { ok: true, count: jobs.length })
+          }
+          if (req.method === 'PATCH') {
+            const body = await readJsonBody(req)
+            const { promptIds, status } = body || {}
+            if (!Array.isArray(promptIds) || !status) return sendJsonMiddleware(res, 400, { error: 'promptIds and status required' })
+            bulkUpdateComfyJobStatus(runtime.db, promptIds, status)
+            return sendJsonMiddleware(res, 200, { ok: true })
+          }
+          return sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
+        } catch (err) {
+          sendJsonMiddleware(res, 500, { error: err?.message || 'comfy-jobs error' })
+        } finally {
+          runtime?.close?.()
         }
       })
 

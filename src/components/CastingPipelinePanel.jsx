@@ -28,6 +28,9 @@ import {
   listComfyWorkflows,
   queueComfyPromptPack,
   validateComfyWorkflow,
+  listActiveComfyJobs,
+  saveComfyJobs,
+  markComfyJobsDone,
 } from '../lib/api/comfy.js'
 import { approveGeneratedImage, listGeneratedImages, rejectGeneratedImage } from '../lib/api/generatedImages.js'
 import { queueCharacterPortfolio, queueMoreTakes } from '../lib/api/portfolio.js'
@@ -207,6 +210,7 @@ export default function CastingPipelinePanel() {
   const portfolioPollRef = useRef(null)
   const portfolioTickRef = useRef(null)
   const ingestedRef = useRef(new Set())
+  const dbRestoredAuditJobsRef = useRef([]) // audit jobs restored from DB (no card UI)
 
   // ── SSE real-time render updates ──────────────────────────────────────────
   const [isSSEConnected, setIsSSEConnected] = useState(false)
@@ -242,6 +246,11 @@ export default function CastingPipelinePanel() {
     for (const [candidateId, job] of Object.entries(batchPreviewJobs)) {
       if (job.promptId && job.status !== 'success' && job.status !== 'failed') {
         jobs.push({ promptId: job.promptId, promptPackId: job.promptPackId, characterId: job.characterId, viewType: 'front_portrait', type: 'batchPreview', candidateId })
+      }
+    }
+    for (const j of dbRestoredAuditJobsRef.current) {
+      if (j.promptId && !ingestedRef.current.has(j.promptId)) {
+        jobs.push({ ...j, type: j.jobType || 'audition' })
       }
     }
     if (jobs.length === 0) {
@@ -332,7 +341,12 @@ export default function CastingPipelinePanel() {
       }
 
       const allDone = jobs.every((j) => statusMap[j.promptId] === 'success' || statusMap[j.promptId] === 'failed')
-      if (allDone) { clearInterval(auditPollRef.current); auditPollRef.current = null; setIsPollingAudit(false) }
+      if (allDone) {
+        clearInterval(auditPollRef.current); auditPollRef.current = null; setIsPollingAudit(false)
+        const doneIds = jobs.map((j) => j.promptId).filter(Boolean)
+        if (doneIds.length) markComfyJobsDone(doneIds, 'success').catch(() => {})
+        dbRestoredAuditJobsRef.current = []
+      }
     } catch { /* network error — keep polling */ }
   }
 
@@ -387,6 +401,7 @@ export default function CastingPipelinePanel() {
       })
       if (allDone) {
         clearInterval(portfolioPollRef.current); portfolioPollRef.current = null; setIsPollingPortfolio(false)
+        markComfyJobsDone(portfolioJobs.map((j) => j.promptId).filter(Boolean), 'success').catch(() => {})
         const allFailed = (statusData?.items || []).every((item) => item.status === 'failed' || !item.ok)
         if (allFailed && portfolioJobs[0]?.characterId) {
           const charId = portfolioJobs[0].characterId
@@ -435,30 +450,24 @@ export default function CastingPipelinePanel() {
     }
   }, [isPollingAudit, isPollingPortfolio]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Restore polling state across tab navigation (72j) ────────────────────
+  // ── Restore polling state from DB on mount (72j / H3) ────────────────────
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem('casting_room_audit_state')
-      if (raw) {
-        const { results, statuses } = JSON.parse(raw)
-        if (Array.isArray(results) && results.length) {
-          setAuditionResults(results)
-          setAuditionStatuses(statuses || {})
-          const hasPending = Object.values(statuses || {}).some((s) => s !== 'success' && s !== 'failed')
-          if (hasPending) startAuditPoll()
+    ;(async () => {
+      try {
+        const [auditRes, portfolioRes] = await Promise.all([
+          listActiveComfyJobs('audition'),
+          listActiveComfyJobs('portfolio'),
+        ])
+        if (auditRes?.jobs?.length) {
+          dbRestoredAuditJobsRef.current = auditRes.jobs
+          startAuditPoll()
         }
-      }
-    } catch { /* ignore corrupt storage */ }
-    try {
-      const raw = sessionStorage.getItem('casting_room_portfolio_state')
-      if (raw) {
-        const { jobs } = JSON.parse(raw)
-        if (Array.isArray(jobs) && jobs.length) {
-          setPortfolioJobs(jobs)
+        if (portfolioRes?.jobs?.length) {
+          setPortfolioJobs(portfolioRes.jobs)
           startPortfolioPoll()
         }
-      }
-    } catch { /* ignore */ }
+      } catch { /* non-critical — polling restoration unavailable */ }
+    })()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { selectedCharacterIdRef.current = selectedCharacterId }, [selectedCharacterId])
@@ -555,7 +564,6 @@ export default function CastingPipelinePanel() {
     setAuditionRunning(true); setAuditionError(null)
     ingestedRef.current = new Set()
     try {
-      sessionStorage.removeItem('casting_room_audit_state')
       const data = await generateAudition({
         bankEntryId: selectedBankEntryId,
         count: auditionCount,
@@ -571,7 +579,14 @@ export default function CastingPipelinePanel() {
       }
       setAuditionStatuses(initialStatuses)
       if (Object.keys(initialStatuses).length) startAuditPoll()
-      try { sessionStorage.setItem('casting_room_audit_state', JSON.stringify({ results: data?.results || [], statuses: initialStatuses })) } catch { /* ignore */ }
+      const auditJobsForDB = []
+      for (const r of (data?.results || [])) {
+        if (!r.ok) continue
+        for (const v of (r.views || [])) {
+          if (v.ok && v.comfyPromptId) auditJobsForDB.push({ promptId: v.comfyPromptId, promptPackId: v.promptPackId, viewType: v.view || 'front_portrait', characterId: r.characterId, jobType: 'audition' })
+        }
+      }
+      if (auditJobsForDB.length) saveComfyJobs(auditJobsForDB).catch(() => {})
 
       // 9p1: Refresh character list so Journey A characters appear in Active Character dropdown.
       // 9p1+ef3: Auto-select first successfully generated character if none already selected.
@@ -615,7 +630,7 @@ export default function CastingPipelinePanel() {
       }))
       setPortfolioJobs(jobs); setPortfolioJobsStatus(null)
       for (const j of jobs) ingestedRef.current.delete(j.promptId)
-      try { sessionStorage.setItem('casting_room_portfolio_state', JSON.stringify({ jobs })) } catch { /* ignore */ }
+      if (jobs.length) saveComfyJobs(jobs.map((j) => ({ ...j, jobType: 'portfolio' }))).catch(() => {})
       if (jobs.length) startPortfolioPoll()
       patchCharacterLifecycle(characterId, 'portfolio_pending').catch(() => {})
       setSavedCharacters((prev) => prev.map((c) => c.id === characterId ? { ...c, lifecycleStatus: 'portfolio_pending' } : c))
@@ -785,7 +800,7 @@ export default function CastingPipelinePanel() {
       }))
       setPortfolioJobs(jobs); setPortfolioJobsStatus(null)
       for (const j of jobs) ingestedRef.current.delete(j.promptId)
-      try { sessionStorage.setItem('casting_room_portfolio_state', JSON.stringify({ jobs })) } catch { /* ignore */ }
+      if (jobs.length) saveComfyJobs(jobs.map((j) => ({ ...j, jobType: 'portfolio' }))).catch(() => {})
       setSuccess(`Portfolio queued: ${result.summary?.success || 0} views.`)
       if (jobs.length) startPortfolioPoll()
       patchCharacterLifecycle(selectedCharacterId, 'portfolio_pending').catch(() => { /* non-critical */ })
