@@ -76,6 +76,7 @@ export async function runAudition({
         updatedAt: nowIso,
         embeddingStatus: 'not_indexed',
         name: rawProfile?.name || bankEntry.name,
+        lifecycleStatus: 'auditioned',
         ...(qwenPromptSeed !== undefined ? { qwenPromptSeed } : { qwenPromptSeed: undefined }),
       }
       const validated = parseCharacterProfile(candidatePayload)
@@ -146,6 +147,7 @@ export async function runAudition({
         ok: true,
         pairId,
         characterId: character.id,
+        character,
         views: viewResults,
       })
     } catch (err) {

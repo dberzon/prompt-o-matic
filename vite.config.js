@@ -316,6 +316,26 @@ function apiDevPlugin(env) {
         }
       })
 
+      server.middlewares.use('/api/character-lifecycle', async (req, res) => {
+        if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
+        const VALID = ['draft', 'auditioned', 'portfolio_pending', 'ready', 'finalized']
+        let runtime = null
+        try {
+          const body = await readJsonBody(req)
+          const characterId = body?.characterId
+          const lifecycleStatus = body?.lifecycleStatus
+          if (!characterId) { sendJsonMiddleware(res, 400, { error: 'Missing characterId' }); return }
+          if (!VALID.includes(lifecycleStatus)) { sendJsonMiddleware(res, 400, { error: `Invalid lifecycleStatus. Valid: ${VALID.join(', ')}` }); return }
+          runtime = createVectorRuntime({ env })
+          const updated = updateCharacter(runtime.db, characterId, { lifecycleStatus })
+          if (!updated) { sendJsonMiddleware(res, 404, { error: 'Character not found' }); return }
+          sendJsonMiddleware(res, 200, { ok: true, item: updated })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_LIFECYCLE_ERROR' })
+        } finally { runtime?.close?.() }
+      })
+
       server.middlewares.use('/api/character-rename', async (req, res) => {
         if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
         let runtime = null

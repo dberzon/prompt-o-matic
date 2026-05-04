@@ -48,3 +48,7 @@ export function reconsiderBatchCandidate(candidateId) {
   return apiPost('/api/character-batch-candidate-reconsider', { candidateId })
 }
 
+
+export function patchCharacterLifecycle(characterId, lifecycleStatus) {
+  return apiPost('/api/character-lifecycle', { characterId, lifecycleStatus })
+}

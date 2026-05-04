@@ -1,0 +1,195 @@
+.card {
+  background: var(--surface-1, #1a1a1a);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: var(--radius-md, 6px);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card[data-dimmed='true'] {
+  opacity: 0.6;
+}
+
+/* ── Header ────────────────────────────────────── */
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.name {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  margin: 0;
+}
+
+.age {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.statusBadge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 20px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.badge-auditioned {
+  background: var(--surface-2, #222);
+  color: var(--text-2);
+  border: 1px solid var(--border);
+}
+
+.badge-portfolio_pending {
+  background: rgba(255, 180, 50, 0.12);
+  color: #e8a838;
+  border: 1px solid rgba(255, 180, 50, 0.25);
+}
+
+.badge-ready {
+  background: rgba(60, 200, 100, 0.12);
+  color: #3cc864;
+  border: 1px solid rgba(60, 200, 100, 0.25);
+}
+
+.badge-finalized {
+  background: rgba(100, 100, 255, 0.12);
+  color: #8888ff;
+  border: 1px solid rgba(100, 100, 255, 0.25);
+}
+
+.badge-draft {
+  background: var(--surface-2, #222);
+  color: var(--text-3);
+  border: 1px solid var(--border);
+}
+
+/* ── Preview image ────────────────────────────── */
+
+.preview {
+  width: 80px;
+  height: 107px;
+  object-fit: cover;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.bodyRow {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.profileBlock {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ── Profile rows ─────────────────────────────── */
+
+.archetype {
+  font-size: 12px;
+  color: var(--accent, #a78bfa);
+  font-style: italic;
+  line-height: 1.4;
+}
+
+.energy {
+  font-size: 11px;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+
+.traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.chip {
+  font-size: 10px;
+  color: var(--text-3);
+  background: var(--surface-2, #222);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 4px);
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+}
+
+/* ── Classification tag ───────────────────────── */
+
+.classTag {
+  font-size: 10px;
+  color: var(--text-3);
+}
+
+/* ── Actions ──────────────────────────────────── */
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.actionBtn {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm, 4px);
+  border: 1px solid var(--border);
+  background: var(--surface-2, #222);
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.actionBtn:hover:not(:disabled) {
+  background: var(--surface-3, #2a2a2a);
+  border-color: var(--accent, #a78bfa);
+}
+
+.actionBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.actionBtn[data-variant='primary'] {
+  background: var(--accent, #a78bfa);
+  border-color: var(--accent, #a78bfa);
+  color: #fff;
+}
+
+.actionBtn[data-variant='primary']:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.actionBtn[data-variant='danger'] {
+  color: #e05c5c;
+}
+
+.actionBtn[data-variant='danger']:hover:not(:disabled) {
+  border-color: #e05c5c;
+  background: rgba(224, 92, 92, 0.08);
+}
+
+.actionError {
+  font-size: 11px;
+  color: #e05c5c;
+  align-self: center;
+}

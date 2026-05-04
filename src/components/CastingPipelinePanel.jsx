@@ -7,6 +7,7 @@ import {
   listBatchCandidates,
   listCharacterBatches,
   listCharacters,
+  patchCharacterLifecycle,
   reconsiderBatchCandidate,
   rejectBatchCandidate,
   renameCharacter,
@@ -30,6 +31,7 @@ import { generateAudition } from '../lib/api/audition.js'
 import { approveActorAudition, rejectActorAudition } from '../lib/api/actorAuditions.js'
 import { listBankEntries } from '../lib/api/characterBank.js'
 import styles from './CastingPipelinePanel.module.css'
+import CharacterCard from './CastingRoom/CharacterCard.jsx'
 
 const POLL_MS = 8000
 const ALL_VIEWS = ['front_portrait', 'three_quarter_portrait', 'profile_portrait', 'full_body', 'audition_still', 'cinematic_scene']
@@ -348,10 +350,10 @@ export default function CastingPipelinePanel() {
       const chars = (charsResult.items || []).filter((c) => c?.id)
       setSavedCharacters((prev) => {
         const map = new Map(prev.map((c) => [c.id, c]))
-        for (const c of chars) map.set(c.id, { id: c.id, name: c.name || '(unnamed)', age: c.age })
+        for (const c of chars) map.set(c.id, { id: c.id, name: c.name || '(unnamed)', age: c.age, lifecycleStatus: c.lifecycleStatus })
         return [...map.values()]
       })
-      setArchivedCharacters((archivedResult.items || []).filter((c) => c?.id).map((c) => ({ id: c.id, name: c.name || '(unnamed)', age: c.age })))
+      setArchivedCharacters((archivedResult.items || []).filter((c) => c?.id).map((c) => ({ id: c.id, name: c.name || '(unnamed)', age: c.age, lifecycleStatus: c.lifecycleStatus })))
       if (!selectedWorkflowId) {
         const def = (workflowResult.workflows || []).find((w) => w.valid)
         if (def) setSelectedWorkflowId(def.workflowId)
@@ -432,7 +434,7 @@ export default function CastingPipelinePanel() {
         const chars = (charsResult.items || []).filter((c) => c?.id)
         setSavedCharacters((prev) => {
           const map = new Map(prev.map((c) => [c.id, c]))
-          for (const c of chars) map.set(c.id, { id: c.id, name: c.name || '(unnamed)', age: c.age })
+          for (const c of chars) map.set(c.id, { id: c.id, name: c.name || '(unnamed)', age: c.age, lifecycleStatus: c.lifecycleStatus })
           return [...map.values()]
         })
         if (!selectedCharacterId && newSuccessCharIds[0]) setSelectedCharacterId(newSuccessCharIds[0])
@@ -534,7 +536,7 @@ export default function CastingPipelinePanel() {
           const cand = saved?.item?.candidate
           setSavedCharacters((prev) => {
             const map = new Map(prev.map((c) => [c.id, c]))
-            map.set(newId, { id: newId, name: cand?.name || '(unnamed)', age: cand?.age })
+            map.set(newId, { id: newId, name: cand?.name || '(unnamed)', age: cand?.age, lifecycleStatus: 'auditioned' })
             return [...map.values()]
           })
           setSelectedCharacterId(newId)
@@ -617,6 +619,7 @@ export default function CastingPipelinePanel() {
       try { sessionStorage.setItem('casting_room_portfolio_state', JSON.stringify({ jobs })) } catch { /* ignore */ }
       setSuccess(`Portfolio queued: ${result.summary?.success || 0} views.`)
       if (jobs.length) startPortfolioPoll()
+      patchCharacterLifecycle(selectedCharacterId, 'portfolio_pending').catch(() => { /* non-critical */ })
     } catch (err) { setError(err.message || 'Failed to queue portfolio.') }
     finally { setActionLoading(false) }
   }
@@ -628,6 +631,10 @@ export default function CastingPipelinePanel() {
       if (action === 'approve') await approveGeneratedImage(id)
       if (action === 'reject') await rejectGeneratedImage(id, 'Rejected manually')
       await refreshGallery(); setSuccess(`Image ${action}d.`)
+      if (action === 'approve' && selectedCharacterId) {
+        patchCharacterLifecycle(selectedCharacterId, 'ready').catch(() => { /* non-critical */ })
+        setSavedCharacters((prev) => prev.map((c) => c.id === selectedCharacterId ? { ...c, lifecycleStatus: 'ready' } : c))
+      }
     } catch (err) { setError(err.message || `Failed to ${action} image.`) }
     finally { setActionLoading(false) }
   }
@@ -802,7 +809,11 @@ export default function CastingPipelinePanel() {
                   <div key={result.pairId || `failed-${index}`} className={styles.item}>
                     {result.ok ? (
                       <>
-                        <div className={styles.subtle}>
+                        <CharacterCard
+                          character={result.character}
+                          lifecycleStatus={savedCharacters.find((c) => c.id === result.characterId)?.lifecycleStatus}
+                        />
+                        <div className={styles.subtle} style={{ marginTop: 4 }}>
                           Pair {result.pairId?.slice(0, 8)} · char {result.characterId?.slice(0, 8)}
                         </div>
                         <div className={styles.row} style={{ alignItems: 'flex-start', gap: 16 }}>
@@ -847,11 +858,7 @@ export default function CastingPipelinePanel() {
                             </div>
                           ))}
                         </div>
-                        {result.ok && !auditionRunning && result.views?.every((v) => {
-                          if (!v.ok || !v.comfyPromptId) return true
-                          const s = auditionStatuses[v.comfyPromptId]
-                          return s === 'success' || s === 'failed'
-                        }) && (
+                        {result.ok && !auditionRunning && (
                           <MoreTakesPanel characterId={result.characterId} moreTakesState={moreTakesState} onQueue={handleMoreTakes} />
                         )}
                       </>
@@ -955,36 +962,30 @@ export default function CastingPipelinePanel() {
                 </div>
               )}
               <div className={styles.list}>
-                {displayed.map((candidate) => (
-                  <div className={styles.item} key={candidate.id} style={candidate.reviewStatus === 'rejected' ? { opacity: 0.6 } : undefined}>
-                    <div className={styles.itemTitle}>
-                      {candidate.candidate?.name || '(unnamed)'}{candidate.candidate?.age ? `, age ${candidate.candidate.age}` : ''}
-                    </div>
-                    <div className={styles.subtle}>
-                      {candidate.reviewStatus} · {classLabel[candidate.classification] || candidate.classification}{candidate.reviewNote ? ` · ${candidate.reviewNote}` : ''} · {candidate.candidate?.cinematicArchetype || ''}
-                    </div>
-                    <div className={styles.row}>
-                      {candidate.reviewStatus === 'pending' && (
-                        <>
-                          <button disabled={actionLoading} onClick={() => handleCandidateAction('approve', candidate.id)}>Cast this character</button>
-                          <button disabled={actionLoading} onClick={() => handleCandidateAction('reject', candidate.id)}>Dismiss</button>
-                        </>
-                      )}
-                      {candidate.reviewStatus === 'approved' && (
-                        <>
-                          <button disabled={actionLoading} onClick={() => handleCandidateAction('save', candidate.id)}>Save → Active Character</button>
-                          <button disabled={actionLoading} onClick={() => handleCandidateAction('reject', candidate.id)}>Dismiss</button>
-                        </>
-                      )}
-                      {candidate.reviewStatus === 'saved' && (
-                        <span className={styles.subtle}>Saved ✓</span>
-                      )}
-                      {candidate.reviewStatus === 'rejected' && (
-                        <button disabled={actionLoading} onClick={() => handleCandidateAction('reconsider', candidate.id)}>Reconsider</button>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                {displayed.map((candidate) => {
+                  const batchActions = []
+                  if (candidate.reviewStatus === 'pending') {
+                    batchActions.push({ label: 'Cast this character', onClick: () => handleCandidateAction('approve', candidate.id), disabled: actionLoading, variant: 'primary' })
+                    batchActions.push({ label: 'Dismiss', onClick: () => handleCandidateAction('reject', candidate.id), disabled: actionLoading, variant: 'danger' })
+                  } else if (candidate.reviewStatus === 'approved') {
+                    batchActions.push({ label: 'Save → Active Character', onClick: () => handleCandidateAction('save', candidate.id), disabled: actionLoading, variant: 'primary' })
+                    batchActions.push({ label: 'Dismiss', onClick: () => handleCandidateAction('reject', candidate.id), disabled: actionLoading, variant: 'danger' })
+                  } else if (candidate.reviewStatus === 'rejected') {
+                    batchActions.push({ label: 'Reconsider', onClick: () => handleCandidateAction('reconsider', candidate.id), disabled: actionLoading })
+                  }
+                  const clLabel = candidate.reviewStatus === 'saved'
+                    ? 'Saved ✓'
+                    : `${candidate.reviewStatus} · ${classLabel[candidate.classification] || candidate.classification}${candidate.reviewNote ? ` · ${candidate.reviewNote}` : ''}`
+                  return (
+                    <CharacterCard
+                      key={candidate.id}
+                      character={candidate.candidate}
+                      dimmed={candidate.reviewStatus === 'rejected'}
+                      classificationLabel={clLabel}
+                      actions={batchActions}
+                    />
+                  )
+                })}
               </div>
             </>
           )
@@ -997,9 +998,10 @@ export default function CastingPipelinePanel() {
         <div className={styles.row}>
           <select value={selectedCharacterId} onChange={(e) => { setSelectedCharacterId(e.target.value); setRenamingCharacterId(null) }} className={styles.select}>
             <option value="">Select character…</option>
-            {savedCharacters.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}{c.age ? `, ${c.age}` : ''} ({c.id.slice(0, 8)}…)</option>
-            ))}
+            {savedCharacters.map((c) => {
+              const lcLabel = c.lifecycleStatus === 'portfolio_pending' ? ' ⏳' : c.lifecycleStatus === 'ready' ? ' ✓' : ''
+              return <option key={c.id} value={c.id}>{c.name}{c.age ? `, ${c.age}` : ''}{lcLabel} ({c.id.slice(0, 8)}…)</option>
+            })}
           </select>
           <button disabled={actionLoading || !selectedCharacterId} onClick={handleCompileAndListPromptPacks}>
             {compilingPrompts.has(selectedCharacterId) ? 'Compiling…' : promptPacks.length > 0 ? 'Recompile Packs' : 'Compile Prompt Packs'}

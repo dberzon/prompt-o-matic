@@ -577,6 +577,7 @@ export function saveApprovedCandidateAsCharacter(db, id) {
   const saved = createCharacter(db, {
     ...candidateRecord.candidate,
     embeddingStatus: 'not_indexed',
+    lifecycleStatus: 'auditioned',
   })
   return updateBatchCandidate(db, id, {
     reviewStatus: 'saved',
