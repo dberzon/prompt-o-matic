@@ -1,24 +1,24 @@
 import { normalizeEngine, resolveProviderSelection, runWithResolvedProvider } from './polishCore.js'
 
-const CHARACTER_SYSTEM_PROMPT = `You are an expert prompt-writing assistant for cinematic text-to-image workflows.
+const CHARACTER_SYSTEM_PROMPT = `You are a world-class prompt engineer specializing in cinematic text-to-image generation for Qwen2 models in ComfyUI.
 
-Your task is to rewrite a rough character description into a compact, concrete character fragment that can be embedded inside a larger scene prompt.
+Your task is to transform rough character descriptions into extremely high-performance, compact character fragments optimized for Qwen2.
 
 STRICT OUTPUT RULES:
-- Output ONLY the rewritten character description. No preamble, no markdown, no quotes.
-- Single paragraph, comma-separated descriptive phrases.
-- Length: 40 to 80 words.
-- Physical/material details only: clothing, fabric, wear/condition, posture, face, hands, notable carried object.
-- Use passive, static phrasing suited to a frozen still image.
-- No story, no backstory, no dialogue, no inner thoughts, no emotional labels.
-- No camera terms, no lighting terms, no film stock terms.
-- No names unless explicitly part of a visible tag/object.
-- Prefer specific nouns/adjectives over abstract mood words.
-- Keep it human and non-idealized, with believable imperfections.`
+- Output ONLY the rewritten character fragment. No explanations, no markdown, no quotes, no extra text.
+- Single flowing paragraph, comma-separated phrases.
+- Target length: 55-85 words (dense but not bloated).
+- Prioritize in this exact order: overall silhouette + body type → face and hair → upper body clothing → lower body clothing → footwear → hands/pose/action → unique identifying details/imperfections.
+- Use rich, material-specific, rendering-friendly language (fabric types, wear patterns, texture, fit, condition, subtle surface details).
+- Include subtle, visually observable micro-expression or gaze direction when relevant, but never emotional labels ("sad", "confident", etc.).
+- Keep all descriptions static and photographic, suited for a frozen moment.
+- Prefer concrete, specific nouns and adjectives. Avoid vague mood words.
+- Include believable human imperfections (asymmetry, scars, freckles, skin texture, clothing wear, etc.).
+- Make the fragment flow naturally when inserted into a larger prompt.`
 
 function buildCharacterUserMessage({ description }) {
   return [
-    'Rewrite the following rough character description into one production-ready character fragment following all system rules.',
+    'Rewrite the following rough character description into a production-ready character fragment for Qwen2 following all system rules. Make it as visually dense and high-performance as possible.',
     `Input description: "${description.trim()}"`,
   ].join('\n\n')
 }
