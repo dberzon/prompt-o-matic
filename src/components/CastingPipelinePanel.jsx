@@ -636,7 +636,7 @@ export default function CastingPipelinePanel() {
 
   async function handleGeneratePreviews() {
     if (!selectedWorkflowId) return
-    const targets = candidates.filter((c) => c.reviewStatus !== 'rejected' && !batchPreviewJobs[c.id])
+    const targets = candidates.filter((c) => c.reviewStatus === 'approved' && !batchPreviewJobs[c.id])
     if (!targets.length) return
     setPreviewsGenerating(true)
     const newJobs = {}
@@ -1070,22 +1070,29 @@ export default function CastingPipelinePanel() {
                   </button>
                 </div>
               )}
-              {!allDismissed && selectedWorkflowId && (
-                <div className={styles.row}>
-                  <button
-                    type="button"
-                    disabled={previewsGenerating || candidates.filter((c) => c.reviewStatus !== 'rejected' && !batchPreviewJobs[c.id]).length === 0}
-                    onClick={handleGeneratePreviews}
-                  >
-                    {previewsGenerating ? 'Queuing previews…' : 'Generate Previews'}
-                  </button>
-                  {Object.keys(batchPreviewJobs).length > 0 && (
-                    <span className={styles.subtle}>
-                      {Object.values(batchPreviewJobs).filter((j) => j.status === 'success').length}/{Object.keys(batchPreviewJobs).length} preview{Object.keys(batchPreviewJobs).length !== 1 ? 's' : ''} ready
-                    </span>
-                  )}
-                </div>
-              )}
+              {!allDismissed && selectedWorkflowId && (() => {
+                const approvedUnqueued = candidates.filter((c) => c.reviewStatus === 'approved' && !batchPreviewJobs[c.id])
+                const hasApproved = candidates.some((c) => c.reviewStatus === 'approved')
+                return (
+                  <div className={styles.row}>
+                    <button
+                      type="button"
+                      disabled={previewsGenerating || approvedUnqueued.length === 0}
+                      onClick={handleGeneratePreviews}
+                    >
+                      {previewsGenerating ? 'Queuing previews…' : 'Generate Previews'}
+                    </button>
+                    {!hasApproved && Object.keys(batchPreviewJobs).length === 0 && (
+                      <span className={styles.subtle}>Cast characters first, then generate previews.</span>
+                    )}
+                    {Object.keys(batchPreviewJobs).length > 0 && (
+                      <span className={styles.subtle}>
+                        {Object.values(batchPreviewJobs).filter((j) => j.status === 'success').length}/{Object.keys(batchPreviewJobs).length} preview{Object.keys(batchPreviewJobs).length !== 1 ? 's' : ''} ready
+                      </span>
+                    )}
+                  </div>
+                )
+              })()}
               <div className={styles.list}>
                 {displayed.map((candidate) => {
                   const isBusy = candidateActionId === candidate.id
