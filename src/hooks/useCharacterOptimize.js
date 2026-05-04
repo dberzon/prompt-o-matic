@@ -14,6 +14,9 @@ export function useCharacterOptimize() {
     embeddedPort = null,
     embeddedSecret = null,
     embeddedModel = null,
+    localProvider = null,
+    lmStudioBaseUrl = null,
+    lmStudioModel = null,
   }) => {
     if (!description || !description.trim()) return
 
@@ -32,6 +35,9 @@ export function useCharacterOptimize() {
           embeddedPort,
           embeddedSecret,
           embeddedModel,
+          localProvider,
+          lmStudioBaseUrl,
+          lmStudioModel,
         }),
       })
       const contentType = response.headers.get('content-type') ?? ''

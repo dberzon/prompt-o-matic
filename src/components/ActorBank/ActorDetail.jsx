@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import styles from './ActorDetail.module.css'
 
 const PROFILE_SECTIONS = [
@@ -52,10 +53,27 @@ function renderValue(val) {
   return String(val ?? '—')
 }
 
-export default function ActorDetail({ character, images, onBack }) {
+export default function ActorDetail({ character, images, onBack, onDelete }) {
   const { name, age, genderPresentation, cinematicArchetype, distinctiveFeatures, visualKeywords } = character
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
 
   const metaParts = [age, genderPresentation, cinematicArchetype].filter(Boolean)
+
+  const handleDeleteConfirm = async () => {
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      const res = await fetch(`/api/characters?id=${encodeURIComponent(character.id)}`, { method: 'DELETE' })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      onDelete?.(character.id)
+    } catch (err) {
+      setDeleteError(err.message ?? 'Delete failed')
+      setDeleting(false)
+    }
+  }
 
   return (
     <div className={styles.detail}>
@@ -63,6 +81,38 @@ export default function ActorDetail({ character, images, onBack }) {
         <button type="button" className={styles.backBtn} onClick={onBack}>
           ← Back to Actor Bank
         </button>
+        <div className={styles.topBarActions}>
+          {confirmDelete ? (
+            <div className={styles.confirmRow}>
+              <span className={styles.confirmPrompt}>Delete {name ?? 'this character'}?</span>
+              <button
+                type="button"
+                className={styles.confirmYes}
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+              >
+                {deleting ? 'Deleting…' : 'Yes, delete'}
+              </button>
+              <button
+                type="button"
+                className={styles.confirmNo}
+                onClick={() => { setConfirmDelete(false); setDeleteError(null) }}
+                disabled={deleting}
+              >
+                Cancel
+              </button>
+              {deleteError && <span className={styles.deleteError}>{deleteError}</span>}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={styles.deleteBtn}
+              onClick={() => setConfirmDelete(true)}
+            >
+              Delete character
+            </button>
+          )}
+        </div>
       </div>
 
       <div className={styles.hero}>

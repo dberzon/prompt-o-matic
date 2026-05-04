@@ -70,6 +70,13 @@ export default function ActorBankView() {
     dispatch({ type: 'SELECT', id: null })
   }, [])
 
+  const handleDelete = useCallback(() => {
+    setDetail(null)
+    setDetailError(null)
+    dispatch({ type: 'SELECT', id: null })
+    load()
+  }, [load])
+
   const { characters, total, loading, error, selected } = state
 
   if (detailLoading) {
@@ -97,7 +104,7 @@ export default function ActorBankView() {
   if (detail) {
     return (
       <div className={styles.view}>
-        <ActorDetail character={detail.character} images={detail.images} onBack={handleBack} />
+        <ActorDetail character={detail.character} images={detail.images} onBack={handleBack} onDelete={handleDelete} />
       </div>
     )
   }

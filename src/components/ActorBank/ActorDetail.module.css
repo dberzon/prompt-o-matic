@@ -4,6 +4,10 @@
 
 .topBar {
   margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .backBtn {
@@ -14,10 +18,90 @@
   padding: 4px 0;
   cursor: pointer;
   transition: color 0.15s;
+  flex-shrink: 0;
 }
 
 .backBtn:hover {
   color: var(--accent);
+}
+
+.topBarActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.deleteBtn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.deleteBtn:hover {
+  color: #e05c5c;
+  border-color: #e05c5c;
+}
+
+.confirmRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.confirmPrompt {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.confirmYes {
+  background: #c0392b;
+  border: none;
+  color: #fff;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.confirmYes:hover:not(:disabled) {
+  background: #e74c3c;
+}
+
+.confirmYes:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.confirmNo {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.confirmNo:hover:not(:disabled) {
+  border-color: var(--text-2);
+}
+
+.confirmNo:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.deleteError {
+  font-size: 11px;
+  color: #e05c5c;
 }
 
 .hero {

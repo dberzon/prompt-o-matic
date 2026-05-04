@@ -1,8 +1,17 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useCharacterOptimize } from '../hooks/useCharacterOptimize.js'
 import { listBankEntries, createBankEntry, updateBankEntry } from '../lib/api/characterBank.js'
 import { toSnakeSlug, withUniqueSuffix } from '../utils/slugify.js'
 import styles from './CharacterBuilder.module.css'
+
+function readLocalSetting(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key)
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : fallback
+  } catch {
+    return fallback
+  }
+}
 
 export default function CharacterBuilder({
   characters,
@@ -81,7 +90,14 @@ export default function CharacterBuilder({
 
   const isDuplicate = Boolean(characters[slug] && characters[slug].name !== name.trim())
 
-  const runOptimize = async () => {
+  const runOptimize = useCallback(async () => {
+    const localProvider = readLocalSetting('qpb_local_provider_v1', 'ollama')
+    const lmStudioHost = readLocalSetting('qpb_lmstudio_host_v1', '127.0.0.1')
+    const lmStudioPort = readLocalSetting('qpb_lmstudio_port_v1', '1234')
+    const lmStudioModel = readLocalSetting('qpb_lmstudio_model_v1', 'qwen-local')
+    const lmStudioBaseUrl = localProvider === 'lmstudio'
+      ? `http://${lmStudioHost}:${lmStudioPort}/v1`
+      : null
     await optimize({
       description,
       engine: aiEngine,
@@ -89,8 +105,11 @@ export default function CharacterBuilder({
       embeddedPort: embeddedStatus?.port ?? null,
       embeddedSecret: embeddedStatus?.secret ?? null,
       embeddedModel: embeddedStatus?.modelId ?? null,
+      localProvider,
+      lmStudioBaseUrl,
+      lmStudioModel: localProvider === 'lmstudio' ? lmStudioModel : null,
     })
-  }
+  }, [description, aiEngine, localOnly, embeddedStatus, optimize])
 
   const saveCharacter = () => {
     if (!canSave) return
