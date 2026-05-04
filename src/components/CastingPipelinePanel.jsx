@@ -463,7 +463,7 @@ export default function CastingPipelinePanel() {
       .catch((err) => { if (!cancelled) setBankLoadError(err?.message || 'Failed to load bank entries') })
     return () => { cancelled = true }
   }, [])
-  useEffect(() => { refreshBatch(selectedBatchId) }, [selectedBatchId])
+  useEffect(() => { setBatchPreviewJobs({}); setBatchPreviewImages({}); refreshBatch(selectedBatchId) }, [selectedBatchId])
   useEffect(() => { if (selectedCharacterId || selectedPromptPackId) refreshGallery() }, [selectedCharacterId, selectedPromptPackId])
 
   // 7yi: Auto-load prompt packs whenever the active character changes.
