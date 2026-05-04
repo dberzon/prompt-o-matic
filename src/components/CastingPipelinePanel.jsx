@@ -146,6 +146,7 @@ export default function CastingPipelinePanel() {
   const [selectedCharacterId, setSelectedCharacterId] = useState('')
   const [promptPacks, setPromptPacks] = useState([])
   const [selectedPromptPackId, setSelectedPromptPackId] = useState('')
+  const [showAllPacks, setShowAllPacks] = useState(false)
 
   // ── Workflow (shared) ─────────────────────────────────────────────────────
   const [workflows, setWorkflows] = useState([])
@@ -539,7 +540,7 @@ export default function CastingPipelinePanel() {
 
   // 7yi: Auto-load prompt packs whenever the active character changes.
   useEffect(() => {
-    if (!selectedCharacterId) { setPromptPacks([]); setSelectedPromptPackId(''); return }
+    if (!selectedCharacterId) { setPromptPacks([]); setSelectedPromptPackId(''); setShowAllPacks(false); return }
     listPromptPacksForCharacter(selectedCharacterId)
       .then((listed) => {
         setPromptPacks(listed.items || [])
@@ -1337,12 +1338,30 @@ export default function CastingPipelinePanel() {
             <div className={styles.row}>
               <select value={selectedPromptPackId} onChange={(e) => { setSelectedPromptPackId(e.target.value); setPackCopied(false) }} className={styles.select}>
                 <option value="">Select prompt pack…</option>
-                {promptPacks.map((pack) => {
-                  const view = pack.consistencyTags?.[1] || pack.id.slice(0, 12)
-                  const label = view.replace(/_/g, ' ')
-                  return <option key={pack.id} value={pack.id}>{label}{pack.camera ? ` · ${pack.camera}` : ''}</option>
-                })}
+                {(() => {
+                  const visible = showAllPacks ? promptPacks : (() => {
+                    const seen = new Set()
+                    return promptPacks.filter((p) => {
+                      const view = p.consistencyTags?.[1] || p.id
+                      if (seen.has(view)) return false
+                      seen.add(view); return true
+                    })
+                  })()
+                  return visible.map((pack) => {
+                    const view = pack.consistencyTags?.[1] || pack.id.slice(0, 12)
+                    const label = view.replace(/_/g, ' ')
+                    return <option key={pack.id} value={pack.id}>{label}{pack.camera ? ` · ${pack.camera}` : ''}</option>
+                  })
+                })()}
               </select>
+              {promptPacks.length > Object.keys(promptPacks.reduce((acc, p) => { acc[p.consistencyTags?.[1] || p.id] = true; return acc }, {})).length && (
+                <button
+                  style={{ whiteSpace: 'nowrap' }}
+                  onClick={() => setShowAllPacks((v) => !v)}
+                >
+                  {showAllPacks ? 'Hide history' : 'Show history'}
+                </button>
+              )}
               {selectedPromptPack && (
                 <button
                   onClick={() => {
