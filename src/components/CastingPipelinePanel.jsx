@@ -78,6 +78,31 @@ function MoreTakesPanel({ characterId, moreTakesState, onQueue }) {
 function ErrorBanner({ message }) { return message ? <div className={styles.error}>{message}</div> : null }
 function SuccessBanner({ message }) { return message ? <div className={styles.success}>{message}</div> : null }
 
+function RenderStatusBar({ isPollingAudit, isPollingPortfolio, auditionStatuses, portfolioJobsStatus, moreTakesState }) {
+  const auditTotal = Object.keys(auditionStatuses).length
+  const auditDone = Object.values(auditionStatuses).filter((s) => s === 'success' || s === 'failed').length
+  const portfolioItems = portfolioJobsStatus?.items || []
+  const portfolioTotal = portfolioItems.length
+  const portfolioDone = portfolioItems.filter((s) => s.status === 'success' || s.status === 'failed').length
+  const mtTotal = Object.values(moreTakesState).reduce((sum, st) => sum + (st.jobs?.length || 0), 0)
+  const mtDone = Object.values(moreTakesState).reduce((sum, st) =>
+    sum + Object.values(st.jobStatuses || {}).filter((s) => s === 'success' || s === 'failed').length, 0)
+  if (!isPollingAudit && !isPollingPortfolio && mtTotal === 0) return null
+  const total = auditTotal + portfolioTotal + mtTotal
+  const done = auditDone + portfolioDone + mtDone
+  return (
+    <div className={styles.statusBar}>
+      <span className={`${styles.statusBarDot} ${done >= total ? styles.statusBarDotDone : ''}`} />
+      <span>Rendering · {done}/{total} complete</span>
+      <div className={styles.statusBarSegments}>
+        {auditTotal > 0 && <span className={styles.statusBarSegment}>Audition: {auditDone}/{auditTotal}</span>}
+        {portfolioTotal > 0 && <span className={styles.statusBarSegment}>Portfolio: {portfolioDone}/{portfolioTotal}</span>}
+        {mtTotal > 0 && <span className={styles.statusBarSegment}>More takes: {mtDone}/{mtTotal}</span>}
+      </div>
+    </div>
+  )
+}
+
 export default function CastingPipelinePanel() {
   // ── Global UI state ───────────────────────────────────────────────────────
   const [loading, setLoading] = useState(false)
@@ -147,6 +172,9 @@ export default function CastingPipelinePanel() {
   const [renameValue, setRenameValue] = useState('')
   const [showDismissed, setShowDismissed] = useState(false)
   const activeCharSectionRef = useRef(null)
+  const selectedCharacterIdRef = useRef('')
+  const [compilingPrompts, setCompilingPrompts] = useState(new Set())
+  const [postApprovalPrompt, setPostApprovalPrompt] = useState(null) // { characterId, characterName }
 
   // ── Dev tools ─────────────────────────────────────────────────────────────
   const [comfyStatus, setComfyStatus] = useState(null)
@@ -303,6 +331,8 @@ export default function CastingPipelinePanel() {
     } catch { /* ignore */ }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => { selectedCharacterIdRef.current = selectedCharacterId }, [selectedCharacterId])
+
   // ── Data loading ──────────────────────────────────────────────────────────
   async function initialLoad() {
     setLoading(true); setError(''); setSuccess('')
@@ -406,6 +436,7 @@ export default function CastingPipelinePanel() {
           return [...map.values()]
         })
         if (!selectedCharacterId && newSuccessCharIds[0]) setSelectedCharacterId(newSuccessCharIds[0])
+        for (const charId of newSuccessCharIds) backgroundCompilePromptPacks(charId)
       } catch { /* non-critical — characters appear after page refresh if this fails */ }
     } catch (err) { setAuditionError(err?.message || 'Audition generation failed') }
     finally { setAuditionRunning(false) }
@@ -416,8 +447,49 @@ export default function CastingPipelinePanel() {
     try {
       await approveActorAudition(auditionId)
       setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, status: 'approved' } }))
+      const matchedResult = auditionResults.find((r) => r.ok && r.views?.some((v) => v.auditionId === auditionId))
+      const charId = matchedResult?.characterId
+      if (charId) {
+        setSelectedCharacterId(charId)
+        const charName = savedCharacters.find((c) => c.id === charId)?.name || null
+        setPostApprovalPrompt({ characterId: charId, characterName: charName })
+      }
       setTimeout(() => activeCharSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100)
     } catch (err) { setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, error: err?.message || 'Approve failed' } })) }
+  }
+
+  async function handleApproveAndQueuePortfolio(auditionId, characterId) {
+    setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: true, error: null } }))
+    try {
+      await approveActorAudition(auditionId)
+      setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, status: 'approved' } }))
+    } catch (err) {
+      setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, error: err?.message || 'Approve failed' } }))
+      return
+    }
+    setSelectedCharacterId(characterId)
+    setTimeout(() => activeCharSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100)
+    const views = selectedPortfolioViewList()
+    if (!selectedWorkflowId || !views.length) {
+      const charName = savedCharacters.find((c) => c.id === characterId)?.name || null
+      setPostApprovalPrompt({ characterId, characterName: charName })
+      return
+    }
+    try {
+      const result = await queueCharacterPortfolio({
+        characterId, views, workflowId: selectedWorkflowId,
+        options: { persistPromptPacks: true, aspectRatio: '2:3', styleProfile: 'cinematic casting portrait' },
+      })
+      const jobs = (result.queued || []).filter((item) => item.ok && item.result?.promptId).map((item) => ({
+        promptId: item.result.promptId, promptPackId: item.promptPackId,
+        view: item.view, characterId, workflowVersion: selectedWorkflowId, viewType: item.view,
+      }))
+      setPortfolioJobs(jobs); setPortfolioJobsStatus(null)
+      for (const j of jobs) ingestedRef.current.delete(j.promptId)
+      try { sessionStorage.setItem('casting_room_portfolio_state', JSON.stringify({ jobs })) } catch { /* ignore */ }
+      if (jobs.length) startPortfolioPoll()
+      setSuccess(`Approved & queued ${result.summary?.success || 0} portfolio view(s).`)
+    } catch (err) { setError(err?.message || 'Portfolio queue failed') }
   }
 
   const handleRejectAudition = async (auditionId) => {
@@ -467,7 +539,9 @@ export default function CastingPipelinePanel() {
           })
           setSelectedCharacterId(newId)
           const charName = cand?.name || null
-          setBatchFeedback({ type: 'success', message: `Character saved${charName ? `: ${charName}` : ''}. Scroll down to Active Character to rename and generate images.` })
+          setBatchFeedback({ type: 'success', message: `Character saved${charName ? `: ${charName}` : ''}.` })
+          backgroundCompilePromptPacks(newId)
+          setPostApprovalPrompt({ characterId: newId, characterName: charName })
           setTimeout(() => activeCharSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)
         } else {
           setBatchFeedback({ type: 'error', message: 'Save completed but no character ID returned — check server logs.' })
@@ -495,6 +569,19 @@ export default function CastingPipelinePanel() {
       setSuccess(`Compiled ${listed.items?.length || 0} prompt pack(s).`)
     } catch (err) { setError(err.message || 'Failed to compile prompt packs.') }
     finally { setActionLoading(false) }
+  }
+
+  async function backgroundCompilePromptPacks(characterId) {
+    setCompilingPrompts((prev) => { const n = new Set(prev); n.add(characterId); return n })
+    try {
+      await compilePromptPacksForCharacter(characterId, selectedWorkflowId)
+      const listed = await listPromptPacksForCharacter(characterId)
+      if (selectedCharacterIdRef.current === characterId) {
+        setPromptPacks(listed.items || [])
+        if (listed.items?.length) setSelectedPromptPackId(listed.items[0].id)
+      }
+    } catch { /* silent — user can compile manually */ }
+    finally { setCompilingPrompts((prev) => { const n = new Set(prev); n.delete(characterId); return n }) }
   }
 
   async function handleLoadPromptPacks() {
@@ -651,6 +738,13 @@ export default function CastingPipelinePanel() {
     <div className={styles.panel}>
       <h2 className={styles.title}>Casting Room</h2>
       {loading && <div className={styles.subtle}>Loading…</div>}
+      <RenderStatusBar
+        isPollingAudit={isPollingAudit}
+        isPollingPortfolio={isPollingPortfolio}
+        auditionStatuses={auditionStatuses}
+        portfolioJobsStatus={portfolioJobsStatus}
+        moreTakesState={moreTakesState}
+      />
       <ErrorBanner message={error} />
       <SuccessBanner message={success} />
 
@@ -734,6 +828,12 @@ export default function CastingPipelinePanel() {
                                       disabled={auditionItemActions[v.auditionId]?.busy}>
                                       {auditionItemActions[v.auditionId]?.status === 'approved' ? '✓ Selected' : 'Select this look'}
                                     </button>
+                                    <button type="button"
+                                      className={styles.approvePortfolioBtn}
+                                      onClick={() => handleApproveAndQueuePortfolio(v.auditionId, result.characterId)}
+                                      disabled={auditionItemActions[v.auditionId]?.busy || auditionItemActions[v.auditionId]?.status === 'approved'}>
+                                      Approve + Portfolio
+                                    </button>
                                     <button type="button" onClick={() => handleRejectAudition(v.auditionId)}
                                       disabled={auditionItemActions[v.auditionId]?.busy}>
                                       {auditionItemActions[v.auditionId]?.status === 'rejected' ? '✗ Passed' : 'Pass'}
@@ -742,9 +842,6 @@ export default function CastingPipelinePanel() {
                                       <span className={styles.error}>{auditionItemActions[v.auditionId].error}</span>
                                     )}
                                   </div>
-                                  {auditionItemActions[v.auditionId]?.status === 'approved' && (
-                                    <div className={styles.subtle}>Character ready — select them in Active Character ↓</div>
-                                  )}
                                 </>
                               ) : <span className={styles.error}>{v.error}</span>}
                             </div>
@@ -905,7 +1002,7 @@ export default function CastingPipelinePanel() {
             ))}
           </select>
           <button disabled={actionLoading || !selectedCharacterId} onClick={handleCompileAndListPromptPacks}>
-            {promptPacks.length > 0 ? 'Recompile Packs' : 'Compile Prompt Packs'}
+            {compilingPrompts.has(selectedCharacterId) ? 'Compiling…' : promptPacks.length > 0 ? 'Recompile Packs' : 'Compile Prompt Packs'}
           </button>
         </div>
 
@@ -948,6 +1045,23 @@ export default function CastingPipelinePanel() {
               ))}
             </div>
           </details>
+        )}
+
+        {postApprovalPrompt && (
+          <div className={styles.portfolioToast}>
+            <span>Character ready{postApprovalPrompt.characterName ? `: ${postApprovalPrompt.characterName}` : ''}.</span>
+            <button
+              className={styles.portfolioToastBtn}
+              disabled={!selectedWorkflowId || actionLoading}
+              onClick={() => { handleQueuePortfolio(); setPostApprovalPrompt(null) }}
+            >
+              Generate Full Portfolio
+            </button>
+            <button
+              onClick={() => setPostApprovalPrompt(null)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', fontSize: 14 }}
+            >✕</button>
+          </div>
         )}
 
         {promptPacks.length > 0 && (
