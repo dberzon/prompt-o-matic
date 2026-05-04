@@ -142,6 +142,7 @@ export default function CastingPipelinePanel() {
 
   // ── Active character ──────────────────────────────────────────────────────
   const [savedCharacters, setSavedCharacters] = useState([]) // [{id, name, age}]
+  const [batchSavedCharIds, setBatchSavedCharIds] = useState(new Set())
   const [selectedCharacterId, setSelectedCharacterId] = useState('')
   const [promptPacks, setPromptPacks] = useState([])
   const [selectedPromptPackId, setSelectedPromptPackId] = useState('')
@@ -508,7 +509,7 @@ export default function CastingPipelinePanel() {
     check()
     return () => { cancelled = true; clearTimeout(timer) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setBatchPreviewJobs({}); setBatchPreviewImages({}); refreshBatch(selectedBatchId) }, [selectedBatchId])
+  useEffect(() => { setBatchPreviewJobs({}); setBatchPreviewImages({}); setBatchSavedCharIds(new Set()); refreshBatch(selectedBatchId) }, [selectedBatchId])
   useEffect(() => { if (selectedCharacterId || selectedPromptPackId) refreshGallery() }, [selectedCharacterId, selectedPromptPackId])
 
   // 7yi: Auto-load prompt packs whenever the active character changes.
@@ -558,27 +559,6 @@ export default function CastingPipelinePanel() {
           return [...map.values()]
         })
         for (const charId of newSuccessCharIds) backgroundCompilePromptPacks(charId)
-      } catch { /* non-critical — characters appear after page refresh if this fails */ }
-    } catch (err) { setAuditionError(err?.message || 'Audition generation failed') }
-    finally { setAuditionRunning(false) }
-  }
-
-  const handleApproveAudition = async (auditionId) => {
-    setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: true, error: null } }))
-    try {
-      await approveActorAudition(auditionId)
-      setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, status: 'approved' } }))
-      const matchedResult = auditionResults.find((r) => r.ok && r.views?.some((v) => v.auditionId === auditionId))
-      const charId = matchedResult?.characterId
-      if (charId) {
-        setSelectedCharacterId(charId)
-        const charName = savedCharacters.find((c) => c.id === charId)?.name || null
-        setPostApprovalPrompt({ characterId: charId, characterName: charName })
-      }
-      setTimeout(() => activeCharSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100)
-    } catch (err) { setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, error: err?.message || 'Approve failed' } })) }
-  }
-
   async function handleApproveAndQueuePortfolio(auditionId, characterId) {
     setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: true, error: null } }))
     try {
@@ -590,12 +570,14 @@ export default function CastingPipelinePanel() {
     }
     setSelectedCharacterId(characterId)
     setTimeout(() => activeCharSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100)
-    const views = selectedPortfolioViewList()
-    if (!selectedWorkflowId || !views.length) {
+    if (!selectedWorkflowId) {
       const charName = savedCharacters.find((c) => c.id === characterId)?.name || null
       setPostApprovalPrompt({ characterId, characterName: charName })
       return
     }
+    const selected = selectedPortfolioViewList()
+    const views = selected.length ? selected : Object.keys(portfolioViews)
+    const usedDefaults = !selected.length
     try {
       const result = await queueCharacterPortfolio({
         characterId, views, workflowId: selectedWorkflowId,
@@ -609,7 +591,12 @@ export default function CastingPipelinePanel() {
       for (const j of jobs) ingestedRef.current.delete(j.promptId)
       try { sessionStorage.setItem('casting_room_portfolio_state', JSON.stringify({ jobs })) } catch { /* ignore */ }
       if (jobs.length) startPortfolioPoll()
-      setSuccess(`Approved & queued ${result.summary?.success || 0} portfolio view(s).`)
+      patchCharacterLifecycle(characterId, 'portfolio_pending').catch(() => {})
+      setSavedCharacters((prev) => prev.map((c) => c.id === characterId ? { ...c, lifecycleStatus: 'portfolio_pending' } : c))
+      const msg = usedDefaults
+        ? `Approved & queued ${result.summary?.success || 0} views (all defaults — adjust view selection below to customise).`
+        : `Approved & queued ${result.summary?.success || 0} portfolio view(s).`
+      setSuccess(msg)
     } catch (err) { setError(err?.message || 'Portfolio queue failed') }
   }
 
@@ -675,7 +662,7 @@ export default function CastingPipelinePanel() {
           const charName = cand?.name || null
           setBatchFeedback({ type: 'success', message: `Character saved${charName ? `: ${charName}` : ''}.` })
           backgroundCompilePromptPacks(newId)
-          setPostApprovalPrompt({ characterId: newId, characterName: charName })
+          setBatchSavedCharIds((prev) => new Set([...prev, newId]))
           setTimeout(() => activeCharSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 300)
         } else {
           setBatchFeedback({ type: 'error', message: 'Save completed but no character ID returned — check server logs.' })
@@ -779,6 +766,48 @@ export default function CastingPipelinePanel() {
       setSavedCharacters((prev) => prev.map((c) => c.id === selectedCharacterId ? { ...c, lifecycleStatus: 'portfolio_pending' } : c))
     } catch (err) { setError(err.message || 'Failed to queue portfolio.') }
     finally { setActionLoading(false) }
+  }
+
+  async function handleQueueBatchPortfolios() {
+    if (!selectedWorkflowId) return
+    const eligible = [...batchSavedCharIds].filter((id) => {
+      const char = savedCharacters.find((c) => c.id === id)
+      return char && char.lifecycleStatus === 'auditioned'
+    })
+    if (!eligible.length) return
+    setActionLoading(true); setError(''); setSuccess('')
+    const views = selectedPortfolioViewList().length ? selectedPortfolioViewList() : Object.keys(portfolioViews)
+    const allJobs = []; const succeeded = []; const failed = []
+    for (const charId of eligible) {
+      try {
+        const result = await queueCharacterPortfolio({
+          characterId: charId, views, workflowId: selectedWorkflowId,
+          options: { persistPromptPacks: true, aspectRatio: '2:3', styleProfile: 'cinematic casting portrait' },
+        })
+        const jobs = (result.queued || []).filter((item) => item.ok && item.result?.promptId).map((item) => ({
+          promptId: item.result.promptId, promptPackId: item.promptPackId,
+          view: item.view, characterId: charId, workflowVersion: selectedWorkflowId, viewType: item.view,
+        }))
+        allJobs.push(...jobs)
+        succeeded.push(charId)
+        patchCharacterLifecycle(charId, 'portfolio_pending').catch(() => {})
+        setSavedCharacters((prev) => prev.map((c) => c.id === charId ? { ...c, lifecycleStatus: 'portfolio_pending' } : c))
+      } catch { failed.push(charId) }
+    }
+    if (allJobs.length) {
+      setPortfolioJobs((prev) => {
+        const existing = new Set(prev.map((j) => j.promptId))
+        return [...prev, ...allJobs.filter((j) => !existing.has(j.promptId))]
+      })
+      setPortfolioJobsStatus(null)
+      for (const j of allJobs) ingestedRef.current.delete(j.promptId)
+      startPortfolioPoll()
+    }
+    const msg = failed.length
+      ? `Queued ${succeeded.length} portfolio(s). ${failed.length} failed.`
+      : `Queued portfolios for ${succeeded.length} character(s).`
+    setSuccess(msg)
+    setActionLoading(false)
   }
 
   // ── Gallery handler ───────────────────────────────────────────────────────
@@ -1190,6 +1219,22 @@ export default function CastingPipelinePanel() {
       {/* ─── 3. ACTIVE CHARACTER ───────────────────────────────────────── */}
       <section className={styles.section} ref={activeCharSectionRef}>
         <h3>Active Character</h3>
+
+        {(() => {
+          const n = [...batchSavedCharIds].filter((id) => savedCharacters.find((c) => c.id === id)?.lifecycleStatus === 'auditioned').length
+          return n > 0 ? (
+            <div className={styles.row} style={{ marginBottom: 8 }}>
+              <button
+                disabled={!selectedWorkflowId || actionLoading}
+                onClick={handleQueueBatchPortfolios}
+                title={selectedWorkflowId ? undefined : 'Select a workflow first'}
+              >
+                Queue Portfolios ({n})
+              </button>
+              <span className={styles.subtle}>Queue portfolios for {n} saved character{n > 1 ? 's' : ''} from this session</span>
+            </div>
+          ) : null
+        })()}
 
         <div className={styles.row}>
           <select value={selectedCharacterId} onChange={(e) => { setSelectedCharacterId(e.target.value); setRenamingCharacterId(null) }} className={styles.select}>
