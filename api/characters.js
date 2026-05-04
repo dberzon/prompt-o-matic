@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   if (req.method === 'DELETE') {
     let runtime = null
     try {
-      assertCharacterBatchOperationAllowed('list-characters', process.env)
+      assertCharacterBatchOperationAllowed('delete-character', process.env)
       runtime = createVectorRuntime({ env: process.env })
       const id = req.query?.id ?? req.body?.id
       if (!id || typeof id !== 'string') {
