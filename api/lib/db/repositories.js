@@ -355,6 +355,7 @@ function mapBatchCandidateRow(row) {
     generationRound: Number(row.generation_round || 1),
     savedCharacterId: row.saved_character_id || null,
     reviewNote: row.review_note || null,
+    previewImageUrl: row.preview_image_url || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -467,9 +468,9 @@ export function createBatchCandidate(db, payload) {
   const id = payload.id || randomUUID()
   db.prepare(`
     INSERT INTO character_batch_candidates
-      (id, batch_id, source_candidate_id, candidate_json, classification, review_status, similarity_json, errors_json, mutation_json, generation_round, saved_character_id, review_note, created_at, updated_at)
+      (id, batch_id, source_candidate_id, candidate_json, classification, review_status, similarity_json, errors_json, mutation_json, generation_round, saved_character_id, review_note, preview_image_url, created_at, updated_at)
     VALUES
-      (@id, @batch_id, @source_candidate_id, @candidate_json, @classification, @review_status, @similarity_json, @errors_json, @mutation_json, @generation_round, @saved_character_id, @review_note, @created_at, @updated_at)
+      (@id, @batch_id, @source_candidate_id, @candidate_json, @classification, @review_status, @similarity_json, @errors_json, @mutation_json, @generation_round, @saved_character_id, @review_note, @preview_image_url, @created_at, @updated_at)
   `).run({
     id,
     batch_id: payload.batchId,
@@ -483,6 +484,7 @@ export function createBatchCandidate(db, payload) {
     generation_round: Number.isInteger(payload.generationRound) ? payload.generationRound : 1,
     saved_character_id: payload.savedCharacterId || null,
     review_note: payload.reviewNote || null,
+    preview_image_url: payload.previewImageUrl || null,
     created_at: now,
     updated_at: now,
   })
@@ -491,7 +493,7 @@ export function createBatchCandidate(db, payload) {
 
 export function getBatchCandidate(db, id) {
   const row = db.prepare(`
-    SELECT id, batch_id, source_candidate_id, candidate_json, classification, review_status, similarity_json, errors_json, mutation_json, generation_round, saved_character_id, review_note, created_at, updated_at
+    SELECT id, batch_id, source_candidate_id, candidate_json, classification, review_status, similarity_json, errors_json, mutation_json, generation_round, saved_character_id, review_note, preview_image_url, created_at, updated_at
     FROM character_batch_candidates
     WHERE id = ?
   `).get(id)
@@ -510,7 +512,7 @@ export function listBatchCandidates(db, batchId, filters = {}) {
     values.push(filters.reviewStatus)
   }
   const rows = db.prepare(`
-    SELECT id, batch_id, source_candidate_id, candidate_json, classification, review_status, similarity_json, errors_json, mutation_json, generation_round, saved_character_id, review_note, created_at, updated_at
+    SELECT id, batch_id, source_candidate_id, candidate_json, classification, review_status, similarity_json, errors_json, mutation_json, generation_round, saved_character_id, review_note, preview_image_url, created_at, updated_at
     FROM character_batch_candidates
     WHERE ${clauses.join(' AND ')}
     ORDER BY created_at ASC
@@ -538,6 +540,7 @@ export function updateBatchCandidate(db, id, patch) {
         generation_round=@generation_round,
         saved_character_id=@saved_character_id,
         review_note=@review_note,
+        preview_image_url=@preview_image_url,
         candidate_json=@candidate_json,
         updated_at=@updated_at
     WHERE id=@id
@@ -552,6 +555,7 @@ export function updateBatchCandidate(db, id, patch) {
     generation_round: Number.isInteger(next.generationRound) ? next.generationRound : 1,
     saved_character_id: next.savedCharacterId || null,
     review_note: next.reviewNote || null,
+    preview_image_url: next.previewImageUrl || null,
     candidate_json: JSON.stringify(next.candidate || {}),
     updated_at: next.updatedAt,
   })

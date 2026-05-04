@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   approveBatchCandidate,
   archiveCharacter,
+  deleteTempCharacter,
   generateBatch,
+  generateCandidatePreview,
   getCharacterBatch,
   listBatchCandidates,
   listCharacterBatches,
@@ -13,6 +15,7 @@ import {
   renameCharacter,
   restoreCharacter,
   saveBatchCandidate,
+  updateCandidatePreviewImage,
 } from '../lib/api/characterBatches.js'
 import { compilePromptPacksForCharacter, listPromptPacksForCharacter } from '../lib/api/promptPacks.js'
 import {
@@ -301,18 +304,29 @@ export default function CastingPipelinePanel() {
             try { const list = await listGeneratedImages({ characterId: cId }); imageMap[cId] = list?.items || [] } catch { /* silent */ }
           }
           setAuditionImages((prev) => ({ ...prev, ...imageMap }))
-          // Populate batch preview image URLs for completed preview jobs
+          // Persist preview image URL to candidate record and delete the temp character
           const previewIngests = toIngest.filter((j) => j.type === 'batchPreview')
           if (previewIngests.length) {
             const previewImgUpdates = {}
             for (const j of previewIngests) {
               const imgs = imageMap[j.characterId] || []
               const first = imgs.find((img) => !img.viewType || img.viewType === 'front_portrait') || imgs[0]
-              if (first) previewImgUpdates[j.candidateId] = `/api/generated-image-view?id=${encodeURIComponent(first.id)}`
+              if (first) {
+                const url = `/api/generated-image-view?id=${encodeURIComponent(first.id)}`
+                previewImgUpdates[j.candidateId] = url
+                updateCandidatePreviewImage(j.candidateId, url).catch(() => { /* non-critical */ })
+              }
+              deleteTempCharacter(j.characterId).catch(() => { /* non-critical */ })
             }
             if (Object.keys(previewImgUpdates).length) setBatchPreviewImages((prev) => ({ ...prev, ...previewImgUpdates }))
           }
         } catch { /* images will appear on next successful tick */ }
+      }
+      // Clean up temp characters for failed preview renders
+      const failedPreviews = jobs.filter((j) => j.type === 'batchPreview' && statusMap[j.promptId] === 'failed' && !ingestedRef.current.has(j.promptId))
+      for (const j of failedPreviews) {
+        ingestedRef.current.add(j.promptId)
+        deleteTempCharacter(j.characterId).catch(() => { /* non-critical */ })
       }
 
       const allDone = jobs.every((j) => statusMap[j.promptId] === 'success' || statusMap[j.promptId] === 'failed')
@@ -654,9 +668,6 @@ export default function CastingPipelinePanel() {
       setError(msg)
       setBatchFeedback({ type: 'error', message: msg })
     }
-    finally { setCandidateActionId(null) }
-  }
-
   async function handleGeneratePreviews() {
     if (!selectedWorkflowId) return
     const targets = candidates.filter((c) => c.reviewStatus === 'approved' && !batchPreviewJobs[c.id])
@@ -665,28 +676,21 @@ export default function CastingPipelinePanel() {
     const newJobs = {}
     for (const candidate of targets) {
       try {
-        const saved = await saveBatchCandidate(candidate.id)
-        const characterId = saved?.item?.savedCharacterId
-        if (!characterId) continue
-        const cand = saved?.item?.candidate
-        patchCharacterLifecycle(characterId, 'preview').catch(() => { /* non-critical */ })
-        setSavedCharacters((prev) => {
-          const map = new Map(prev.map((c) => [c.id, c]))
-          map.set(characterId, { id: characterId, name: cand?.name || '(unnamed)', age: cand?.age, lifecycleStatus: 'preview' })
-          return [...map.values()]
-        })
-        const result = await queueCharacterPortfolio({
-          characterId, views: ['front_portrait'], workflowId: selectedWorkflowId,
-          options: { persistPromptPacks: true, aspectRatio: '2:3', styleProfile: 'cinematic casting portrait' },
-        })
-        const queued = (result.queued || []).filter((item) => item.ok && item.result?.promptId)
-        if (queued.length) {
-          newJobs[candidate.id] = { characterId, promptId: queued[0].result.promptId, promptPackId: queued[0].promptPackId, status: 'pending' }
+        const result = await generateCandidatePreview(candidate.id, selectedWorkflowId)
+        if (result?.promptId) {
+          newJobs[candidate.id] = {
+            characterId: result.characterId,
+            promptId: result.promptId,
+            promptPackId: result.promptPackId,
+            status: 'pending',
+          }
         }
       } catch { /* skip candidate on error */ }
     }
     setBatchPreviewJobs((prev) => ({ ...prev, ...newJobs }))
     if (Object.keys(newJobs).length) startAuditPoll()
+    setPreviewsGenerating(false)
+  } if (Object.keys(newJobs).length) startAuditPoll()
     await refreshBatch(selectedBatchId)
     setPreviewsGenerating(false)
   }
@@ -1142,7 +1146,7 @@ export default function CastingPipelinePanel() {
                   const clLabel = isSaved
                     ? 'Saved ✓'
                     : `${candidate.reviewStatus} · ${classLabel[candidate.classification] || candidate.classification}${candidate.reviewNote ? ` · ${candidate.reviewNote}` : ''}`
-                  const previewImageUrl = batchPreviewImages[candidate.id] || null
+                  const previewImageUrl = batchPreviewImages[candidate.id] || candidate.previewImageUrl || null
                   return (
                     <CharacterCard
                       key={candidate.id}
@@ -1165,25 +1169,7 @@ export default function CastingPipelinePanel() {
       {/* ─── 3. ACTIVE CHARACTER ───────────────────────────────────────── */}
       <section className={styles.section} ref={activeCharSectionRef}>
         <h3>Active Character</h3>
-        {(() => {
-          const previewChars = savedCharacters.filter((c) => c.lifecycleStatus === 'preview')
-          if (!previewChars.length) return null
-          return (
-            <div className={styles.row}>
-              <span className={styles.subtle}>{previewChars.length} preview character{previewChars.length !== 1 ? 's' : ''} (from batch previews)</span>
-              <button
-                type="button"
-                onClick={async () => {
-                  for (const c of previewChars) { try { await archiveCharacter(c.id) } catch { /* silent */ } }
-                  setSavedCharacters((prev) => prev.filter((c) => c.lifecycleStatus !== 'preview'))
-                  if (previewChars.some((c) => c.id === selectedCharacterId)) setSelectedCharacterId('')
-                }}
-              >
-                Clean up
-              </button>
-            </div>
-          )
-        })()}
+
         <div className={styles.row}>
           <select value={selectedCharacterId} onChange={(e) => { setSelectedCharacterId(e.target.value); setRenamingCharacterId(null) }} className={styles.select}>
             <option value="">Select character…</option>

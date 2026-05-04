@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from './http.js'
+import { apiGet, apiPost, apiDelete } from './http.js'
 
 export function listCharacterBatches() {
   return apiGet('/api/character-batches')
@@ -51,4 +51,16 @@ export function reconsiderBatchCandidate(candidateId) {
 
 export function patchCharacterLifecycle(characterId, lifecycleStatus) {
   return apiPost('/api/character-lifecycle', { characterId, lifecycleStatus })
+}
+
+export function generateCandidatePreview(candidateId, workflowId) {
+  return apiPost('/api/batch-candidate-preview', { candidateId, workflowId })
+}
+
+export function updateCandidatePreviewImage(candidateId, previewImageUrl) {
+  return apiPost('/api/batch-candidate-preview-image', { candidateId, previewImageUrl })
+}
+
+export function deleteTempCharacter(characterId) {
+  return apiDelete('/api/characters', { id: characterId })
 }

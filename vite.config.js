@@ -46,6 +46,7 @@ import {
   listActorAuditions,
   listActorCandidates,
   listBankEntries,
+  createCharacter,
   getCharacter,
   listCharacters,
   deleteCharacter,
@@ -58,6 +59,8 @@ import {
   archiveCharacter,
   restoreCharacter,
   reconsiderBatchCandidate,
+  getBatchCandidate,
+  updateBatchCandidate,
 } from './api/lib/db/repositories.js'
 import { createVectorRuntime } from './api/lib/vector/runtime.js'
 import {
@@ -670,6 +673,73 @@ function apiDevPlugin(env) {
         } finally {
           runtime?.close?.()
         }
+      })
+
+      server.middlewares.use('/api/batch-candidate-preview', async (req, res) => {
+        if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
+        let runtime = null
+        try {
+          assertCharacterBatchOperationAllowed('candidate-preview', env)
+          const body = await readJsonBody(req)
+          const { candidateId, workflowId } = body || {}
+          if (!candidateId) { sendJsonMiddleware(res, 400, { error: 'Missing candidateId' }); return }
+          runtime = createVectorRuntime({ env })
+          const candidate = getBatchCandidate(runtime.db, candidateId)
+          if (!candidate) { sendJsonMiddleware(res, 404, { error: 'Candidate not found' }); return }
+          if (candidate.reviewStatus !== 'approved') {
+            sendJsonMiddleware(res, 400, { error: 'Candidate must be approved before previewing' }); return
+          }
+          const tempChar = createCharacter(runtime.db, {
+            ...candidate.candidate,
+            embeddingStatus: 'not_indexed',
+            lifecycleStatus: 'preview',
+          })
+          const compileResult = compileCharacterPromptPacks({
+            db: runtime.db,
+            input: { characterId: tempChar.id, views: ['front_portrait'] },
+          })
+          const promptPack = compileResult?.packs?.[0] ?? null
+          if (!promptPack) {
+            deleteCharacter(runtime.db, tempChar.id)
+            sendJsonMiddleware(res, 500, { error: 'Failed to compile prompt pack for preview' }); return
+          }
+          const service = createComfyService({ env })
+          const comfyJob = await service.queuePromptPackById({
+            db: runtime.db, promptPackId: promptPack.id,
+            workflowId: workflowId || undefined, allowWorkflowFallback: true, front: true,
+          })
+          if (comfyJob?.error) {
+            deleteCharacter(runtime.db, tempChar.id)
+            sendJsonMiddleware(res, 502, { error: comfyJob.error }); return
+          }
+          sendJsonMiddleware(res, 200, {
+            ok: true, candidateId,
+            characterId: tempChar.id,
+            promptId: comfyJob.promptId,
+            promptPackId: promptPack.id,
+          })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'BATCH_CANDIDATE_PREVIEW_ERROR' })
+        } finally { runtime?.close?.() }
+      })
+
+      server.middlewares.use('/api/batch-candidate-preview-image', async (req, res) => {
+        if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
+        let runtime = null
+        try {
+          assertCharacterBatchOperationAllowed('candidate-preview-image', env)
+          const body = await readJsonBody(req)
+          const { candidateId, previewImageUrl } = body || {}
+          if (!candidateId) { sendJsonMiddleware(res, 400, { error: 'Missing candidateId' }); return }
+          runtime = createVectorRuntime({ env })
+          const updated = updateBatchCandidate(runtime.db, candidateId, { previewImageUrl: previewImageUrl || null })
+          if (!updated) { sendJsonMiddleware(res, 404, { error: 'Candidate not found' }); return }
+          sendJsonMiddleware(res, 200, { ok: true, item: updated })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'BATCH_CANDIDATE_PREVIEW_IMAGE_ERROR' })
+        } finally { runtime?.close?.() }
       })
 
       server.middlewares.use('/api/character-batch-candidate-mutate', async (req, res) => {
