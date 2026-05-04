@@ -8,25 +8,31 @@ const LIFECYCLE_LABELS = {
   finalized: 'finalized',
 }
 
+const RENDER_STATUS_LABEL = { pending: '⏳ rendering…', success: '✓ ready', failed: '✗ failed' }
+
 /**
  * Unified character profile card.
  *
  * Props:
+ *   mode             — 'audition' | 'batch' | 'preview' | 'bank' (default: 'batch')
  *   character        — profile object (name, age, cinematicArchetype, etc.)
  *   lifecycleStatus  — optional enum value from CharacterProfileSchema
  *   previewImageUrl  — optional thumbnail image URL
- *   classificationLabel — optional string (e.g. "unique", "needs change")
+ *   classificationLabel — string shown only in batch mode (similarity / review status)
+ *   renderStatus     — { status, imageUrl } shown in audition/preview modes
  *   actions          — array of { label, onClick, disabled?, variant?, key? }
  *   actionError      — optional error string shown below actions
  *   dimmed           — if true, renders at reduced opacity
  *   children         — additional content rendered below actions
  */
 export default function CharacterCard({
+  mode = 'batch',
   character,
   lifecycleStatus,
   previewImageUrl,
   classificationLabel,
   classificationLabelVariant,
+  renderStatus,
   actions = [],
   actionError,
   actionHint,
@@ -43,6 +49,9 @@ export default function CharacterCard({
   ].filter(Boolean).slice(0, 3)
 
   const keywords = Array.isArray(visualKeywords) ? visualKeywords.slice(0, 4) : []
+
+  const showClassTag = mode === 'batch' && classificationLabel
+  const showRenderStatus = (mode === 'audition' || mode === 'preview') && renderStatus
 
   return (
     <div className={styles.card} data-dimmed={dimmed ? 'true' : undefined}>
@@ -62,6 +71,9 @@ export default function CharacterCard({
         {previewImageUrl && (
           <img className={styles.preview} src={previewImageUrl} alt={name || 'character'} />
         )}
+        {showRenderStatus && renderStatus.imageUrl && (
+          <img className={styles.preview} src={renderStatus.imageUrl} alt={name || 'character'} />
+        )}
         <div className={styles.profileBlock}>
           {cinematicArchetype && <div className={styles.archetype}>{cinematicArchetype}</div>}
           {personalityEnergy && <div className={styles.energy}>{personalityEnergy}</div>}
@@ -71,8 +83,13 @@ export default function CharacterCard({
               {keywords.map((k) => <span key={k} className={styles.chip}>{k}</span>)}
             </div>
           )}
-          {classificationLabel && (
+          {showClassTag && (
             <div className={styles.classTag} data-variant={classificationLabelVariant || undefined}>{classificationLabel}</div>
+          )}
+          {showRenderStatus && (
+            <div className={styles.renderStatus} data-status={renderStatus.status || 'pending'}>
+              {RENDER_STATUS_LABEL[renderStatus.status] || '⏳ queued'}
+            </div>
           )}
         </div>
       </div>

@@ -1044,8 +1044,16 @@ export default function CastingPipelinePanel() {
                     {result.ok ? (
                       <>
                         <CharacterCard
+                          mode="audition"
                           character={result.character}
                           lifecycleStatus={savedCharacters.find((c) => c.id === result.characterId)?.lifecycleStatus}
+                          renderStatus={(() => {
+                            const fv = result.views?.find((v) => v.view === 'front_portrait')
+                            if (!fv?.comfyPromptId) return null
+                            const status = auditionStatuses[fv.comfyPromptId] || 'pending'
+                            const img = (auditionImages[result.characterId] || []).find((i) => !i.viewType || i.viewType === 'front_portrait')
+                            return { status, imageUrl: img ? `/api/generated-image-view?id=${encodeURIComponent(img.id)}` : null }
+                          })()}
                         />
                         <div className={styles.subtle} style={{ marginTop: 4 }}>
                           Pair {result.pairId?.slice(0, 8)} · char {result.characterId?.slice(0, 8)}
@@ -1241,6 +1249,7 @@ export default function CastingPipelinePanel() {
                   return (
                     <CharacterCard
                       key={candidate.id}
+                      mode="batch"
                       character={candidate.candidate}
                       dimmed={candidate.reviewStatus === 'rejected'}
                       classificationLabel={clLabel}

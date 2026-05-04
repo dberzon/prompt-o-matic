@@ -206,3 +206,15 @@
   color: #3cc864;
   font-weight: 600;
 }
+
+/* ── Render status (audition / preview modes) ─── */
+
+.renderStatus {
+  font-size: 10px;
+  color: var(--text-3);
+  margin-top: 4px;
+}
+
+.renderStatus[data-status='success'] { color: #3cc864; }
+.renderStatus[data-status='failed'] { color: #e05c5c; }
+.renderStatus[data-status='pending'] { color: #e8a838; }
