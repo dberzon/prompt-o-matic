@@ -16,6 +16,7 @@ import {
 } from '../lib/api/characterBatches.js'
 import { compilePromptPacksForCharacter, listPromptPacksForCharacter } from '../lib/api/promptPacks.js'
 import {
+  getChromaHealth,
   getComfyJobStatus,
   getComfyJobsStatus,
   getComfyStatus,
@@ -184,6 +185,9 @@ export default function CastingPipelinePanel() {
   const selectedCharacterIdRef = useRef('')
   const [compilingPrompts, setCompilingPrompts] = useState(new Set())
   const [postApprovalPrompt, setPostApprovalPrompt] = useState(null) // { characterId, characterName }
+
+  // ── Service health ────────────────────────────────────────────────────────
+  const [chromaReady, setChromaReady] = useState(false)
 
   // ── Dev tools ─────────────────────────────────────────────────────────────
   const [comfyStatus, setComfyStatus] = useState(null)
@@ -463,6 +467,25 @@ export default function CastingPipelinePanel() {
       .catch((err) => { if (!cancelled) setBankLoadError(err?.message || 'Failed to load bank entries') })
     return () => { cancelled = true }
   }, [])
+
+  // ── Chroma health polling — fast until ready, then slow ───────────────────
+  useEffect(() => {
+    let timer = null
+    let cancelled = false
+    async function check() {
+      if (cancelled) return
+      try {
+        const result = await getChromaHealth()
+        if (!cancelled) setChromaReady(!!result.available)
+        timer = setTimeout(check, result.available ? 30000 : 3000)
+      } catch {
+        if (!cancelled) setChromaReady(false)
+        timer = setTimeout(check, 5000)
+      }
+    }
+    check()
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { setBatchPreviewJobs({}); setBatchPreviewImages({}); refreshBatch(selectedBatchId) }, [selectedBatchId])
   useEffect(() => { if (selectedCharacterId || selectedPromptPackId) refreshGallery() }, [selectedCharacterId, selectedPromptPackId])
 
@@ -852,7 +875,13 @@ export default function CastingPipelinePanel() {
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className={styles.panel}>
-      <h2 className={styles.title}>Casting Room</h2>
+      <div className={styles.titleRow}>
+        <h2 className={styles.title}>Casting Room</h2>
+        <span className={`${styles.chromaBadge} ${chromaReady ? styles.chromaBadgeReady : styles.chromaBadgeStarting}`}>
+          <span className={styles.chromaDot} />
+          {chromaReady ? 'Chroma ready' : 'Chroma starting…'}
+        </span>
+      </div>
       {loading && <div className={styles.subtle}>Loading…</div>}
       <RenderStatusBar
         isPollingAudit={isPollingAudit}

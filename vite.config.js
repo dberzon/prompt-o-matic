@@ -1,5 +1,7 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import { spawn } from 'child_process'
+import path from 'path'
 import { healthCheck, runPolish } from './api/lib/polishCore.js'
 import { resolveProviderSelection, runWithResolvedProvider } from './api/lib/polishCore.js'
 import { runReferenceImageAnalysis } from './api/lib/referenceImageCore.js'
@@ -77,6 +79,63 @@ import {
   sendJsonMiddleware,
 } from './api/lib/http.js'
 
+// ── Chroma auto-spawn ─────────────────────────────────────────────────────────
+let chromaProcess = null
+
+async function isChromaRunning(url = 'http://127.0.0.1:8000') {
+  for (const endpoint of [`${url}/api/v2/heartbeat`, `${url}/api/v1/heartbeat`]) {
+    try {
+      const res = await fetch(endpoint, { signal: AbortSignal.timeout(1500) })
+      if (res.ok) return true
+    } catch { /* try next */ }
+  }
+  return false
+}
+
+async function startChromaServer(chromaDataPath = './chroma_data') {
+  const already = await isChromaRunning()
+  if (already) {
+    console.log('\x1b[36m[chroma]\x1b[0m Already running on :8000')
+    return
+  }
+  console.log('\x1b[36m[chroma]\x1b[0m Starting… (chroma run --path', chromaDataPath + ')')
+  // Strip node_modules/.bin from PATH so the system Python `chroma` is found
+  // instead of the chromadb npm package's CLI (which doesn't support Windows x64).
+  const spawnEnv = { ...process.env }
+  if (spawnEnv.PATH) {
+    spawnEnv.PATH = spawnEnv.PATH.split(path.delimiter)
+      .filter((p) => !p.includes('node_modules'))
+      .join(path.delimiter)
+  }
+  // Avoid shell:true (triggers Node deprecation warning when args are passed).
+  // On Windows, run via cmd /c; on Unix, use sh -c.
+  const isWin = process.platform === 'win32'
+  const [cmd, args] = isWin
+    ? ['cmd', ['/c', 'chroma', 'run', '--path', chromaDataPath]]
+    : ['sh', ['-c', `chroma run --path ${chromaDataPath}`]]
+  chromaProcess = spawn(cmd, args, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: spawnEnv,
+  })
+  chromaProcess.stdout.on('data', (d) => {
+    for (const line of d.toString().trim().split('\n')) {
+      console.log(`\x1b[36m[chroma]\x1b[0m ${line}`)
+    }
+  })
+  chromaProcess.stderr.on('data', (d) => {
+    for (const line of d.toString().trim().split('\n')) {
+      if (line.trim()) console.log(`\x1b[36m[chroma]\x1b[0m ${line}`)
+    }
+  })
+  chromaProcess.on('exit', (code) => {
+    if (code !== null) console.log(`\x1b[36m[chroma]\x1b[0m Process exited (code ${code})`)
+    chromaProcess = null
+  })
+  for (const sig of ['exit', 'SIGINT', 'SIGTERM']) {
+    process.once(sig, () => { chromaProcess?.kill(); chromaProcess = null })
+  }
+}
+
 // ── SSE render watcher (singleton across all requests) ────────────────────────
 const sseClients = new Set()
 const seenPromptIds = new Map() // promptId → timestamp (for sliding-window cleanup)
@@ -115,6 +174,18 @@ function apiDevPlugin(env) {
   return {
     name: 'api-dev-polish',
     configureServer(server) {
+      const chromaUrl = env.CHROMA_URL || 'http://127.0.0.1:8000'
+
+      server.httpServer?.once('listening', () => {
+        startChromaServer(env.CHROMA_DATA_PATH || './chroma_data')
+      })
+
+      server.middlewares.use('/api/chroma-health', async (req, res) => {
+        if (req.method !== 'GET') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
+        const available = await isChromaRunning(chromaUrl)
+        sendJsonMiddleware(res, 200, { available, url: chromaUrl })
+      })
+
       server.middlewares.use('/api/polish', async (req, res) => {
         if (req.method !== 'POST') {
           sendJsonMiddleware(res, 405, { error: 'Method not allowed' })

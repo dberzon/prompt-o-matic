@@ -4,6 +4,10 @@ export function getComfyStatus() {
   return apiGet('/api/comfy-status')
 }
 
+export function getChromaHealth() {
+  return apiGet('/api/chroma-health')
+}
+
 export function listComfyWorkflows() {
   return apiGet('/api/comfy-workflows')
 }
