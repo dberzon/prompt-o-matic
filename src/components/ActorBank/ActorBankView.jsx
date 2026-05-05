@@ -16,37 +16,70 @@ function reducer(state, action) {
   }
 }
 
+async function fetchCharacters(params) {
+  const res = await fetch(`/api/characters?${params}`)
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+  return data
+}
+
 export default function ActorBankView() {
   const [state, dispatch] = useReducer(reducer, INIT)
   const filtersRef = useRef({ search: '', gender: '', ageMin: '', ageMax: '' })
   const [detail, setDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState(null)
+  const [showArchived, setShowArchived] = useState(false)
+  const [archivedChars, setArchivedChars] = useState([])
+  const [archivedLoading, setArchivedLoading] = useState(false)
+
+  const buildParams = useCallback((f = filtersRef.current, extra = {}) => {
+    const params = new URLSearchParams()
+    if (f.search) params.set('search', f.search)
+    if (f.gender) params.set('gender', f.gender)
+    if (f.ageMin !== '' && f.ageMin != null) params.set('ageMin', String(f.ageMin))
+    if (f.ageMax !== '' && f.ageMax != null) params.set('ageMax', String(f.ageMax))
+    params.set('sortBy', 'last_rendered_at')
+    for (const [k, v] of Object.entries(extra)) params.set(k, v)
+    return params
+  }, [])
 
   const load = useCallback(async (f = filtersRef.current) => {
     dispatch({ type: 'LOADING' })
     try {
-      const params = new URLSearchParams()
-      if (f.search) params.set('search', f.search)
-      if (f.gender) params.set('gender', f.gender)
-      if (f.ageMin !== '' && f.ageMin != null) params.set('ageMin', String(f.ageMin))
-      if (f.ageMax !== '' && f.ageMax != null) params.set('ageMax', String(f.ageMax))
-      params.set('sortBy', 'last_rendered_at')
-      const res = await fetch(`/api/characters?${params}`)
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      const data = await fetchCharacters(buildParams(f))
       dispatch({ type: 'LOADED', items: data.items ?? [], total: data.total ?? 0 })
     } catch (err) {
       dispatch({ type: 'ERROR', error: err.message ?? 'Failed to load characters' })
     }
-  }, [])
+  }, [buildParams])
+
+  const loadArchived = useCallback(async () => {
+    setArchivedLoading(true)
+    try {
+      const data = await fetchCharacters(buildParams(filtersRef.current, { includeArchived: 'only' }))
+      setArchivedChars(data.items ?? [])
+    } catch {
+      setArchivedChars([])
+    } finally {
+      setArchivedLoading(false)
+    }
+  }, [buildParams])
 
   useEffect(() => { load() }, [load])
 
   const handleFilterChange = useCallback((patch) => {
     filtersRef.current = { ...filtersRef.current, ...patch }
     load(filtersRef.current)
-  }, [load])
+    if (showArchived) loadArchived()
+  }, [load, loadArchived, showArchived])
+
+  const handleToggleArchived = useCallback(() => {
+    const next = !showArchived
+    setShowArchived(next)
+    if (next) loadArchived()
+    else setArchivedChars([])
+  }, [showArchived, loadArchived])
 
   const handleSelect = useCallback(async (id) => {
     dispatch({ type: 'SELECT', id })
@@ -117,6 +150,13 @@ export default function ActorBankView() {
         {!loading && !error && (
           <span className={styles.count}>{total} character{total !== 1 ? 's' : ''}</span>
         )}
+        <button
+          type="button"
+          className={`${styles.archiveToggle} ${showArchived ? styles.archiveToggleActive : ''}`}
+          onClick={handleToggleArchived}
+        >
+          {showArchived ? 'Hide archived' : 'Show archived'}
+        </button>
       </div>
 
       <ActorBankFilters filters={filtersRef.current} onChange={handleFilterChange} />
@@ -155,6 +195,39 @@ export default function ActorBankView() {
               onSelect={handleSelect}
             />
           ))}
+        </div>
+      )}
+
+      {showArchived && (
+        <div className={styles.archivedSection}>
+          <div className={styles.archivedHeader}>
+            <span className={styles.archivedTitle}>Archived</span>
+            {!archivedLoading && (
+              <span className={styles.archivedCount}>{archivedChars.length}</span>
+            )}
+          </div>
+          {archivedLoading && (
+            <div className={styles.grid}>
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className={styles.skeleton} aria-hidden="true" />
+              ))}
+            </div>
+          )}
+          {!archivedLoading && archivedChars.length === 0 && (
+            <p className={styles.archivedEmpty}>No archived characters.</p>
+          )}
+          {!archivedLoading && archivedChars.length > 0 && (
+            <div className={styles.grid}>
+              {archivedChars.map((c) => (
+                <ActorCard
+                  key={c.id}
+                  character={c}
+                  isSelected={selected === c.id}
+                  onSelect={handleSelect}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

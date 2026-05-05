@@ -116,3 +116,66 @@
 .detailLoadingBar {
   margin-bottom: 24px;
 }
+
+/* Archive toggle button */
+.archiveToggle {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+
+.archiveToggle:hover {
+  border-color: var(--text-2);
+  color: var(--text);
+}
+
+.archiveToggleActive {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.archiveToggleActive:hover {
+  background: rgba(var(--accent-rgb, 100, 100, 255), 0.08);
+}
+
+/* Archived section */
+.archivedSection {
+  margin-top: 32px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.archivedHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.archivedTitle {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.archivedCount {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.archivedEmpty {
+  font-size: 12px;
+  color: var(--text-2);
+  margin: 0;
+  padding: 16px 0;
+}

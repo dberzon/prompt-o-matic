@@ -430,7 +430,7 @@ function apiDevPlugin(env) {
           const enriched = items.map((c) => {
             const imgs = imagesByChar[c.id] || []
             const thumb = imgs.find((i) => i.viewType === 'front_portrait') ?? imgs[0] ?? null
-            return { ...c, thumbnailUrl: thumb ? `/api/generated-image-view?id=${encodeURIComponent(thumb.id)}` : null }
+            return { ...c, thumbnailUrl: thumb ? `/api/generated-image-view?id=${encodeURIComponent(thumb.id)}` : null, imageCount: imgs.length }
           })
           sendJsonMiddleware(res, 200, { ok: true, items: enriched, total: enriched.length })
         } catch (err) {

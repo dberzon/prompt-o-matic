@@ -120,14 +120,14 @@ export function listCharacters(db, filters = {}) {
     ? 'COALESCE(last_rendered_at, created_at) DESC'
     : 'created_at DESC'
   const rows = db.prepare(`
-    SELECT payload_json
+    SELECT payload_json, archived_at
     FROM characters
     ${whereSql}
     ORDER BY ${orderBy}
     ${limitSql}
   `).all(...values)
 
-  let items = rows.map(rowToPayload)
+  let items = rows.map((row) => ({ ...rowToPayload(row), archived_at: row.archived_at ?? null }))
 
   if (filters.gender) {
     const g = filters.gender.toLowerCase()
