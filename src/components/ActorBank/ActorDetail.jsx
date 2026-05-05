@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { archiveCharacter, renameCharacter, restoreCharacter } from '../../lib/api/characterBatches.js'
 import styles from './ActorDetail.module.css'
 
 const PROFILE_SECTIONS = [
@@ -53,25 +54,98 @@ function renderValue(val) {
   return String(val ?? '—')
 }
 
-export default function ActorDetail({ character, images, onBack, onDelete }) {
-  const { name, age, genderPresentation, cinematicArchetype, distinctiveFeatures, visualKeywords } = character
+export default function ActorDetail({ character: initialCharacter, images, onBack, onDelete, onArchive, onRestore }) {
+  const [character, setCharacter] = useState(initialCharacter)
+  const { id, age, genderPresentation, cinematicArchetype, distinctiveFeatures, visualKeywords, archived_at } = character
+  const [displayName, setDisplayName] = useState(character.name ?? 'Unnamed')
+
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState(null)
 
+  const [isRenaming, setIsRenaming] = useState(false)
+  const [renameValue, setRenameValue] = useState('')
+  const [renameLoading, setRenameLoading] = useState(false)
+  const [renameError, setRenameError] = useState(null)
+  const renameInputRef = useRef(null)
+
+  const [archiving, setArchiving] = useState(false)
+  const [archiveError, setArchiveError] = useState(null)
+
   const metaParts = [age, genderPresentation, cinematicArchetype].filter(Boolean)
+
+  useEffect(() => {
+    if (isRenaming) renameInputRef.current?.focus()
+  }, [isRenaming])
+
+  const startRename = () => {
+    setRenameValue(displayName)
+    setRenameError(null)
+    setIsRenaming(true)
+  }
+
+  const cancelRename = () => {
+    setIsRenaming(false)
+    setRenameError(null)
+  }
+
+  const commitRename = async () => {
+    const trimmed = renameValue.trim()
+    if (!trimmed || trimmed === displayName) { cancelRename(); return }
+    setRenameLoading(true)
+    setRenameError(null)
+    try {
+      await renameCharacter(id, trimmed)
+      setDisplayName(trimmed)
+      setCharacter((prev) => ({ ...prev, name: trimmed }))
+      setIsRenaming(false)
+    } catch (err) {
+      setRenameError(err.message ?? 'Rename failed')
+    } finally {
+      setRenameLoading(false)
+    }
+  }
+
+  const handleRenameKeyDown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commitRename() }
+    if (e.key === 'Escape') cancelRename()
+  }
 
   const handleDeleteConfirm = async () => {
     setDeleting(true)
     setDeleteError(null)
     try {
-      const res = await fetch(`/api/characters?id=${encodeURIComponent(character.id)}`, { method: 'DELETE' })
+      const res = await fetch(`/api/characters?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
-      onDelete?.(character.id)
+      onDelete?.(id)
     } catch (err) {
       setDeleteError(err.message ?? 'Delete failed')
       setDeleting(false)
+    }
+  }
+
+  const handleArchive = async () => {
+    setArchiving(true)
+    setArchiveError(null)
+    try {
+      await archiveCharacter(id)
+      onArchive?.(id)
+    } catch (err) {
+      setArchiveError(err.message ?? 'Archive failed')
+      setArchiving(false)
+    }
+  }
+
+  const handleRestore = async () => {
+    setArchiving(true)
+    setArchiveError(null)
+    try {
+      await restoreCharacter(id)
+      onRestore?.(id)
+    } catch (err) {
+      setArchiveError(err.message ?? 'Restore failed')
+      setArchiving(false)
     }
   }
 
@@ -82,9 +156,31 @@ export default function ActorDetail({ character, images, onBack, onDelete }) {
           ← Back to Actor Bank
         </button>
         <div className={styles.topBarActions}>
+          {archiveError && <span className={styles.actionError}>{archiveError}</span>}
+
+          {archived_at ? (
+            <button
+              type="button"
+              className={styles.restoreBtn}
+              onClick={handleRestore}
+              disabled={archiving}
+            >
+              {archiving ? 'Restoring…' : 'Restore'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className={styles.archiveBtn}
+              onClick={handleArchive}
+              disabled={archiving}
+            >
+              {archiving ? 'Archiving…' : 'Archive'}
+            </button>
+          )}
+
           {confirmDelete ? (
             <div className={styles.confirmRow}>
-              <span className={styles.confirmPrompt}>Delete {name ?? 'this character'}?</span>
+              <span className={styles.confirmPrompt}>Delete {displayName}?</span>
               <button
                 type="button"
                 className={styles.confirmYes}
@@ -109,14 +205,33 @@ export default function ActorDetail({ character, images, onBack, onDelete }) {
               className={styles.deleteBtn}
               onClick={() => setConfirmDelete(true)}
             >
-              Delete character
+              Delete
             </button>
           )}
         </div>
       </div>
 
       <div className={styles.hero}>
-        <h2 className={styles.name}>{name ?? 'Unnamed'}</h2>
+        {isRenaming ? (
+          <div className={styles.renameRow}>
+            <input
+              ref={renameInputRef}
+              className={styles.renameInput}
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={handleRenameKeyDown}
+              onBlur={commitRename}
+              disabled={renameLoading}
+              maxLength={120}
+            />
+            {renameError && <span className={styles.renameError}>{renameError}</span>}
+          </div>
+        ) : (
+          <button type="button" className={styles.nameBtn} onClick={startRename} title="Click to rename">
+            {displayName}
+          </button>
+        )}
+        {archived_at && <span className={styles.archivedBadge}>archived</span>}
         {metaParts.length > 0 && (
           <div className={styles.herMeta}>{metaParts.join(' · ')}</div>
         )}

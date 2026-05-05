@@ -138,7 +138,14 @@ export default function ActorBankView() {
   if (detail) {
     return (
       <div className={styles.view}>
-        <ActorDetail character={detail.character} images={detail.images} onBack={handleBack} onDelete={handleDelete} />
+        <ActorDetail
+          character={detail.character}
+          images={detail.images}
+          onBack={handleBack}
+          onDelete={handleDelete}
+          onArchive={handleDelete}
+          onRestore={handleDelete}
+        />
       </div>
     )
   }

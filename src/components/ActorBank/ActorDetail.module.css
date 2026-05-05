@@ -108,17 +108,121 @@
   margin-bottom: 32px;
 }
 
-.name {
+/* Clickable name that triggers inline rename */
+.nameBtn {
   font-family: var(--font-ui);
   font-size: 26px;
   font-weight: 700;
   color: var(--text);
+  background: none;
+  border: none;
+  padding: 0;
   margin: 0 0 6px;
+  cursor: text;
+  text-align: left;
+  display: block;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s;
+}
+
+.nameBtn:hover {
+  border-bottom-color: var(--border);
+}
+
+/* Inline rename */
+.renameRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.renameInput {
+  font-family: var(--font-ui);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  outline: none;
+  width: 100%;
+  max-width: 480px;
+}
+
+.renameError {
+  font-size: 11px;
+  color: #e05c5c;
+  white-space: nowrap;
+}
+
+/* Archived badge in hero */
+.archivedBadge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  margin-bottom: 6px;
+  vertical-align: middle;
 }
 
 .herMeta {
   font-size: 13px;
   color: var(--text-2);
+}
+
+/* Archive / Restore buttons */
+.archiveBtn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.archiveBtn:hover:not(:disabled) {
+  color: #c4882a;
+  border-color: #c4882a;
+}
+
+.archiveBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.restoreBtn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.restoreBtn:hover:not(:disabled) {
+  color: #3ab87a;
+  border-color: #3ab87a;
+}
+
+.restoreBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.actionError {
+  font-size: 11px;
+  color: #e05c5c;
 }
 
 .section {

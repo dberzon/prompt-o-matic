@@ -54,8 +54,9 @@ export function createCharacter(db, profile) {
 }
 
 export function getCharacter(db, id) {
-  const row = db.prepare('SELECT payload_json FROM characters WHERE id = ?').get(id)
-  return rowToPayload(row)
+  const row = db.prepare('SELECT payload_json, archived_at FROM characters WHERE id = ?').get(id)
+  if (!row) return null
+  return { ...rowToPayload(row), archived_at: row.archived_at ?? null }
 }
 
 export function countCharacters(db) {
