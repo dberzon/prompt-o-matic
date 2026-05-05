@@ -18,6 +18,11 @@ This document is for a Claude Code agent starting work on this project. Read it 
 
 **Four tabs:** Prompt Builder, Character Builder, Casting Room, Actor Bank. See `AGENT_HANDOFF.md` for full tab descriptions and `APPLICATION_REFERENCE.md` for exhaustive source-verified detail.
 
+**P6 cross-tab wiring (as of May 2026):**
+- Actor Bank character slots can be linked to Prompt Builder director scenarios (`bankCharId/bankCharName/bankCharDesc` in each `chars[i]` slot; `DirectorSection.jsx` uses `bankCharDesc ?? getCharDesc(g, a)`).
+- `assemblePrompt` receives `effectiveCharacters` = Actor Bank chars (slugified) merged with Character Builder localStorage — `@slug` tokens in scene text resolve against both sources.
+- "Open in Casting Room →" in `ActorDetail` sets `activeTab='pipeline'` + `castingRoomJumpId` in App.jsx; `CastingPipelinePanel` receives `jumpToCharacterId` prop and applies it once via `useEffect`.
+
 **API surface:** ~47 routes across 10 domains, all registered in `vite.config.js`.
 
 **Database:** 10 SQLite tables. Schema in `api/lib/db/schema.js`. All query functions in `api/lib/db/repositories.js`.
@@ -28,14 +33,19 @@ This document is for a Claude Code agent starting work on this project. Read it 
 
 | File | What it does |
 |---|---|
-| `src/App.jsx` | Root component; all Prompt Builder state; tab switching; blend, presets, profiles |
+| `src/App.jsx` | Root component; all Prompt Builder state; tab switching; blend, presets, profiles; `bankCharsForSelector` fetch + `effectiveCharacters` memo; `castingRoomJumpId` cross-tab bridge state |
 | `src/utils/assembler.js` | `rewriteScene`, `assemblePrompt`, `dedupeFragments`, `getCharDesc` |
+| `src/utils/slugify.js` | `toSnakeSlug`, `resolveCharacterSlug` — used by `@slug` expansion and Actor Bank character linking |
 | `api/lib/polishCore.js` | System prompt, provider resolution, `runPolish`, `healthCheck` |
 | `vite.config.js` | All API route handlers; Chroma auto-spawn; SSE watcher |
 | `api/lib/db/schema.js` | All CREATE TABLE SQL + MIGRATIONS array |
-| `api/lib/db/repositories.js` | All DB query functions |
-| `src/components/CastingPipelinePanel.jsx` | Entire Casting Room — Path A + B + Active Character + render system |
-| `src/components/ActorBank/ActorBankView.jsx` | Actor Bank tab root |
+| `api/lib/db/repositories.js` | All DB query functions; `listCharacters` and `getCharacter` both SELECT `archived_at` alongside `payload_json` and merge it into the returned object |
+| `src/components/CastingPipelinePanel.jsx` | Entire Casting Room — Path A + B + Active Character + render system; accepts `jumpToCharacterId`/`onJumpConsumed` props for cross-tab navigation |
+| `src/components/ActorBank/ActorBankView.jsx` | Actor Bank tab root; archived toggle; passes `onOpenInCastingRoom` to ActorDetail |
+| `src/components/ActorBank/ActorCard.jsx` | Character card with lifecycle badge, image count, archived state |
+| `src/components/ActorBank/ActorBankFilters.jsx` | Filter bar with search, gender chips, age range, sort select |
+| `src/components/ActorBank/ActorDetail.jsx` | Character detail — inline rename, archive/restore, image keep/discard, portfolio re-queue, "Open in Casting Room" |
+| `src/components/DirectorSection.jsx` | Director + character slot UI; `bankChars` prop enables "link actor…" per slot |
 | `src/components/CharacterBuilder.jsx` | Character bank entry form and management |
 | `api/lib/characterLifecycle.js` | Character lifecycle state machine |
 | `api/lib/characters/batchGeneration.js` | Batch generation + similarity classification |
@@ -50,7 +60,7 @@ This document is for a Claude Code agent starting work on this project. Read it 
 
 These areas can be changed with low risk:
 
-- `src/components/` — UI components (PromptOutput, ChipSection, DirectorSection, SceneMatcher, SceneInput, etc.)
+- `src/components/` — UI components (PromptOutput, ChipSection, DirectorSection, SceneMatcher, SceneInput, ActorBank/*, etc.)
 - `src/utils/assembler.js` — prompt assembly and scene rewriting (small changes: adding REWRITES, tweaking fragment order)
 - `src/utils/qualityScore.js`, `src/utils/promptRules.js`, `src/utils/variants.js` — scoring and rule logic
 - `src/data/directors.js` — adding/editing directors (follow existing pattern)
@@ -68,6 +78,8 @@ Changes here can break the whole application or corrupt data:
 **`vite.config.js`** — All 47+ API route handlers live here. Adding a route is safe; changing an existing route's request/response contract can break all callers. Be surgical. Test with `npm test` and `npm run build` after changes.
 
 **`api/lib/db/schema.js` and `api/lib/db/repositories.js`** — Database schema and all query functions. Changing column names or table structure without adding a migration will corrupt the DB. Always add backward-compatible migrations to the `MIGRATIONS` array, not by editing `CREATE_TABLES_SQL`. Never drop columns.
+
+Note: `archived_at` is a separate DB column, NOT stored inside `payload_json`. `listCharacters` and `getCharacter` both explicitly SELECT it and merge it into the returned object. Any new query function that needs `archived_at` must do the same — do not assume it comes from `rowToPayload`.
 
 **`api/lib/polishCore.js` and `api/lib/llm/providers/`** — LLM provider resolution, system prompt, and provider clients. Changes here affect all polish behavior. The provider resolution chain is: embedded → local (Ollama/LM Studio) → cloud. Do not alter the fallback logic without understanding the full chain.
 
@@ -87,6 +99,8 @@ Changes here can break the whole application or corrupt data:
 - Director count is **61**. Do not write 60 or 25.
 - The `APP_MODE=local-studio` is the operative mode. Cloud mode is for a hypothetical Vercel deployment; do not assume cloud mode works for any feature beyond polish.
 - Use `bd` for task tracking, not TodoWrite or markdown TODO lists.
+- `assemblePrompt` receives `effectiveCharacters` (Actor Bank chars merged with localStorage chars), not `characters` directly. Do not replace this with `characters` alone — it would break Actor Bank `@slug` expansion.
+- The `chars[i]` shape is `{ g, a }` OR `{ g, a, bankCharId, bankCharName, bankCharDesc }`. The `bankCharDesc` field bypasses `getCharDesc` in `DirectorSection`. Do not strip unknown fields when updating a char slot — use spread (`{ ...prev, [field]: value }`).
 
 ---
 
