@@ -4,6 +4,21 @@ export async function fetchSavedPrompts() {
   return (await res.json()).items ?? []
 }
 
+export function mergeRemoteWithLegacyById(remoteItems = [], legacyItems = []) {
+  const remote = Array.isArray(remoteItems) ? remoteItems : []
+  const legacy = Array.isArray(legacyItems) ? legacyItems : []
+  const seen = new Set(remote.map((item) => item?.id).filter(Boolean))
+  const missingLegacy = legacy.filter((item) => item?.id && !seen.has(item.id))
+  return [...remote, ...missingLegacy]
+}
+
+export function allLegacyItemsMigrated(remoteItems = [], legacyItems = []) {
+  const legacy = Array.isArray(legacyItems) ? legacyItems : []
+  if (!legacy.length) return true
+  const remoteIds = new Set((Array.isArray(remoteItems) ? remoteItems : []).map((item) => item?.id).filter(Boolean))
+  return legacy.every((item) => item?.id && remoteIds.has(item.id))
+}
+
 export async function createSavedPromptRemote({ id, name, text }) {
   const res = await fetch('/api/saved-prompts', {
     method: 'POST',
