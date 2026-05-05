@@ -1,6 +1,6 @@
 # Qwen Prompt Builder — Full Guide
 
-> **Last updated:** 2026-05-03
+> **Last updated:** 2026-05-05
 > Covers: recently completed work, full interface walkthrough, external services reference.
 
 ---
@@ -25,6 +25,29 @@
 ## 1. What Was Recently Completed
 
 The following work was completed in the most recent sessions (newest first).
+
+---
+
+### P5 — Prompt Storage Migration, Blend Fix, and Display Priority (May 5 2026)
+
+**localStorage → SQLite migration for saved prompts and workspace profiles:**
+- New `saved_prompts` and `workspace_profiles` SQLite tables added (via schema migration).
+- 7 new repository functions added to `api/lib/db/repositories.js` covering create, list, delete, rename, and upsert for both tables.
+- New frontend API client: `src/api/promptStorage.js` with wrappers for both tables.
+- New API routes: `GET/POST/DELETE/PATCH /api/saved-prompts` and `GET/PUT/DELETE /api/workspace-profiles`.
+- One-time migration on first load: if the DB is empty and localStorage has entries under `qpb_saved_prompts_v1` or `qpb_workspace_profiles_v1`, they are migrated automatically.
+
+**`blendPresetChips` fix — secondary director chips no longer injected into single-source dimensions:**
+- `light`, `shot`, and `film` chip groups are "single-source dimensions" — the blend function now uses only the dominant director's chips for these groups and never appends a secondary director's chip.
+- This prevents validation conflicts (e.g. `multiple-light`, `film-overflow`) that were triggering on every blend operation.
+
+**PromptOutput display priority fixes:**
+- `handlePolish()` now explicitly clears `selectedVariant` before initiating the polish request, so the returned polish result is always displayed rather than a stale variant.
+- A new `useEffect` clears `selectedVariant` whenever `assembledText` changes (i.e., whenever chips, scene, scenario, or characters change), preventing stale variant text from persisting after workspace edits.
+- Removed a dead-letter `useEffect` that detected manual-edit divergence from the assembled prompt but took no action.
+
+**`About_Prompt_Builder_Tab.md` corrected:**
+- 8 factual errors fixed: director count corrected to 61, deduplication algorithm description corrected, URL sharing scope clarified, polish fallback documentation corrected, SceneMatcher section added.
 
 ---
 
@@ -137,7 +160,7 @@ The main workspace. Everything here assembles into a single prompt string.
 Free-text field. Describe the scene in plain English. The system rewrites it into cinematic material language using an internal REWRITES table (textures, surfaces, architectural details).
 
 **Director Section**
-Grid of 60 directors, each with a distinct aesthetic. Select one to define the visual register of the prompt. Each director provides 3–4 pre-written scenarios per character count.
+Grid of 61 directors, each with a distinct aesthetic. Select one to define the visual register of the prompt. Each director provides 3–4 pre-written scenarios per character count.
 
 > Example directors: Agnès Varda (French New Wave), Wong Kar-wai (saturated neon nostalgia), Satyajit Ray (realist humanism), Lucile Hadžihalilović (fairytale unease).
 
@@ -219,7 +242,7 @@ A numeric score and hints based on prompt rule compliance.
 - Download as `.txt` file (includes negative prompt)
 
 **Saved prompts panel**
-Save and name snapshots of the current prompt. Persisted to `localStorage`.
+Save and name snapshots of the current prompt. Persisted to the SQLite `saved_prompts` table (migrated from localStorage in P5).
 
 **Generated image gallery**
 When ComfyUI produces images from your prompt, they appear here inline.

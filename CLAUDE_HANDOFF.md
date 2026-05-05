@@ -1,104 +1,111 @@
-# Claude Code Handoff — Prompt-o-matic
+# Claude Code Handoff — Qwen Prompt Builder
 
-## 1) Project Purpose
+This document is for a Claude Code agent starting work on this project. Read it before touching any code.
 
-Prompt-o-matic (Qwen Prompt Builder) turns natural language scene intent into structured cinematic prompts for Qwen Image workflows. It combines:
-- frontend prompt assembly (director/scenario/chips/characters),
-- optional LLM polish,
-- output tooling (variants/export/history) for repeatable prompt iteration.
+---
 
-Primary goal during takeover: improve observability and reliability without destabilizing existing generate/polish behavior.
+## 1. Current Architecture
 
-## 2) Current Architecture
+**What it is:** A local-first tool for constructing cinematic text-to-image prompts and generating AI actor portraits. Runs entirely on a developer machine — no production server.
 
-Three layers:
-- **Frontend (React + Vite)**: user controls, assembly preview, polish trigger/UI.
-- **API layer (Node)**: `/api/polish`, `/api/polish-health`.
-- **Domain core**: polish logic and provider resolution.
+**Stack:**
+- Frontend: React 18 + Vite, CSS Modules, no UI library
+- API: Vite dev-server middleware plugins in `vite.config.js` — no separate Express/Fastify server
+- Database: SQLite via `better-sqlite3`
+- Vector store: Chroma (auto-spawned on dev start)
+- Image generation: ComfyUI (localhost:8188)
+- LLM: Ollama or LM Studio (local), Anthropic Claude (cloud fallback)
 
-Key files:
-- Frontend orchestration: `src/App.jsx`
-- Prompt assembly: `src/utils/assembler.js`
-- Output/polish UI: `src/components/PromptOutput.jsx`
-- Polish API hook: `src/hooks/usePolish.js`
-- API entry: `api/polish.js`
-- Core polish logic: `api/lib/polish/polishCore.js`
-- Providers: `api/lib/llm/providers/*`
+**Four tabs:** Prompt Builder, Character Builder, Casting Room, Actor Bank. See `AGENT_HANDOFF.md` for full tab descriptions and `APPLICATION_REFERENCE.md` for exhaustive source-verified detail.
 
-## 3) Core Generate/Polish Flow
+**API surface:** ~47 routes across 10 domains, all registered in `vite.config.js`.
 
-1. User configures scene/scenario/chips/characters/director in frontend.
-2. `App.jsx` assembles base fragments via `assemblePrompt(...)`.
-3. `PromptOutput.jsx` renders assembled output.
-4. User triggers polish.
-5. `usePolish.js` builds payload and (normally) POSTs to `/api/polish`.
-6. API delegates to `runPolish()` and `polishCore`.
-7. Provider resolution selects embedded/local/cloud path.
-8. Response returns; frontend updates state and display priority:
-   - restored -> variant -> polished -> assembled fallback.
+**Database:** 10 SQLite tables. Schema in `api/lib/db/schema.js`. All query functions in `api/lib/db/repositories.js`.
 
-## 4) Recently Added Takeover/Debug Features
+---
 
-Frontend-only observability was added without backend/provider edits:
-- **Dev-only Developer debug panel** in `PromptOutput` (visible only in dev mode).
-- Debug data capture in `usePolish`:
-  - `debug.lastRequest`
-  - `debug.lastResponse` (provider/fallback when available)
-  - `debug.lastError`
-- **Copy debug JSON** action in debug panel for bug reports.
-- **Dry Run mode**:
-  - Dev-only toggle: `Dry Run (no API call)`.
-  - Builds exact `/api/polish` payload but skips fetch.
-  - Sets state to `dry-run`.
-  - Stores payload in `debug.lastRequest`.
-  - Shows `DRY RUN MODE ACTIVE` and payload preview.
+## 2. Key Files
 
-## 5) Safe Modification Zones
+| File | What it does |
+|---|---|
+| `src/App.jsx` | Root component; all Prompt Builder state; tab switching; blend, presets, profiles |
+| `src/utils/assembler.js` | `rewriteScene`, `assemblePrompt`, `dedupeFragments`, `getCharDesc` |
+| `api/lib/polishCore.js` | System prompt, provider resolution, `runPolish`, `healthCheck` |
+| `vite.config.js` | All API route handlers; Chroma auto-spawn; SSE watcher |
+| `api/lib/db/schema.js` | All CREATE TABLE SQL + MIGRATIONS array |
+| `api/lib/db/repositories.js` | All DB query functions |
+| `src/components/CastingPipelinePanel.jsx` | Entire Casting Room — Path A + B + Active Character + render system |
+| `src/components/ActorBank/ActorBankView.jsx` | Actor Bank tab root |
+| `src/components/CharacterBuilder.jsx` | Character bank entry form and management |
+| `api/lib/characterLifecycle.js` | Character lifecycle state machine |
+| `api/lib/characters/batchGeneration.js` | Batch generation + similarity classification |
+| `api/lib/characters/batchReview.js` | Batch review actions including Save to Cast |
+| `api/lib/audition/auditionOrchestrator.js` | Path A full orchestration |
+| `src/data/directors.js` | 61 directors with scenarios |
+| `src/data/constants.js` | REWRITES (29), DEFAULTS, DIRECTOR_PRESETS (61) |
 
-Preferred early-change areas:
-- `src/components/PromptOutput.jsx` (diagnostics/UI)
-- `src/hooks/usePolish.js` (frontend request handling/observability)
-- `src/utils/assembler.js` (small prompt assembly refinements)
-- docs and tests
+---
 
-Guidance: keep edits minimal, isolated, and reversible.
+## 3. Safe Modification Zones
 
-## 6) Dangerous Zones
+These areas can be changed with low risk:
 
-Avoid high-risk changes unless explicitly required:
-- `api/lib/polish/polishCore.js`
-- `api/lib/llm/providers/*`
-- provider resolution logic
-- async API pipeline behavior
-- Tauri sidecar / embedded runtime orchestration
-- ComfyUI integration
-- database/vector systems
+- `src/components/` — UI components (PromptOutput, ChipSection, DirectorSection, SceneMatcher, SceneInput, etc.)
+- `src/utils/assembler.js` — prompt assembly and scene rewriting (small changes: adding REWRITES, tweaking fragment order)
+- `src/utils/qualityScore.js`, `src/utils/promptRules.js`, `src/utils/variants.js` — scoring and rule logic
+- `src/data/directors.js` — adding/editing directors (follow existing pattern)
+- `src/data/constants.js` — adding chip presets, FEATURED_PRESETS
+- `src/hooks/` — frontend request hooks
+- `docs/` — documentation
+- Tests (`*.test.js` files) — add coverage freely
 
-## 7) Current Test/Build Status
+---
 
-Latest takeover/debug changes were validated successfully:
-- `npm test` passed
-- `npm run build` passed
+## 4. Dangerous Zones (Requires Care)
 
-## 8) Recommended First Claude Code Tasks
+Changes here can break the whole application or corrupt data:
 
-1. Add targeted tests for `usePolish` state transitions, including `dry-run`.
-2. Add small UX polish in debug panel (clear labels, no behavior changes).
-3. Standardize debug field naming/output shape for easier issue triage.
-4. Improve docs/examples in `docs/DEBUGGING.md` and keep `docs/BACKLOG.md` updated.
-5. Investigate whether provider/fallback metadata can be exposed more consistently (design-only first; no contract change without approval).
+**`vite.config.js`** — All 47+ API route handlers live here. Adding a route is safe; changing an existing route's request/response contract can break all callers. Be surgical. Test with `npm test` and `npm run build` after changes.
 
-## 9) Working Rules (Must Follow)
+**`api/lib/db/schema.js` and `api/lib/db/repositories.js`** — Database schema and all query functions. Changing column names or table structure without adding a migration will corrupt the DB. Always add backward-compatible migrations to the `MIGRATIONS` array, not by editing `CREATE_TABLES_SQL`. Never drop columns.
 
-- **Do not rewrite architecture.**
-- **Work in small, surgical patches.**
-- **Do not change backend/provider behavior unless explicitly requested.**
-- **Do not touch Tauri/ComfyUI/database/vector systems for routine tasks.**
-- **After every substantive change, run:**
-  - `npm test`
-  - `npm run build`
-- Report:
-  - changed files,
-  - behavior impact,
-  - test/build results,
-  - risks/follow-up.
+**`api/lib/polishCore.js` and `api/lib/llm/providers/`** — LLM provider resolution, system prompt, and provider clients. Changes here affect all polish behavior. The provider resolution chain is: embedded → local (Ollama/LM Studio) → cloud. Do not alter the fallback logic without understanding the full chain.
+
+**`api/lib/characterLifecycle.js`** — The lifecycle state machine for characters (`auditioned` → `portfolio_pending` → `portfolio_failed`/`ready`). Incorrect transitions leave characters in broken states that require manual DB fixes.
+
+**`api/lib/audition/auditionOrchestrator.js` and `api/lib/characters/batchGeneration.js`** — Path A and Path B orchestration. These create database records and queue ComfyUI jobs atomically. Partial failures have cleanup logic — do not rewrite.
+
+---
+
+## 5. Working Rules
+
+- Run `npm test` after any non-trivial change.
+- Run `npm run build` to confirm no build errors before committing.
+- Prefer surgical patches — change only what is needed.
+- Do not change the `/api/polish` or `/api/polish-health` contract without explicit instruction; many frontend paths depend on their exact response shape.
+- Do not add new SQLite columns without adding a migration entry in `api/lib/db/schema.js`'s `MIGRATIONS` array.
+- Director count is **61**. Do not write 60 or 25.
+- The `APP_MODE=local-studio` is the operative mode. Cloud mode is for a hypothetical Vercel deployment; do not assume cloud mode works for any feature beyond polish.
+- Use `bd` for task tracking, not TodoWrite or markdown TODO lists.
+
+---
+
+## 6. Before Starting Work
+
+1. Run `bd prime` to see the current beads issue queue.
+2. Run `npm test` to confirm the test suite is green.
+3. Read `APPLICATION_REFERENCE.md` for any subsystem you are about to touch — it was written directly from the source code and is the authoritative reference.
+4. If changing the database: find the `MIGRATIONS` array in `api/lib/db/schema.js` and add your migration there.
+5. If changing an API route: find its handler in `vite.config.js` and check all callers in `src/lib/api/` and `src/api/`.
+
+---
+
+## 7. Test and Build
+
+```bash
+npm test          # Vitest unit tests
+npm run build     # Vite production build (confirm no errors)
+npm run dev       # Start dev server (frontend + all API routes on localhost:5173)
+```
+
+Tests cover: `assembler`, `slugify`, `usePolish`, `polishCore`, `db`. Run all before committing.

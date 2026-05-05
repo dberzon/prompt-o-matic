@@ -10,13 +10,24 @@ Cinematic prompt builder for [Qwen image generation](https://chat.qwen.ai). Dire
 
 ## Features
 
-- **60 directors** — each with unique interaction scenarios for 1, 2, or 3 characters
+- **61 directors** — each with unique interaction scenarios for 1, 2, or 3 characters
 - **Character engine** — configurable gender + age, scenarios auto-rewrite with your characters
 - **Scene description** — plain-language input automatically expanded into cinematic material language
 - **Technical chips** — shot, lens, environment, texture, light, palette, film stock, qualifiers
 - **Live assembly** — prompt builds in real-time, copy with one click
 - **Presets** — Tarkovsky, Kubrick, Jarmusch, Mann night, Winter, Night noir
 - **Pluggable AI engine** — Cloud, Local Ollama, or Auto fallback
+
+## Application tabs
+
+| Tab | What it does |
+|---|---|
+| **Prompt Builder** | Assemble cinematic text-to-image prompts from director chips, scenario templates, and scene input. Optional LLM polish via Ollama, LM Studio, or Claude. |
+| **Character Builder** | Define named character bank entries with descriptions. These entries feed into the Casting Room's Path A (audition) workflow. |
+| **Casting Room** | Generate AI actor portraits through two paths: Path A (cast from a bank brief via LLM + ComfyUI) and Path B (batch-generate diverse candidates with vector similarity screening). Manage the active character's portfolio and image gallery. |
+| **Actor Bank** | Browse all saved characters with search, gender, and age filters. Read-oriented; all write actions happen in the Casting Room. |
+
+**Dependency chain:** Character Builder → Casting Room → Actor Bank. Prompt Builder is independent.
 
 ## AI engine setup
 
@@ -599,7 +610,7 @@ npm run preview    # preview the production build locally
 ```
 src/
 ├── data/
-│   ├── directors.js   — 60 directors, scenarios for 1/2/3 characters
+│   ├── directors.js   — 61 directors, scenarios for 1/2/3 characters
 │   ├── chips.js       — all chip groups + negative prompt
 │   ├── constants.js   — rewrites, defaults, presets
 │   ├── sceneBank.js   — director scene-bank entries (style keys, hints)
@@ -644,7 +655,7 @@ api/
                         portfolio, generatedImages, vector, db, llm/providers)
 ```
 
-The app exposes three tabs in `App.jsx`: **Prompt Builder**, **Character Builder**, **Casting Room** (operator pipeline panel).
+The app exposes four tabs in `App.jsx`: **Prompt Builder**, **Character Builder**, **Casting Room** (operator pipeline panel), **Actor Bank** (character library browser).
 
 ## Extending
 

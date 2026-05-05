@@ -1,425 +1,166 @@
 # AGENT HANDOFF — Qwen Prompt Builder
-**Version:** 1.0 (original handoff) — see "Status note (current)" below for what changed since v1.0  
-**Stack:** Vite + React 18, CSS Modules, no UI library; Node `/api/*` backend (serverless + Vite dev middleware), optional Tauri desktop shell with embedded local LLM sidecar  
-**Deploy targets:** Vercel (web SPA + serverless API) and Tauri desktop builds  
-**Live purpose:** A cinematic prompt-assembly tool for Qwen text-to-image generation, plus character/casting and ComfyUI operator pipeline.
 
-> **Status note (current).** This document captures the original v1.0 handoff. The project has moved well beyond it. For up-to-date guidance, prefer:
->
-> - [README.md](README.md) — features, project structure, deploy, env vars
-> - [docs/TECHNICAL.md](docs/TECHNICAL.md) — architecture, runtime modes, API domains
-> - [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md) and [docs/TAKEOVER_FLOW.md](docs/TAKEOVER_FLOW.md) — generate/polish flow
-> - [docs/DEBUGGING.md](docs/DEBUGGING.md) — dev debug panel and bug-report flow
-> - [docs/CASTING_ROOM_PLAN.md](docs/CASTING_ROOM_PLAN.md) — Character Builder + Casting Room phase plan
->
-> Concrete drift from v1.0:
-> - Backend exists: `api/*.js` exposes `/api/polish`, `/api/polish-health`, character batches, prompt-pack compiler, ComfyUI queue/status/ingest, generated-image review, and vector maintenance routes (see `vite.config.js` and `api/`).
-> - Director count is **60**, not 25 (`src/data/directors.js`).
-> - Component set is much larger than the v1.0 tree below (adds `CharacterBuilder`, `CastingPipelinePanel`, `BatchExplorer`, `EmbeddedSetup`, `ReferenceBoard`, `CommandPalette`, `SceneDeck`, `SceneMatcher`, `SceneScaffold`).
-> - The app has three tabs: **Prompt Builder**, **Character Builder**, **Casting Room**.
-> - Vitest is configured and there are tests for `assembler`, `slugify`, `usePolish`, `polishCore`, and `db`.
-> - Many v1.0 "to implement" items in §7 are now shipped (URL share, .txt export, prompt history, prompt diff, custom presets, AI polish via serverless function). See annotations in §7.
+**Stack:** React 18 + Vite frontend, Vite middleware API (no separate server), better-sqlite3 SQLite, Chroma vector DB, ComfyUI, LLM providers (Ollama / LM Studio / Claude cloud)
+**Deploy mode:** Local-only. `APP_MODE=local-studio`. No production cloud deployment.
 
 ---
 
-## 1. WHAT THIS IS AND WHY IT EXISTS
+## What This Application Does
 
-This is a web application that helps users generate high-quality, cinematically-informed prompts for the Qwen image generation model. The core problem it solves: Qwen (and most T2I models) produces generic, over-saturated, AI-smooth output when given casual prompts. It responds well to specific material language, named film stocks, physical light descriptions, and compositional language borrowed from cinematography.
-
-The app encodes this domain knowledge into a structured tool:
-
-1. **Director register** — 25 real film directors, each with a unique visual/interaction signature. Selecting a director loads 3–4 "interaction scenarios" for the chosen number of characters. These scenarios are pre-written cinematographic descriptions that reflect how each director would actually frame and position people in a scene.
-
-2. **Character engine** — Users choose 1–3 characters, set gender and age for each. The system generates readable character descriptors (e.g. "man in his mid-forties") and injects them into the selected scenario text via template literals.
-
-3. **Scene description field** — Plain-language free text input. The assembler runs it through a rewrite table that expands generic terms into specific material language ("coal mine" → "coal mine headframe in background, rusted steel tower, slag heap pale against the sky").
-
-4. **Technical chip grid** — Collapsible sections for: Shot + Lens, Environment + Texture, Light, Palette + Grade, Film Stock + Qualifiers. Each chip is a short phrase that becomes part of the final prompt.
-
-5. **Live assembly** — All inputs are combined in a specific cinematographically-correct order (shot → lens → scenario/subject → scene → environment → light → color → film → qualifiers) and displayed as the final prompt. Copy with one click.
-
-6. **Negative prompt** — A fixed string that prevents common AI image failures (CGI look, studio lighting, perfect faces, etc).
+Qwen Prompt Builder (QPB) is a local-first creative tool for constructing, managing, and rendering cinematic text-to-image prompts, targeting the Qwen image generation model via a locally-running ComfyUI instance. It combines a structured prompt assembly interface (director aesthetics, scenario templates, chip modifiers) with a full character casting and portfolio pipeline: users describe characters, generate AI actor profiles via LLM, queue portrait renders through ComfyUI, and manage the resulting image library. The entire application runs on a developer machine — Vite's dev server serves both the React frontend and all API routes as middleware plugins from `vite.config.js`.
 
 ---
 
-## 2. PROJECT STRUCTURE
+## Four Tabs and Their Dependency Relationships
 
-> Original v1.0 tree below. Current tree is documented in [README.md → "Project structure"](README.md#project-structure). Notable additions since v1.0: `api/` backend with serverless handlers and `api/lib/` domain modules; `src/hooks/`, `src/lib/`, expanded `src/data/` and `src/utils/`; and the Character Builder + Casting Room components.
+**Tab 1 — Prompt Builder** (`activeTab='builder'`)
+Constructs and refines a single text-to-image prompt from freetext scene input, director style chips (61 directors), scenario templates, and an optional LLM polish pass. This tab is independent of the other three — it does not read from or write to the character/casting database, except that Character Builder entries can be referenced as `@slug` tokens in the scene input.
 
-```
-qwen-prompt-builder/
-├── index.html                     # Google Fonts: Syne + JetBrains Mono
-├── vite.config.js
-├── package.json
-├── public/
-│   └── favicon.svg
-└── src/
-    ├── main.jsx                   # ReactDOM.createRoot entry
-    ├── App.jsx                    # All state lives here, two-column layout
-    ├── App.module.css             # Grid layout: 1fr / 420px, sticky right panel
-    ├── index.css                  # CSS custom properties, global resets
-    ├── data/
-    │   ├── directors.js           # 25 directors, all scenarios (v1.0; now 60)
-    │   ├── chips.js               # CHIP_GROUPS array + NEGATIVE_PROMPT string
-    │   └── constants.js           # REWRITES array, DEFAULTS object, PRESETS object
-    ├── utils/
-    │   └── assembler.js           # assemblePrompt(), rewriteScene(), getCharDesc()
-    └── components/
-        ├── Header.jsx / .module.css
-        ├── SceneInput.jsx / .module.css
-        ├── DirectorSection.jsx / .module.css
-        ├── ChipSection.jsx / .module.css
-        └── PromptOutput.jsx / .module.css
-```
+**Tab 2 — Character Builder** (`activeTab='characters'`)
+Creates and manages named character bank entries stored in the `character_bank_entries` SQLite table and mirrored to `localStorage['qpb_characters_v1']`. These entries are the input for the Casting Room's Path A (audition) flow. The `@slug` token system in the Prompt Builder reads from this same localStorage key.
+
+**Tab 3 — Casting Room** (`activeTab='pipeline'`)
+Generates AI actor portfolios through two paths:
+- **Path A (Audition):** Select a bank entry → LLM generates N character profiles → ComfyUI renders portrait views → user reviews and approves candidates.
+- **Path B (Batch):** Generate diverse character candidates with vector similarity screening → review/approve → save to cast.
+Also hosts the Active Character section for renaming, archiving, compiling prompt packs, queuing portfolio renders, and managing the generated image gallery.
+
+**Tab 4 — Actor Bank** (`activeTab='actorBank'`)
+Read-oriented browser of the `characters` table. Shows rendered character cards with filters (search, gender, age). Most write actions happen in the Casting Room. Selecting a character in the Actor Bank does NOT affect the Casting Room's active character — the tabs do not communicate.
+
+**Dependency chain:**
+- Character Builder → Casting Room Path A (bank entries consumed by audition)
+- Casting Room → Actor Bank (characters table is what Actor Bank displays)
+- Prompt Builder is independent (reads Character Builder's localStorage for `@slug` expansion only)
+- Actor Bank has no write relationship with Prompt Builder
 
 ---
 
-## 3. DATA ARCHITECTURE
+## Tech Stack
 
-### 3.1 directors.js
-
-The core data file. Exports `DIRECTORS` (object) and `DIRECTOR_LIST` (array of keys).
-
-Each director entry:
-```js
-{
-  name: 'Full Name',          // displayed in the meta panel
-  short: 'Short',             // max ~10 chars, shown in chip grid
-  note: 'One-line aesthetic signature describing their visual logic',
-  s: {
-    1: (c) => ['scenario string with ${c[0]}', ...],   // 3-4 scenarios
-    2: (c) => ['scenario with ${c[0]} and ${c[1]}', ...],
-    3: (c) => ['scenario with ${c[0]}, ${c[1]}, ${c[2]}', ...],
-  }
-}
-```
-
-`c` is an array of character descriptor strings generated by `getCharDesc()`. The `s` object maps character count (1/2/3) to a function that takes `c` and returns an array of scenario strings.
-
-**Original 25 directors (v1.0):**
-tarkovsky, kubrick, lynch, wongkarwai, malick, jarmusch, haneke, antonioni, kurosawa, fellini, almodovar, parkchanwook, scorsese, depalma, belatarr, apichatpong, ceylan, leone, michaelmann, fincher, eggers, deltoro, parajanov, clairedenis, villeneuve
-
-**Current state:** `src/data/directors.js` ships **60** directors. Since v1.0 the following keys were added: `angelopoulos, bigan, tsaiming, hou, ozu, bresson, akerman, dreyer, mungiu, kiarostami, kaurismaki, wenders, coppola, yangedward, ramsay, bunuel, jodorowsky, argento, maddin, zhangyimou, jeunet, refn, pta, noe, bergman, melville, kitano, glazer, reichardt, ridleyscott, greenaway, lanthimos, aster, guadagnino, carax`.
-
-### 3.2 chips.js
-
-Exports `CHIP_GROUPS` (array) and `NEGATIVE_PROMPT` (string).
-
-`CHIP_GROUPS` structure:
-```js
-[
-  {
-    id: 'shot-lens',           // section identifier
-    label: '01 — Shot + Lens', // displayed in the collapsible header
-    note: 'optional note...',  // shown inside the section body if present
-    subsections: [
-      {
-        id: 'shot',            // THIS is the key used in the chips state object
-        label: 'Shot scale',   // shown as a sub-label (null = no label)
-        chips: [
-          { value: 'extreme wide shot', label: 'extreme wide' }
-          // value = what goes into the prompt
-          // label = what's shown on the button
-        ]
-      }
-    ]
-  }
-]
-```
-
-Chip group IDs currently in use: `shot`, `lens`, `env`, `texture`, `light`, `color`, `film`, `qual`
-
-### 3.3 constants.js
-
-- `REWRITES` — array of `[RegExp, replacementString]` pairs. Applied to scene description text in order.
-- `DEFAULTS` — object of fallback values used when no chip is selected but scene/scenario content exists (shot, lens, light, color, film, qual).
-- `PRESETS` — named chip configurations: `{ label, chips: { groupId: [values] } }`. Applied via the preset buttons.
-
-### 3.4 assembler.js
-
-Three exports:
-
-**`rewriteScene(rawString) → string`**  
-Applies REWRITES array, strips trailing period, lowercases first char for mid-sentence embedding.
-
-**`assemblePrompt({ scene, scenario, chips }) → string[]`**  
-Returns an ordered array of prompt fragment strings. Order:
-1. shot (from chips.shot or DEFAULTS.shot if hasMeat)
-2. lens values (chips.lens or DEFAULTS.lens)
-3. scenario string (if selected)
-4. rewritten scene (if provided)
-5. chips.env values
-6. chips.texture values
-7. light (chips.light or DEFAULTS.light)
-8. color (chips.color or DEFAULTS.color)
-9. film (chips.film or DEFAULTS.film)
-10. qual (chips.qual or DEFAULTS.qual)
-
-`hasMeat` = `!!(scene.trim() || scenario)` — determines whether to inject defaults.
-
-**`getCharDesc(gender, age) → string`**  
-Maps gender ('man'|'woman'|'person') + age ('child'|'teen'|'20s'|'30s'|'40s'|'50s'|'60s'|'elderly') to a natural-language descriptor used in scenario template strings.
+| Layer | Technology |
+|---|---|
+| Frontend | React 18 + Vite, CSS Modules, no UI library |
+| API | Vite dev-server middleware plugins in `vite.config.js` (no Express/Fastify) |
+| Database | SQLite via `better-sqlite3` (`api/lib/db/sqlite.js`) |
+| Vector store | Chroma (`localhost:8000`, auto-spawned by vite.config.js on dev start) |
+| Image generation | ComfyUI (`localhost:8188`) |
+| LLM — local | Ollama (`localhost:11434`) or LM Studio (configurable URL) |
+| LLM — cloud | Anthropic Claude API (fallback; requires `ANTHROPIC_API_KEY`) |
+| Embeddings | Ollama `nomic-embed-text` or LM Studio `nomic-embed-text-v1.5` |
+| Tests | Vitest (`npm test`) |
 
 ---
 
-## 4. STATE ARCHITECTURE (App.jsx)
+## API Surface (10 Domains, 47+ Routes)
 
-All state is in App.jsx, passed down as props. No global store, no context. State shape:
+All routes are registered in `vite.config.js` as Vite middleware. Prefix: `/api/`.
 
-```js
-scene: string                    // raw scene description text
-selectedDir: string | null       // key from DIRECTORS object
-charCount: number                // 1 | 2 | 3
-chars: [{ g: string, a: string }]  // array of 3 always, only first charCount used
-                                    // g = gender, a = age
-scenario: string | null          // the full scenario text string (not an index)
-chips: { [groupId]: string[] }   // selected chip values per group
-```
-
-Derived state (via `useMemo`):
-```js
-prompt = assemblePrompt({ scene, scenario, chips })  // string[]
-```
-
-Key handler patterns:
-- `toggleChip(groupId, value)` — toggles a value in/out of chips[groupId]
-- `loadPreset(key)` — replaces entire chips state with preset.chips
-- `handleDirSelect(dirKey)` — toggles selectedDir, clears scenario
-- `handleScenario(s)` — toggles scenario (deselects if same string)
-- `handleCharChange(index, field, value)` — updates chars[index], clears scenario
-- `handleCharCount(n)` — updates charCount, clears scenario
-
----
-
-## 5. DESIGN SYSTEM
-
-### Typography
-- `Syne` — all UI elements (headings, labels, chips, buttons)
-- `JetBrains Mono` — prompt output text, scenario cards, negative prompt, code
-
-### Color tokens (CSS custom properties in index.css)
-```css
---bg: #0b0b0b          /* page background */
---surface: #111111      /* card/panel background */
---surface-2: #181818    /* elevated surface (section headers) */
---surface-3: #202020    /* hover states */
---border: #272727       /* default border */
---border-2: #333333     /* stronger border, focus states */
---text: #e0d9ce         /* primary text — warm off-white */
---text-2: #80786e       /* secondary text */
---text-3: #4a4540       /* muted text, placeholders */
---accent: #c9a85c       /* amber/gold — active states, links */
---accent-dim: rgba(201, 168, 92, 0.12)  /* active chip background */
---accent-glow: rgba(201, 168, 92, 0.05) /* subtle accent background */
---red: #c96060
---green: #6aaa82
-```
-
-### Layout
-- Two-column grid: `1fr 420px` on desktop (≥960px), single column on mobile
-- Left panel: all controls, `padding-right: 32px`
-- Right panel: `position: sticky; top: 24px` — prompt output always visible
-- Max-width: 1400px, centered, 24px horizontal padding
-
-### Component patterns
-- All components use CSS Modules (`.module.css`)
-- Collapsible sections: controlled by local `useState(false)` in each component
-- Active/inactive chip states: CSS class toggling (`.chipActive`, `.dirActive`, etc.)
-- No animation library — transitions via CSS `transition` property only
-
----
-
-## 6. PROMPT ASSEMBLY LOGIC — CINEMATOGRAPHIC RATIONALE
-
-The order matters. Each position in the output serves a specific function:
-
-| Position | Content | Why |
+| Domain | Routes | Gating |
 |---|---|---|
-| 1 | Shot type | Sets the compositional frame before any content |
-| 2 | Lens | Establishes focal length, depth, compression |
-| 3 | Scenario | The subject — what the figures are doing/being |
-| 4 | Scene | Environment and context around the subject |
-| 5 | Env chips | Additional architectural/spatial specifics |
-| 6 | Texture | Surface and material detail |
-| 7 | Light | How the space is lit — one source only |
-| 8 | Color | Grade/palette — applied to everything above |
-| 9 | Film | Stock character, grain, softness |
-| 10 | Qualifiers | Anti-CGI anchors, documentary register |
-
-**Key rules encoded in the system:**
-- Subjects are always passive — environments act on them
-- Light descriptions are physical, never metaphorical ("flat overcast light, no shadows" not "moody lighting")
-- One light source maximum
-- Faces/figures never idealized — non-idealized faces, ordinary features
-- Material specificity over mood language ("Kodak Vision3 5219" beats "cinematic")
-
----
-
-## 7. FEATURES TO IMPLEMENT (PRIORITIZED)
-
-> Status legend (added during doc audit): **[SHIPPED]** = implemented, **[PARTIAL]** = some pieces present, **[OPEN]** = still a candidate. The original v1.0 text is preserved below for context.
-
-### Priority 1 — Core UX improvements
-
-**7.1 Editable output field** [PARTIAL — `PromptOutput.jsx` supports edit/restore + variant pinning + apply-diff flow]  
-The assembled prompt should be an editable `<textarea>` rather than a read-only display. Users currently have to copy → paste into an external editor to tweak. The textarea should auto-grow with content. Changes to the textarea should NOT sync back to the chip state (one-way: chips → textarea, not textarea → chips). Add a "Reset to assembled" button to revert manual edits.
-
-**7.2 Prompt history / session memory** [SHIPPED — `src/hooks/useWorkspaceHistory.js` provides undo/redo; profiles stored in `qpb_workspace_profiles_v1`]  
-Store the last N prompts (N=10) in `localStorage`. Show them in a collapsible "Recent prompts" panel in the right column. Each entry shows a truncated preview and a "Restore" button. Use timestamps as keys. Structure: `[{ id, timestamp, prompt: string[], scene, scenario, dirKey }]`.
-
-**7.3 Mobile prompt output sticky bottom bar**  
-On mobile (<960px), the prompt output moves above the controls. This is not ideal — users scroll through all controls then lose context. Instead: show a slim sticky bar at the bottom of the screen on mobile showing prompt character count + a "View & Copy" button that opens a modal/sheet with the full prompt.
-
-**7.4 Section open/close persistence**  
-Currently all collapsible sections reset to closed on page load. Save open/closed state to `localStorage` with key `qpb_sections`. Each section has an `id` — use that as the key.
-
-### Priority 2 — Prompt quality improvements
-
-**7.5 Composition modifiers panel**  
-Add a new chip section "06 — Composition" between Environment and Light. This is a gap in the current system — there's nothing that specifies WHERE in the frame subjects are placed. Chips to include:
-- `figures at left third of frame, large negative space right`
-- `figures at right third of frame`
-- `figure centered, symmetrical composition` (Kubrick)
-- `figures small, placed low in frame, sky dominant`
-- `figure in far background, environment fills frame`
-- `blurred foreground element obscuring part of frame`
-- `figures seen from high angle, camera looking down`
-- `worm's eye, camera looking up at figures`
-- `figures in silhouette against bright background`
-
-**7.6 Time of day / weather quick-set**  
-A small button row (not chips, just quick-set buttons) that pre-selects a combination of light + texture + color chips for common conditions:
-- Dawn, Morning overcast, Midday harsh, Golden hour, Blue hour, Night rain, Night clear, Fog
-Each button applies a specific chip combination. Should merge with (not replace) existing chip selections.
-
-**7.7 Garment / clothing expander in scene rewriting**  
-The current REWRITES table handles locations and weather but not clothing. Add rewrite rules for common garment terms so they get expanded into material-specific language. Examples:
-- `gray raincoat` → `gray wool raincoat, collar turned up, dark with moisture at the shoulders`
-- `overcoat` → `heavy wool overcoat, worn at the elbows`
-- `suit` → `dark suit, not recently pressed`
-- `uniform` → `utilitarian uniform, worn and faded`
-- `dress` → `simple dress, unremarkable, the fabric slightly creased`
-
-### Priority 3 — New features
-
-**7.8 URL state sharing** [SHIPPED — see `encodeShareState` / `decodeShareState` in `src/App.jsx` and the Share action in `PromptOutput.jsx`]  
-Encode the full app state into the URL hash (`window.location.hash`) as a base64-encoded JSON string. This lets users share prompts. Decode on load. State to encode: `{ scene, dirKey, charCount, chars, scenario, chips }`. Keep it opt-in — a "Share" button copies the URL, not automatic push-state on every change (too aggressive).
-
-Implementation note: the scenario string can be very long — consider storing the scenario index instead of the full string, and reconstructing it from the director data on load. But be careful: if the scenario list changes between versions, indices become stale. Storing the full string is safer for now.
-
-**7.9 Favorites / saved prompts**  
-A "Save" button on the output panel that saves the current prompt to `localStorage` under a user-given name. Display saved prompts in a sidebar panel or modal. Each saved entry should store: name, full prompt text, director key, scene, timestamp. Allow rename and delete.
-
-**7.9 Favorites / saved prompts** [PARTIAL — workspace profiles via `qpb_workspace_profiles_v1` cover most of this; no explicit "Save with name" panel]
-
-**7.10 Custom director slots**  
-Allow users to create 2–3 custom director entries. Each requires: name, short name, note, and 3–4 scenario templates per character count. Store in `localStorage`. Render in the director grid after the built-in 25. This is a power-user feature — put it behind an "Advanced" toggle or a separate "Custom" section.
-
-**7.11 Prompt diff view** [SHIPPED — `applyDiff` flow in `App.jsx` + summarization helper; pin/clear controls in `PromptOutput.jsx`]  
-When a user has manually edited the output textarea (see 7.1), show a subtle visual diff between the assembled-from-chips version and the manually-edited version. Highlight additions in a muted green, removals struck through in red. This helps users understand what they've changed and decide whether to keep or revert.
-
-**7.12 Export as .txt** [SHIPPED — `src/utils/downloadPromptFile.js`, used by `PromptOutput.jsx`]  
-A download button on the output panel that saves the prompt as a `.txt` file. Filename format: `qpb-[director-short]-[timestamp].txt`. Include the negative prompt as a second line with a `NEGATIVE:` prefix. Simple — just `Blob + createObjectURL`.
-
-**7.13 Image reference upload (visual palette)**  
-An optional image upload on the right panel. The image is displayed as a small thumbnail. This is a UX hint feature only (not connected to any API) — it helps users keep a visual reference in view while building the prompt. No processing needed. Store as data URL in state (not localStorage — too large).
-
-### Priority 4 — Advanced / API-connected
-
-**7.14 AI scene expander** [SHIPPED as `/api/polish` — `api/polish.js` + `api/lib/polishCore.js`; cloud (Claude), local (Ollama / LM Studio), and embedded (Tauri sidecar) providers under `api/lib/llm/providers/`]  
-Re-attempt the Anthropic API integration that failed in the widget version due to CORS/header issues. The correct approach for a Vite/React app (not a sandboxed widget) is to call the API from a **Vercel serverless function** (`/api/expand.js`) which proxies the request server-side, avoiding CORS entirely.
-
-File: `api/expand.js`
-```js
-export default async function handler(req, res) {
-  const { scene, scenario, chips } = req.body
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 800, ... })
-  })
-  const data = await response.json()
-  res.json(data)
-}
-```
-
-Add `ANTHROPIC_API_KEY` to Vercel environment variables. The frontend calls `/api/expand` not `api.anthropic.com` directly. This is the correct architecture.
-
-**7.15 Qwen direct integration**  
-If Qwen exposes a public API, add a "Generate image" button that submits the prompt directly and displays the result image in the right panel. Would need an API key input (stored in localStorage, never sent to any server other than Qwen's own endpoint).
+| Polish | `POST /api/polish`, `GET /api/polish-health` | Always available |
+| Characters (CRUD + lifecycle) | `GET/DELETE /api/characters`, `POST /api/character-lifecycle`, `POST /api/character-rename`, `POST /api/character-archive`, `POST /api/character-restore` | `ENABLE_CHARACTER_BATCH_API` for list/delete |
+| Casting / Audition (Path A) | `POST /api/audition/generate` | None |
+| Batch pipeline (Path B) | `POST /api/characters-generate-batch`, `GET /api/character-batches`, `GET /api/character-batch`, `GET /api/character-batch-candidates`, `POST /api/character-batch-candidate-approve/reject/reconsider/save/mutate`, `POST /api/character-batch-refill`, `POST /api/batch-candidate-preview`, `POST /api/batch-candidate-preview-image` | `ENABLE_CHARACTER_BATCH_API` |
+| Prompt packs | `POST /api/prompt-pack-compile-character`, `POST /api/prompt-pack-compile-batch`, `GET /api/prompt-packs` | `ENABLE_PROMPT_PACK_API` |
+| Portfolio | `POST /api/character-portfolio-plan`, `POST /api/character-portfolio-queue`, `POST /api/actor-more-takes` | `ENABLE_PROMPT_PACK_API` + `ENABLE_COMFY_API` |
+| ComfyUI integration | `GET /api/comfy-status`, `GET /api/comfy-workflows`, `POST /api/comfy-validate-workflow`, `POST /api/comfy-queue-prompt-pack`, `POST /api/comfy-queue-character`, `GET /api/comfy-job-status`, `POST /api/comfy-jobs-status`, `GET/POST/PATCH /api/comfy-jobs`, `POST /api/comfy-ingest-outputs`, `POST /api/comfy-ingest-many` | `ENABLE_COMFY_API` |
+| Generated images | `GET /api/generated-images`, `POST /api/generated-image-approve`, `POST /api/generated-image-reject`, `GET /api/generated-image-view` | `ENABLE_GENERATED_IMAGES_API` |
+| Vector / Chroma | `GET /api/vector-status`, `POST /api/vector-index-character`, `POST /api/vector-reindex-characters`, `POST /api/vector-similar-by-character`, `POST /api/vector-similar-by-text`, `GET /api/chroma-health` | `ENABLE_VECTOR_MAINTENANCE_API` |
+| Character bank entries | `GET/POST/PUT/DELETE /api/character-bank` | None |
+| Actor candidates + auditions | `GET/POST/PUT/DELETE /api/actor-candidates`, `GET/POST/PUT/DELETE /api/actor-auditions` | None |
+| Saved prompts | `GET/POST/DELETE/PATCH /api/saved-prompts` | None |
+| Workspace profiles | `GET/PUT/DELETE /api/workspace-profiles` | None |
+| Reference image analysis | `POST /api/analyze-reference-image` | None |
+| Character optimization | `POST /api/optimize-character` | None |
+| SSE render events | `GET /api/render-events` | None |
 
 ---
 
-## 8. KNOWN LIMITATIONS AND TECHNICAL DEBT
+## Database Tables (10 Tables)
 
-1. **No TypeScript** — The project uses plain JS. If extending significantly, migrating to TS would help — especially the director data file benefits from typed interfaces.
+Schema defined in `api/lib/db/schema.js`. All query functions in `api/lib/db/repositories.js`.
 
-2. **Scenario stored as full string** — `scenario` state holds the complete scenario text, not an index. This is robust against data changes but means the URL sharing feature (7.8) must store verbose text.
-
-3. ~~**No test coverage**~~ — Vitest is now configured. Existing tests include `src/utils/assembler.test.js`, `src/utils/slugify.test.js`, `src/hooks/usePolish.test.js`, `api/lib/polishCore.test.js`, `api/lib/db/db.test.js`. Run with `npm test`.
-
-4. **Rewrite order sensitivity** — The REWRITES array applies patterns sequentially. A later pattern can match something introduced by an earlier rewrite. This has not caused issues yet but could if new rewrites are added carelessly. Each rewrite should be checked against all existing rewrite outputs.
-
-5. **Mobile layout** — The current single-column mobile layout puts the output above the controls (via `order: -1`). This is functional but not ideal — see feature 7.3 for the proper fix.
-
-6. **Director chip grid overflow** — With 25 directors at varying label lengths, the flex-wrap grid can look uneven on narrow screens. Consider a CSS grid with `auto-fill` and `minmax(80px, 1fr)` columns for a more even layout.
-
-7. **No loading/error state in ChipSection** — Currently if chip data were ever async, there's no skeleton or error boundary. Not a current issue but worth noting.
-
----
-
-## 9. EXTENDING THE DIRECTOR LIST
-
-To add a new director:
-
-1. Add an entry to `DIRECTORS` in `src/data/directors.js`
-2. The `DIRECTOR_LIST` is auto-generated from `Object.keys(DIRECTORS)` — no need to update it manually
-
-Scenario writing guidelines (critical for quality):
-- Scenarios describe a STATIC IMAGE, not an action sequence
-- Figures should be passive — absorbed, waiting, unaware, not performing
-- The environment must feel larger than the human subject in most cases
-- Never use abstract mood words — physical descriptions only
-- Scenarios should feel like a camera operator's note, not a story synopsis
-- Each director's 4 scenarios should each feel distinctly different from the others
-- Lean into each director's most recognizable compositional signature
+| Table | Purpose |
+|---|---|
+| `characters` | Generated character profiles (output of audition or batch-save). Has `lifecycle_status`, `embedding_status`, `archived_at`, `last_rendered_at` columns. |
+| `character_bank_entries` | Character descriptions authored in the Character Builder tab (input specs for audition). Keyed by slug. |
+| `prompt_packs` | Compiled prompt packs per character per view angle. Used to queue ComfyUI jobs. |
+| `generated_images` | Records of ComfyUI output images with metadata (approve/reject state, view type). |
+| `character_batches` | Batch generation sessions (Path B). Tracks batch status and summary. |
+| `character_batch_candidates` | Individual LLM-generated candidates within a batch. Has review/classification state. |
+| `actor_candidates` | Actor candidate records linked to bank entries and prompt packs. |
+| `actor_auditions` | Audition records linking actor candidates to bank entries with status. |
+| `saved_prompts` | Named prompt snapshots from the Prompt Builder (migrated from localStorage). |
+| `workspace_profiles` | Named workspace state snapshots for the Prompt Builder (migrated from localStorage). |
+| `comfy_jobs` (migration 6) | Persistent ComfyUI job tracking — survives page reloads. Keyed by `prompt_id` (UNIQUE). |
 
 ---
 
-## 10. DEPLOYMENT REFERENCE
+## Character Lifecycle States
 
-**Vercel auto-config (zero setup needed):**
-- Framework: Vite (auto-detected)
-- Build command: `npm run build`
-- Output dir: `dist`
-- Install command: `npm install`
+Valid values for `lifecycle_status` column in `characters` table:
 
-**Environment variables needed for feature 7.14:**
-- `ANTHROPIC_API_KEY` — set in Vercel project settings → Environment Variables
+| Status | Meaning |
+|---|---|
+| `auditioned` | Default on creation. Character generated but no portfolio render queued. |
+| `preview` | Temporary — used only for batch preview renders. Deleted after image ingestion. |
+| `portfolio_pending` | Portfolio render queued to ComfyUI. |
+| `portfolio_failed` | All portfolio jobs failed. Requires manual re-queue. |
+| `ready` | At least one generated image has been approved. |
 
-**Domain:** Any custom domain can be set in Vercel project settings → Domains.
-
-**Branch deployments:** Vercel auto-deploys preview URLs for every Git branch. Useful for testing new director additions without touching production.
-
----
-
-## 11. CONVERSATION CONTEXT SUMMARY
-
-This tool was developed iteratively through a conversation starting from:
-1. A formula system for Qwen prompting (director aesthetic, shot, light, film stock)
-2. An interactive widget (HTML/JS in a chat artifact) with chip selection
-3. Addition of a free-text scene description field with smart rewriting
-4. Addition of director × character × scenario engine (5 directors initially)
-5. Expansion to 25 directors with full scenario coverage
-6. Migration to a proper React/Vite application for Vercel deployment
-
-The primary user (Dmitri) is a music producer and mixing/mastering engineer based in Czech Republic with strong interest in cinema aesthetics, Soviet/Eastern European visual culture, and AI image generation. The tool reflects his preference for non-CGI, film-grain, cinematically-grounded image outputs over generic AI aesthetics. He is technically fluent and communicates directly.
+Soft-archive is separate: `archived_at` column (ISO timestamp if archived, NULL if active).
 
 ---
 
-*Handoff document generated for qwen-prompt-builder v1.0*  
-*All source files are in the zip provided alongside this document.*
+## Key Files
+
+| File | Role |
+|---|---|
+| `src/App.jsx` | Root component; all Prompt Builder state; tab switching; blend, presets, profiles |
+| `src/utils/assembler.js` | `rewriteScene`, `assemblePrompt`, `dedupeFragments`, `getCharDesc` |
+| `api/lib/polishCore.js` | System prompt, provider resolution, `runPolish`, `healthCheck` |
+| `vite.config.js` | All 47+ API route handlers registered as Vite middleware; Chroma auto-spawn; SSE watcher |
+| `api/lib/db/schema.js` | All CREATE TABLE SQL + MIGRATIONS array |
+| `api/lib/db/repositories.js` | All DB query functions |
+| `src/components/CastingPipelinePanel.jsx` | Entire Casting Room — Path A + B + Active Character + render system |
+| `src/components/ActorBank/ActorBankView.jsx` | Actor Bank tab root |
+| `src/components/CharacterBuilder.jsx` | Character bank entry form and management |
+| `api/lib/characterLifecycle.js` | Lifecycle transition functions |
+| `api/lib/characters/batchGeneration.js` | Batch generation, similarity thresholds, classification |
+| `api/lib/audition/auditionOrchestrator.js` | Path A full orchestration |
+| `src/data/directors.js` | 61 directors with scenarios |
+| `src/data/constants.js` | REWRITES (29), DEFAULTS, DIRECTOR_PRESETS (61), FEATURED_PRESETS (6) |
+
+---
+
+## What Is In-Progress or Not Yet Built
+
+The following features are absent from the current codebase (from APPLICATION_REFERENCE.md Section 9):
+
+- **Actor Bank full implementation:** The Actor Bank tab is a functional read-only browser. Advanced features are not built: direct "Cast from Actor Bank" integration, Actor Bank ↔ Prompt Builder `@slug` token integration, lifecycle management in the Actor Bank, advanced portfolio management actions. The infrastructure (tables, APIs) exists; the UI layer is minimal. This is tracked in beads issue `qwen-prompt-builder-pv9`.
+- **Prompt Builder ↔ Actor Bank character integration:** The `@slug` token system reads from the Character Builder's localStorage, not from the Actor Bank's `characters` table. A rendered Actor Bank character cannot be referenced as `@slug` in the Prompt Builder. Not built.
+- **Reference image AI Vision extraction:** The `POST /api/analyze-reference-image` route exists but AI Vision extraction from reference images is not implemented in the current code. The ReferenceBoard component exists but serves as a visual reference holder only.
+- **Composition Modifiers panel:** Not present in the current chip groups.
+- **Time / Weather Quick-Set buttons:** Not present in the current UI.
+- **Garment / Clothing Expander panel:** Not present as a panel; some garment rewrites exist in the REWRITES table.
+
+---
+
+## Director Count
+
+**61 directors** — verified by counting top-level keys in `src/data/directors.js`. Do not write 60 or 25.
+
+---
+
+## External Service Dependencies
+
+| Service | Default URL | What breaks if absent |
+|---|---|---|
+| ComfyUI | `localhost:8188` | All image rendering; audition/portfolio queue returns 502 |
+| Ollama | `localhost:11434` | Polish falls back to cloud; vector indexing fails if primary provider |
+| LM Studio | configurable | Same as Ollama if configured as primary |
+| Chroma | `localhost:8000` | Similarity checks skip silently; batch dedup bypassed gracefully |
+| Anthropic Claude API | cloud | Cloud polish fails with 4xx if key absent; local providers remain functional |
+
+Chroma is auto-spawned by `vite.config.js` on dev server start (`chroma run --path ./chroma_data`). On Windows, this runs via `cmd /c chroma run ...`.
