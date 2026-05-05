@@ -600,6 +600,11 @@ export default function CastingPipelinePanel() {
           return [...map.values()]
         })
         for (const charId of newSuccessCharIds) backgroundCompilePromptPacks(charId)
+      } catch { /* non-critical — characters appear after page refresh if this fails */ }
+    } catch (err) { setAuditionError(err?.message || 'Audition generation failed') }
+    finally { setAuditionRunning(false) }
+  }
+
   async function handleApproveAndQueuePortfolio(auditionId, characterId) {
     setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: true, error: null } }))
     try {
