@@ -14,25 +14,26 @@ Qwen Prompt Builder (QPB) is a local-first creative tool for constructing, manag
 ## Four Tabs and Their Dependency Relationships
 
 **Tab 1 — Prompt Builder** (`activeTab='builder'`)
-Constructs and refines a single text-to-image prompt from freetext scene input, director style chips (61 directors), scenario templates, and an optional LLM polish pass. This tab is independent of the other three — it does not read from or write to the character/casting database, except that Character Builder entries can be referenced as `@slug` tokens in the scene input.
+Constructs and refines a single text-to-image prompt from freetext scene input, director style chips (61 directors), scenario templates, and an optional LLM polish pass. Actor Bank characters are available in two ways: (1) character slots can be linked to a named Actor Bank character — the linked character's description replaces the anonymous demographic descriptor in director scenario templates; (2) `@slug` tokens in scene text expand to the character's full `optimizedDescription` from the Actor Bank database (merged with Character Builder localStorage entries).
 
 **Tab 2 — Character Builder** (`activeTab='characters'`)
-Creates and manages named character bank entries stored in the `character_bank_entries` SQLite table and mirrored to `localStorage['qpb_characters_v1']`. These entries are the input for the Casting Room's Path A (audition) flow. The `@slug` token system in the Prompt Builder reads from this same localStorage key.
+Creates and manages named character bank entries stored in the `character_bank_entries` SQLite table and mirrored to `localStorage['qpb_characters_v1']`. These entries are the input for the Casting Room's Path A (audition) flow. The `@slug` token system in the Prompt Builder reads from both this localStorage key and from the Actor Bank `characters` table.
 
 **Tab 3 — Casting Room** (`activeTab='pipeline'`)
 Generates AI actor portfolios through two paths:
 - **Path A (Audition):** Select a bank entry → LLM generates N character profiles → ComfyUI renders portrait views → user reviews and approves candidates.
 - **Path B (Batch):** Generate diverse character candidates with vector similarity screening → review/approve → save to cast.
-Also hosts the Active Character section for renaming, archiving, compiling prompt packs, queuing portfolio renders, and managing the generated image gallery.
+Also hosts the Active Character section for renaming, archiving, compiling prompt packs, queuing portfolio renders, and managing the generated image gallery. Can be launched directly from the Actor Bank via the "Open in Casting Room" button.
 
 **Tab 4 — Actor Bank** (`activeTab='actorBank'`)
-Read-oriented browser of the `characters` table. Shows rendered character cards with filters (search, gender, age). Most write actions happen in the Casting Room. Selecting a character in the Actor Bank does NOT affect the Casting Room's active character — the tabs do not communicate.
+Full character management interface for the `characters` table. Grid view with filters (search, gender, age) and sort options (recent renders / recently created / A–Z). Per-character detail view provides: inline rename, archive/restore, image keep/discard curation, portfolio re-queue when `portfolio_failed`, and an "Open in Casting Room" button that switches tabs and sets the active character in one click.
 
 **Dependency chain:**
 - Character Builder → Casting Room Path A (bank entries consumed by audition)
 - Casting Room → Actor Bank (characters table is what Actor Bank displays)
-- Prompt Builder is independent (reads Character Builder's localStorage for `@slug` expansion only)
-- Actor Bank has no write relationship with Prompt Builder
+- Actor Bank → Casting Room (cross-tab "Open in Casting Room" bridge via `jumpToCharacterId` prop)
+- Actor Bank → Prompt Builder (character slot linking + `@slug` expansion via `effectiveCharacters`)
+- Prompt Builder reads `effectiveCharacters` = Actor Bank chars (slugified) merged with Character Builder localStorage; localStorage wins on collision
 
 ---
 
@@ -106,10 +107,10 @@ Valid values for `lifecycle_status` column in `characters` table:
 | `auditioned` | Default on creation. Character generated but no portfolio render queued. |
 | `preview` | Temporary — used only for batch preview renders. Deleted after image ingestion. |
 | `portfolio_pending` | Portfolio render queued to ComfyUI. |
-| `portfolio_failed` | All portfolio jobs failed. Requires manual re-queue. |
+| `portfolio_failed` | All portfolio jobs failed. Re-queue available from Actor Bank detail view. |
 | `ready` | At least one generated image has been approved. |
 
-Soft-archive is separate: `archived_at` column (ISO timestamp if archived, NULL if active).
+Soft-archive is separate: `archived_at` column (ISO timestamp if archived, NULL if active). This column is NOT inside `payload_json` — `listCharacters` and `getCharacter` must SELECT it explicitly and spread it onto the returned object.
 
 ---
 
@@ -117,14 +118,19 @@ Soft-archive is separate: `archived_at` column (ISO timestamp if archived, NULL 
 
 | File | Role |
 |---|---|
-| `src/App.jsx` | Root component; all Prompt Builder state; tab switching; blend, presets, profiles |
+| `src/App.jsx` | Root component; all Prompt Builder state; tab switching; blend, presets, profiles; `bankCharsForSelector` fetch + `effectiveCharacters` memo; `castingRoomJumpId` cross-tab bridge state |
 | `src/utils/assembler.js` | `rewriteScene`, `assemblePrompt`, `dedupeFragments`, `getCharDesc` |
+| `src/utils/slugify.js` | `toSnakeSlug`, `resolveCharacterSlug` — used by `@slug` expansion and Actor Bank character linking |
 | `api/lib/polishCore.js` | System prompt, provider resolution, `runPolish`, `healthCheck` |
 | `vite.config.js` | All 47+ API route handlers registered as Vite middleware; Chroma auto-spawn; SSE watcher |
 | `api/lib/db/schema.js` | All CREATE TABLE SQL + MIGRATIONS array |
-| `api/lib/db/repositories.js` | All DB query functions |
-| `src/components/CastingPipelinePanel.jsx` | Entire Casting Room — Path A + B + Active Character + render system |
-| `src/components/ActorBank/ActorBankView.jsx` | Actor Bank tab root |
+| `api/lib/db/repositories.js` | All DB query functions; `listCharacters` and `getCharacter` both SELECT `archived_at` alongside `payload_json` and merge it into the returned object |
+| `src/components/CastingPipelinePanel.jsx` | Entire Casting Room — Path A + B + Active Character + render system; accepts `jumpToCharacterId`/`onJumpConsumed` props for cross-tab navigation |
+| `src/components/ActorBank/ActorBankView.jsx` | Actor Bank tab root; archived toggle; passes `onOpenInCastingRoom` to ActorDetail |
+| `src/components/ActorBank/ActorCard.jsx` | Character card with lifecycle badge, image count, archived state |
+| `src/components/ActorBank/ActorBankFilters.jsx` | Filter bar with search, gender chips, age range, sort select |
+| `src/components/ActorBank/ActorDetail.jsx` | Character detail — inline rename, archive/restore, image keep/discard curation, portfolio re-queue, "Open in Casting Room" |
+| `src/components/DirectorSection.jsx` | Director + character slot UI; `bankChars` prop enables "link actor…" per slot |
 | `src/components/CharacterBuilder.jsx` | Character bank entry form and management |
 | `api/lib/characterLifecycle.js` | Lifecycle transition functions |
 | `api/lib/characters/batchGeneration.js` | Batch generation, similarity thresholds, classification |
@@ -136,14 +142,15 @@ Soft-archive is separate: `archived_at` column (ISO timestamp if archived, NULL 
 
 ## What Is In-Progress or Not Yet Built
 
-The following features are absent from the current codebase (from APPLICATION_REFERENCE.md Section 9):
-
-- **Actor Bank full implementation:** The Actor Bank tab is a functional read-only browser. Advanced features are not built: direct "Cast from Actor Bank" integration, Actor Bank ↔ Prompt Builder `@slug` token integration, lifecycle management in the Actor Bank, advanced portfolio management actions. The infrastructure (tables, APIs) exists; the UI layer is minimal. This is tracked in beads issue `qwen-prompt-builder-pv9`.
-- **Prompt Builder ↔ Actor Bank character integration:** The `@slug` token system reads from the Character Builder's localStorage, not from the Actor Bank's `characters` table. A rendered Actor Bank character cannot be referenced as `@slug` in the Prompt Builder. Not built.
 - **Reference image AI Vision extraction:** The `POST /api/analyze-reference-image` route exists but AI Vision extraction from reference images is not implemented in the current code. The ReferenceBoard component exists but serves as a visual reference holder only.
 - **Composition Modifiers panel:** Not present in the current chip groups.
 - **Time / Weather Quick-Set buttons:** Not present in the current UI.
 - **Garment / Clothing Expander panel:** Not present as a panel; some garment rewrites exist in the REWRITES table.
+
+The following were previously listed as gaps and are now complete (P6):
+
+- **Actor Bank full implementation (AB1–AB7):** Lifecycle badges, image count, archived toggle, inline rename, archive/restore, image keep/discard curation, sort options (recent renders / recently created / A–Z), portfolio re-queue on `portfolio_failed`, "Open in Casting Room" cross-tab bridge.
+- **Prompt Builder ↔ Actor Bank character integration (pv9):** `effectiveCharacters` merges Actor Bank chars with Character Builder localStorage so Actor Bank characters resolve as `@slug` tokens in scene text. Director scenario slots can be linked to a named Actor Bank character (`bankCharId/bankCharName/bankCharDesc`); linked character's description replaces the anonymous demographic descriptor.
 
 ---
 
