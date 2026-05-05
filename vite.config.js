@@ -64,6 +64,13 @@ import {
   listActiveComfyJobs,
   bulkUpsertComfyJobs,
   bulkUpdateComfyJobStatus,
+  listSavedPrompts,
+  createSavedPrompt,
+  deleteSavedPrompt,
+  renameSavedPrompt,
+  listWorkspaceProfiles,
+  upsertWorkspaceProfile,
+  deleteWorkspaceProfile,
 } from './api/lib/db/repositories.js'
 import { createVectorRuntime } from './api/lib/vector/runtime.js'
 import {
@@ -1895,6 +1902,79 @@ function apiDevPlugin(env) {
           runtime?.close?.()
         }
       })
+      server.middlewares.use('/api/saved-prompts', async (req, res) => {
+        let runtime = null
+        try {
+          runtime = createVectorRuntime({ env })
+          const url = new URL(req.url || '', 'http://localhost')
+          if (req.method === 'GET') {
+            sendJsonMiddleware(res, 200, { ok: true, items: listSavedPrompts(runtime.db) })
+            return
+          }
+          if (req.method === 'POST') {
+            const body = await readJsonBody(req)
+            const item = createSavedPrompt(runtime.db, body || {})
+            sendJsonMiddleware(res, 200, { ok: true, item })
+            return
+          }
+          if (req.method === 'DELETE') {
+            const id = url.searchParams.get('id') || ''
+            if (!id) { sendJsonMiddleware(res, 400, { error: 'Missing id' }); return }
+            const deleted = deleteSavedPrompt(runtime.db, id)
+            if (!deleted) { sendJsonMiddleware(res, 404, { error: 'Not found' }); return }
+            sendJsonMiddleware(res, 200, { ok: true })
+            return
+          }
+          if (req.method === 'PATCH') {
+            const body = await readJsonBody(req)
+            if (!body?.id || !body?.name) { sendJsonMiddleware(res, 400, { error: 'Missing id or name' }); return }
+            const item = renameSavedPrompt(runtime.db, body.id, body.name)
+            if (!item) { sendJsonMiddleware(res, 404, { error: 'Not found' }); return }
+            sendJsonMiddleware(res, 200, { ok: true, item })
+            return
+          }
+          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message })
+        } finally {
+          runtime?.close?.()
+        }
+      })
+
+      server.middlewares.use('/api/workspace-profiles', async (req, res) => {
+        let runtime = null
+        try {
+          runtime = createVectorRuntime({ env })
+          const url = new URL(req.url || '', 'http://localhost')
+          if (req.method === 'GET') {
+            sendJsonMiddleware(res, 200, { ok: true, items: listWorkspaceProfiles(runtime.db) })
+            return
+          }
+          if (req.method === 'PUT') {
+            const body = await readJsonBody(req)
+            if (!body?.id || !body?.label) { sendJsonMiddleware(res, 400, { error: 'Missing id or label' }); return }
+            const item = upsertWorkspaceProfile(runtime.db, { id: body.id, label: body.label, stateJson: JSON.stringify(body.state ?? {}) })
+            sendJsonMiddleware(res, 200, { ok: true, item })
+            return
+          }
+          if (req.method === 'DELETE') {
+            const id = url.searchParams.get('id') || ''
+            if (!id) { sendJsonMiddleware(res, 400, { error: 'Missing id' }); return }
+            const deleted = deleteWorkspaceProfile(runtime.db, id)
+            if (!deleted) { sendJsonMiddleware(res, 404, { error: 'Not found' }); return }
+            sendJsonMiddleware(res, 200, { ok: true })
+            return
+          }
+          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message })
+        } finally {
+          runtime?.close?.()
+        }
+      })
+
     },
   }
 }

@@ -914,3 +914,67 @@ export function bulkUpdateComfyJobStatus(db, promptIds, status) {
   const placeholders = promptIds.map(() => '?').join(',')
   db.prepare(`UPDATE comfy_jobs SET status = ?, completed_at = ? WHERE prompt_id IN (${placeholders})`).run(status, completedAt, ...promptIds)
 }
+
+// ── Saved Prompts ─────────────────────────────────────────────────────────────
+
+export function listSavedPrompts(db) {
+  return db.prepare('SELECT * FROM saved_prompts ORDER BY created_at DESC').all().map((row) => ({
+    id: row.id,
+    name: row.name,
+    text: row.text,
+    timestamp: new Date(row.created_at).getTime(),
+  }))
+}
+
+export function createSavedPrompt(db, { id, name, text }) {
+  if (!id || !name || !text) {
+    const err = new Error('Missing id, name, or text')
+    err.status = 400
+    throw err
+  }
+  const now = nowIso()
+  db.prepare('INSERT INTO saved_prompts (id, name, text, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').run(id, name, text, now, now)
+  return { id, name, text, timestamp: new Date(now).getTime() }
+}
+
+export function deleteSavedPrompt(db, id) {
+  return db.prepare('DELETE FROM saved_prompts WHERE id = ?').run(id).changes > 0
+}
+
+export function renameSavedPrompt(db, id, name) {
+  const now = nowIso()
+  const changes = db.prepare('UPDATE saved_prompts SET name = ?, updated_at = ? WHERE id = ?').run(name, now, id).changes
+  if (!changes) return null
+  const row = db.prepare('SELECT * FROM saved_prompts WHERE id = ?').get(id)
+  return { id: row.id, name: row.name, text: row.text, timestamp: new Date(row.created_at).getTime() }
+}
+
+// ── Workspace Profiles ────────────────────────────────────────────────────────
+
+export function listWorkspaceProfiles(db) {
+  return db.prepare('SELECT * FROM workspace_profiles ORDER BY created_at ASC').all().map((row) => ({
+    id: row.id,
+    label: row.label,
+    state: JSON.parse(row.state_json),
+  }))
+}
+
+export function upsertWorkspaceProfile(db, { id, label, stateJson }) {
+  if (!id || !label) {
+    const err = new Error('Missing id or label')
+    err.status = 400
+    throw err
+  }
+  const now = nowIso()
+  db.prepare(`
+    INSERT INTO workspace_profiles (id, label, state_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(id) DO UPDATE SET label = excluded.label, state_json = excluded.state_json, updated_at = excluded.updated_at
+  `).run(id, label, stateJson, now, now)
+  const row = db.prepare('SELECT * FROM workspace_profiles WHERE id = ?').get(id)
+  return { id: row.id, label: row.label, state: JSON.parse(row.state_json) }
+}
+
+export function deleteWorkspaceProfile(db, id) {
+  return db.prepare('DELETE FROM workspace_profiles WHERE id = ?').run(id).changes > 0
+}

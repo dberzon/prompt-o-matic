@@ -4,13 +4,13 @@ import { usePolish } from '../hooks/usePolish.js'
 import { scorePromptQuality } from '../utils/qualityScore.js'
 import { downloadPromptTxt } from '../utils/downloadPromptFile.js'
 import { listGeneratedImages } from '../lib/api/generatedImages.js'
+import { fetchSavedPrompts, createSavedPromptRemote, deleteSavedPromptRemote, renameSavedPromptRemote } from '../api/promptStorage.js'
 import styles from './PromptOutput.module.css'
 
 const DEFAULT_FRONT_PREFIX = 'photorealistic film still'
 const HISTORY_KEY = 'qpb_prompt_history_v1'
 const HISTORY_LIMIT = 12
 const SAVED_PROMPTS_KEY = 'qpb_saved_prompts_v1'
-const SAVED_PROMPTS_LIMIT = 30
 const LOCAL_PROVIDER_KEY = 'qpb_local_provider_v1'
 const LMSTUDIO_HOST_KEY = 'qpb_lmstudio_host_v1'
 const LMSTUDIO_PORT_KEY = 'qpb_lmstudio_port_v1'
@@ -19,17 +19,6 @@ const LMSTUDIO_MODEL_KEY = 'qpb_lmstudio_model_v1'
 function readHistory() {
   try {
     const raw = localStorage.getItem(HISTORY_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
-}
-
-function readSavedPrompts() {
-  try {
-    const raw = localStorage.getItem(SAVED_PROMPTS_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw)
     return Array.isArray(parsed) ? parsed : []
@@ -106,7 +95,7 @@ export default function PromptOutput({
   const [history, setHistory] = useState(() => readHistory())
   const textareaRef = useRef(null)
   const [showHistory, setShowHistory] = useState(false)
-  const [savedPrompts, setSavedPrompts] = useState(() => readSavedPrompts())
+  const [savedPrompts, setSavedPrompts] = useState([])
   const [showSaved, setShowSaved] = useState(false)
   const [showGallery, setShowGallery] = useState(false)
   const [galleryImages, setGalleryImages] = useState([])
@@ -210,6 +199,29 @@ export default function PromptOutput({
     return () => { active = false }
   }, [aiEngine, localOnly, embeddedStatus, checkHealth, localProvider, lmStudioBaseUrl, lmStudioModel])
 
+  // Load saved prompts from DB; migrate any existing localStorage entries on first run.
+  useEffect(() => {
+    let active = true
+    fetchSavedPrompts().then((items) => {
+      if (!active) return
+      if (items.length === 0) {
+        // One-time migration from localStorage
+        try {
+          const raw = localStorage.getItem(SAVED_PROMPTS_KEY)
+          const legacy = raw ? JSON.parse(raw) : []
+          if (Array.isArray(legacy) && legacy.length) {
+            Promise.all(legacy.map((e) => createSavedPromptRemote({ id: e.id, name: e.name, text: e.text }).catch(() => null)))
+              .then(() => fetchSavedPrompts())
+              .then((migrated) => { if (active) { setSavedPrompts(migrated); localStorage.removeItem(SAVED_PROMPTS_KEY) } })
+            return
+          }
+        } catch { /* ignore */ }
+      }
+      setSavedPrompts(items)
+    }).catch(() => { /* API unavailable — leave empty */ })
+    return () => { active = false }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     localStorage.setItem(LOCAL_PROVIDER_KEY, localProvider)
   }, [localProvider])
@@ -256,15 +268,7 @@ export default function PromptOutput({
   // Clear selected variant when assembled prompt changes so stale variant text is never shown.
   useEffect(() => { setSelectedVariant(null) }, [assembledText])
 
-  // Clear manual edit when underlying assembled text changes (one-way sync)
-  useEffect(() => {
-    if (hasManualEdit) {
-      // Only clear if the assembled text is different
-      if (manualEdit !== assembledText) {
-        // Keep manual edit - user is editing, don't override
-      }
-    }
-  }, [assembledText, hasManualEdit, manualEdit])
+
 
   const handlePolish = () => {
     setRestoredText(null)
@@ -367,43 +371,35 @@ export default function PromptOutput({
     }
   }
 
-  const handleSavePrompt = useCallback(() => {
+  const handleSavePrompt = useCallback(async () => {
     const text = displayText.trim()
     if (!text) return
     const name = window.prompt('Save prompt as:')
     if (!name?.trim()) return
-    setSavedPrompts((prev) => {
-      const entry = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        name: name.trim(),
-        text,
-        timestamp: Date.now(),
-      }
-      const next = [entry, ...prev].slice(0, SAVED_PROMPTS_LIMIT)
-      localStorage.setItem(SAVED_PROMPTS_KEY, JSON.stringify(next))
-      return next
-    })
+    const entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, name: name.trim(), text }
+    try {
+      await createSavedPromptRemote(entry)
+      setSavedPrompts(await fetchSavedPrompts())
+    } catch { /* non-critical */ }
   }, [displayText])
 
-  const handleDeleteSavedPrompt = useCallback((id) => {
-    setSavedPrompts((prev) => {
-      const next = prev.filter((e) => e.id !== id)
-      localStorage.setItem(SAVED_PROMPTS_KEY, JSON.stringify(next))
-      return next
-    })
+  const handleDeleteSavedPrompt = useCallback(async (id) => {
+    try {
+      await deleteSavedPromptRemote(id)
+      setSavedPrompts((prev) => prev.filter((e) => e.id !== id))
+    } catch { /* non-critical */ }
   }, [])
 
-  const handleRenameSavedPrompt = useCallback((id) => {
-    setSavedPrompts((prev) => {
-      const entry = prev.find((e) => e.id === id)
-      if (!entry) return prev
-      const newName = window.prompt('Rename to:', entry.name)
-      if (!newName?.trim()) return prev
-      const next = prev.map((e) => e.id === id ? { ...e, name: newName.trim() } : e)
-      localStorage.setItem(SAVED_PROMPTS_KEY, JSON.stringify(next))
-      return next
-    })
-  }, [])
+  const handleRenameSavedPrompt = useCallback(async (id) => {
+    const entry = savedPrompts.find((e) => e.id === id)
+    if (!entry) return
+    const newName = window.prompt('Rename to:', entry.name)
+    if (!newName?.trim()) return
+    try {
+      const updated = await renameSavedPromptRemote(id, newName.trim())
+      if (updated) setSavedPrompts((prev) => prev.map((e) => e.id === id ? { ...e, name: updated.name } : e))
+    } catch { /* non-critical */ }
+  }, [savedPrompts])
 
   const loadGallery = useCallback(async () => {
     setGalleryLoading(true)

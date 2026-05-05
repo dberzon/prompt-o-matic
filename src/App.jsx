@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
+import { fetchWorkspaceProfiles, upsertWorkspaceProfileRemote, deleteWorkspaceProfileRemote } from './api/promptStorage.js'
 import { assemblePrompt } from './utils/assembler.js'
 import { PRESETS, DIRECTOR_PRESETS } from './data/constants.js'
 import { DIRECTORS } from './data/directors.js'
@@ -31,7 +32,7 @@ const DEFAULT_CHARS = [
 ]
 const CUSTOM_PRESETS_KEY = 'qpb_custom_presets_v1'
 const CUSTOM_DIRECTORS_KEY = 'qpb_custom_directors_v1'
-const WORKSPACE_PROFILES_KEY = 'qpb_workspace_profiles_v1'
+const WORKSPACE_PROFILES_KEY = 'qpb_workspace_profiles_v1' // kept for one-time migration only
 const AI_ENGINE_KEY = 'qpb_ai_engine_v1'
 const LOCAL_ONLY_KEY = 'qpb_local_only_v1'
 const CHARACTERS_KEY = 'qpb_characters_v1'
@@ -72,16 +73,7 @@ function readCustomDirectors() {
   }
 }
 
-function readWorkspaceProfiles() {
-  try {
-    const raw = localStorage.getItem(WORKSPACE_PROFILES_KEY)
-    if (!raw) return {}
-    const parsed = JSON.parse(raw)
-    return parsed && typeof parsed === 'object' ? parsed : {}
-  } catch {
-    return {}
-  }
-}
+
 
 function readAiEngine() {
   try {
@@ -194,7 +186,7 @@ export default function App() {
   const [blendWeight, setBlendWeight] = useState(70)
   const [customPresets, setCustomPresets] = useState(() => readCustomPresets())
   const [customDirectors, setCustomDirectors] = useState(() => readCustomDirectors())
-  const [profiles, setProfiles] = useState(() => readWorkspaceProfiles())
+  const [profiles, setProfiles] = useState({})
   const [selectedProfile, setSelectedProfile] = useState('')
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [narrativeBeat, setNarrativeBeat] = useState(null)
@@ -218,9 +210,36 @@ export default function App() {
     localStorage.setItem(CUSTOM_DIRECTORS_KEY, JSON.stringify(customDirectors))
   }, [customDirectors])
 
+  // Load workspace profiles from DB on mount; migrate legacy localStorage entries once.
   useEffect(() => {
-    localStorage.setItem(WORKSPACE_PROFILES_KEY, JSON.stringify(profiles))
-  }, [profiles])
+    let active = true
+    fetchWorkspaceProfiles().then((items) => {
+      if (!active) return
+      if (items.length === 0) {
+        try {
+          const raw = localStorage.getItem(WORKSPACE_PROFILES_KEY)
+          const legacy = raw ? JSON.parse(raw) : null
+          if (legacy && typeof legacy === 'object' && Object.keys(legacy).length) {
+            const entries = Object.entries(legacy)
+            Promise.all(entries.map(([id, p]) => upsertWorkspaceProfileRemote({ id, label: p.label, state: p.state }).catch(() => null)))
+              .then(() => fetchWorkspaceProfiles())
+              .then((migrated) => {
+                if (!active) return
+                const obj = {}
+                for (const p of migrated) obj[p.id] = { label: p.label, state: p.state }
+                setProfiles(obj)
+                localStorage.removeItem(WORKSPACE_PROFILES_KEY)
+              })
+            return
+          }
+        } catch { /* ignore */ }
+      }
+      const obj = {}
+      for (const p of items) obj[p.id] = { label: p.label, state: p.state }
+      setProfiles(obj)
+    }).catch(() => { /* API unavailable — leave empty */ })
+    return () => { active = false }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     localStorage.setItem(AI_ENGINE_KEY, aiEngine)
@@ -416,6 +435,8 @@ export default function App() {
     const secondary = DIRECTOR_PRESETS[secondaryKey]?.chips ?? {}
     if (!primaryKey || !secondaryKey) return clonePresetChips(primary)
     const dominantPrimary = primaryWeight >= 50
+    // Dimensions where only one source should ever be active (validation enforces single-chip).
+    const singleSourceDims = new Set(['light', 'shot', 'film'])
     const result = {}
     const allGroups = new Set([...Object.keys(primary), ...Object.keys(secondary)])
     allGroups.forEach((groupId) => {
@@ -425,7 +446,10 @@ export default function App() {
       const dominant = dominantPrimary ? a : b
       const secondaryVals = dominantPrimary ? b : a
       const values = [...dominant]
-      if (secondaryVals[0] && !values.includes(secondaryVals[0])) values.push(secondaryVals[0])
+      // Never merge secondary chips into single-source dimensions — use dominant only.
+      if (!singleSourceDims.has(groupId) && secondaryVals[0] && !values.includes(secondaryVals[0])) {
+        values.push(secondaryVals[0])
+      }
       result[groupId] = values
     })
     return result
@@ -667,13 +691,15 @@ export default function App() {
     localOnly,
   ])
 
-  const saveProfile = useCallback(() => {
+  const saveProfile = useCallback(async () => {
     const name = window.prompt('Profile name')
     const trimmed = (name ?? '').trim()
     if (!trimmed) return
     const key = `profile-${trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`
-    setProfiles((prev) => ({ ...prev, [key]: { label: trimmed, state: captureWorkspace() } }))
+    const snapshot = captureWorkspace()
+    setProfiles((prev) => ({ ...prev, [key]: { label: trimmed, state: snapshot } }))
     setSelectedProfile(key)
+    upsertWorkspaceProfileRemote({ id: key, label: trimmed, state: snapshot }).catch(() => { /* non-critical */ })
   }, [captureWorkspace])
 
   const restoreWorkspace = useCallback((s) => {
@@ -731,6 +757,7 @@ export default function App() {
       return rest
     })
     if (selectedProfile === key) setSelectedProfile('')
+    deleteWorkspaceProfileRemote(key).catch(() => { /* non-critical */ })
   }, [selectedProfile])
 
   const commands = useMemo(() => [

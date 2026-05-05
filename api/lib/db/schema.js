@@ -120,6 +120,24 @@ CREATE TABLE IF NOT EXISTS actor_auditions (
 CREATE INDEX IF NOT EXISTS idx_actor_auditions_actor_candidate_id ON actor_auditions(actor_candidate_id);
 CREATE INDEX IF NOT EXISTS idx_actor_auditions_bank_entry_id ON actor_auditions(bank_entry_id);
 CREATE INDEX IF NOT EXISTS idx_actor_auditions_status ON actor_auditions(status);
+
+CREATE TABLE IF NOT EXISTS saved_prompts (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_saved_prompts_created_at ON saved_prompts(created_at);
+
+CREATE TABLE IF NOT EXISTS workspace_profiles (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  state_json TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
 `
 
 export const MIGRATIONS = [
