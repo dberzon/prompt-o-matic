@@ -88,6 +88,7 @@ export default function DirectorSection({
   customDirectors = [],
   onSaveCustomDirector,
   onDeleteCustomDirector,
+  bankChars = [],
 }) {
   const [open, setOpen] = useSectionState('director-section', true)
   const [copiedSeedIdx, setCopiedSeedIdx] = useState(null)
@@ -116,7 +117,7 @@ export default function DirectorSection({
   const bank = selectedDir ? getSceneBankEntry(selectedDir) : null
 
   const charDescs = Array.from({ length: charCount }, (_, i) =>
-    getCharDesc(chars[i]?.g ?? 'person', chars[i]?.a ?? '30s')
+    chars[i]?.bankCharDesc ?? getCharDesc(chars[i]?.g ?? 'person', chars[i]?.a ?? '30s')
   )
 
   const primaryScenarios = dirData ? dirData.s[charCount]?.(charDescs) ?? [] : []
@@ -431,24 +432,53 @@ export default function DirectorSection({
             {Array.from({ length: charCount }, (_, i) => (
               <div key={i} className={styles.charRow}>
                 <span className={styles.charNum}>Character {i + 1}</span>
-                <select
-                  className={styles.charSelect}
-                  value={chars[i]?.g ?? 'person'}
-                  onChange={e => onCharChange(i, 'g', e.target.value)}
-                >
-                  {GENDERS.map(g => (
-                    <option key={g} value={g}>{g}</option>
-                  ))}
-                </select>
-                <select
-                  className={styles.charSelect}
-                  value={chars[i]?.a ?? '30s'}
-                  onChange={e => onCharChange(i, 'a', e.target.value)}
-                >
-                  {AGES.map(a => (
-                    <option key={a} value={a}>{a}</option>
-                  ))}
-                </select>
+                {chars[i]?.bankCharId ? (
+                  <span className={styles.bankCharChip}>
+                    <span className={styles.bankCharName}>{chars[i].bankCharName}</span>
+                    <button
+                      type="button"
+                      className={styles.bankCharUnlink}
+                      onClick={() => onCharChange(i, 'bankLink', null)}
+                      title="Unlink character"
+                    >×</button>
+                  </span>
+                ) : (
+                  <>
+                    <select
+                      className={styles.charSelect}
+                      value={chars[i]?.g ?? 'person'}
+                      onChange={e => onCharChange(i, 'g', e.target.value)}
+                    >
+                      {GENDERS.map(g => (
+                        <option key={g} value={g}>{g}</option>
+                      ))}
+                    </select>
+                    <select
+                      className={styles.charSelect}
+                      value={chars[i]?.a ?? '30s'}
+                      onChange={e => onCharChange(i, 'a', e.target.value)}
+                    >
+                      {AGES.map(a => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </select>
+                    {bankChars.length > 0 && (
+                      <select
+                        className={styles.bankSelect}
+                        value=""
+                        onChange={e => {
+                          const found = bankChars.find(c => c.id === e.target.value)
+                          if (found) onCharChange(i, 'bankLink', found)
+                        }}
+                      >
+                        <option value="">link actor…</option>
+                        {bankChars.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    )}
+                  </>
+                )}
               </div>
             ))}
           </div>

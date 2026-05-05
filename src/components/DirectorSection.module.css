@@ -254,6 +254,67 @@
   border-color: var(--border-2);
 }
 
+/* Actor Bank link selector */
+.bankSelect {
+  padding: 5px 8px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.12s, color 0.12s;
+  -webkit-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%234a4540' fill='none' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 24px;
+}
+
+.bankSelect:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* Linked Actor Bank character chip */
+.bankCharChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-dim, rgba(100, 100, 255, 0.08));
+  font-size: 12px;
+  flex: 1;
+}
+
+.bankCharName {
+  color: var(--accent);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bankCharUnlink {
+  background: none;
+  border: none;
+  color: var(--text-2);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+  flex-shrink: 0;
+  transition: color 0.1s;
+}
+
+.bankCharUnlink:hover {
+  color: #e05c5c;
+}
+
 /* Scenarios */
 .scenarioList {
   display: flex;

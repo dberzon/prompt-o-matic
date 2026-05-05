@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { fetchWorkspaceProfiles, upsertWorkspaceProfileRemote, deleteWorkspaceProfileRemote } from './api/promptStorage.js'
 import { assemblePrompt } from './utils/assembler.js'
+import { toSnakeSlug } from './utils/slugify.js'
 import { PRESETS, DIRECTOR_PRESETS } from './data/constants.js'
 import { DIRECTORS } from './data/directors.js'
 import { getSceneBankEntry } from './data/sceneBank.js'
@@ -90,6 +91,18 @@ function readLocalOnly() {
   } catch {
     return false
   }
+}
+
+function buildBankCharDesc(char) {
+  const parts = [char.name ?? 'Unnamed']
+  if (char.cinematicArchetype) {
+    parts.push(char.cinematicArchetype)
+  } else {
+    const agePart = typeof char.age === 'number' ? `${char.age}yo` : char.age
+    const demo = [agePart, char.genderPresentation].filter(Boolean).join(' ')
+    if (demo) parts.push(demo)
+  }
+  return parts.join(', ')
 }
 
 function readCharacters() {
@@ -205,6 +218,7 @@ export default function App() {
   const [embeddedSetupOpen, setEmbeddedSetupOpen] = useState(false)
   const [embeddedStatus, setEmbeddedStatus] = useState(null)
   const [characters, setCharacters] = useState(() => readCharacters())
+  const [bankCharsForSelector, setBankCharsForSelector] = useState([])
   const promptExportRef = useRef(null)
   const matcherRef = useRef(null)
 
@@ -258,6 +272,41 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters))
   }, [characters])
+
+  useEffect(() => {
+    fetch('/api/characters?sortBy=name')
+      .then(r => r.json())
+      .then(data => {
+        const items = data.items ?? []
+        setBankCharsForSelector(items.map(char => ({
+          id: char.id,
+          name: char.name ?? 'Unnamed',
+          desc: buildBankCharDesc(char),
+          optimizedDescription: char.optimizedDescription || char.rawDescription || '',
+          slug: toSnakeSlug(char.name ?? ''),
+        })))
+      })
+      .catch(() => {})
+  }, [])
+
+  const bankCharDict = useMemo(() => {
+    const dict = {}
+    for (const c of bankCharsForSelector) {
+      if (c.slug) {
+        dict[c.slug] = {
+          name: c.name,
+          rawDescription: c.desc,
+          optimizedDescription: c.optimizedDescription || c.desc,
+        }
+      }
+    }
+    return dict
+  }, [bankCharsForSelector])
+
+  const effectiveCharacters = useMemo(() => ({
+    ...bankCharDict,
+    ...characters,
+  }), [bankCharDict, characters])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -336,8 +385,8 @@ export default function App() {
   }, [selectedDir])
 
   const prompt = useMemo(
-    () => assemblePrompt({ scene, scenario, chips, characters }),
-    [scene, scenario, chips, characters]
+    () => assemblePrompt({ scene, scenario, chips, characters: effectiveCharacters }),
+    [scene, scenario, chips, effectiveCharacters]
   )
   const variants = useMemo(() => generatePromptVariants(prompt), [prompt])
   const issues = useMemo(
@@ -615,7 +664,16 @@ export default function App() {
   const handleCharChange = useCallback((index, field, value) => {
     setChars(prev => {
       const next = [...prev]
-      next[index] = { ...next[index], [field]: value }
+      if (field === 'bankLink') {
+        if (value) {
+          next[index] = { ...next[index], bankCharId: value.id, bankCharName: value.name, bankCharDesc: value.desc }
+        } else {
+          const { bankCharId: _bid, bankCharName: _bname, bankCharDesc: _bdesc, ...rest } = next[index]
+          next[index] = rest
+        }
+      } else {
+        next[index] = { ...next[index], [field]: value }
+      }
       return next
     })
     setScenario(null)
@@ -921,6 +979,7 @@ export default function App() {
             useStyleKeyForPolish={useStyleKeyForPolish}
             onDirSelect={handleDirSelect}
             onBlendConfig={handleBlendConfig}
+            bankChars={bankCharsForSelector}
             onCharCountChange={handleCharCount}
             onCharChange={handleCharChange}
             onScenarioSelect={handleScenario}
