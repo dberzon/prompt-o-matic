@@ -1,6 +1,6 @@
 # APPLICATION_REFERENCE.md
 
-*Written from source code — May 2025. Code wins over any other documentation.*
+*Written from source code — May 2026. Updated after P6 (Actor Bank full UI + pv9). Code wins over any other documentation.*
 
 ---
 
@@ -13,14 +13,14 @@ Qwen Prompt Builder (QPB) is a local-first creative tool for constructing, manag
 - **Prompt Builder** — Constructs and refines a single text-to-image prompt from freetext scene input, director style chips, scenario templates, and an optional LLM polish pass. This is the primary creative composition interface.
 - **Character Builder** — Creates and manages named character bank entries that describe a specific person's appearance. These entries are the input for the Casting Room's Path A (audition) flow.
 - **Casting Room** — Generates AI actor portfolios through two paths: Path A (audition from bank, LLM generates character variations from a bank entry, then ComfyUI renders them), and Path B (batch generation using vector similarity checking). Also hosts the Active Character section for managing approved characters and queuing portfolio renders.
-- **Actor Bank** — Browses and manages the full library of saved/generated characters, with filtering by name, gender, and age. Shows rendered images for each character. Read-oriented; most write actions happen in the Casting Room.
+- **Actor Bank** — Full character management interface for the `characters` table. Grid view with filters (search, gender, age) and sort options. Per-character detail view with: inline rename, archive/restore, image keep/discard curation, portfolio re-queue on failure, and "Open in Casting Room" cross-tab bridge. All management actions that previously required the Casting Room are now available here.
 
 **Dependency relationships between tabs:**
 
 - Character Builder produces bank entries (SQLite `character_bank_entries` table) that Path A in the Casting Room consumes.
 - Casting Room produces character records (SQLite `characters` table) and generated images that the Actor Bank displays.
-- Prompt Builder is independent of the other three tabs; it does not read from or write to the character/casting database, except that the Character Builder's `characters` object (localStorage) can be referenced via `@snake_case` tokens in the scene input.
-- The Actor Bank has no write relationship with the Prompt Builder; there is no integration between the Actor Bank characters and the Prompt Builder's director/chip system.
+- Prompt Builder reads Actor Bank characters on mount via `GET /api/characters`. These feed two integrations: (1) character slots in DirectorSection can be linked to a named Actor Bank character, replacing the anonymous demographic descriptor in director scenario templates; (2) Actor Bank characters are merged into `effectiveCharacters` so `@slug` tokens in the scene input expand to the character's full `optimizedDescription` from the database (in addition to the existing localStorage Character Builder entries).
+- Actor Bank provides a cross-tab "Open in Casting Room" action that switches the active tab to `pipeline` and sets `selectedCharacterId` in `CastingPipelinePanel` via the `jumpToCharacterId` prop.
 
 **External service dependencies:**
 
@@ -931,7 +931,7 @@ All state relevant to the Prompt Builder:
 | `scene` | string | `''` | Freetext scene/environment input | No (workspace profile) |
 | `selectedDir` | string\|null | `null` | Active director key | No (workspace profile) |
 | `charCount` | number | `1` | Number of characters (1–3) | No (workspace profile) |
-| `chars` | array | `DEFAULT_CHARS` (3 entries: man/40s, woman/30s, man/20s) | Character gender+age descriptors | No (workspace profile) |
+| `chars` | array | `DEFAULT_CHARS` (3 entries: man/40s, woman/30s, man/20s) | Character slot descriptors. Each entry is `{ g, a }` (anonymous) or `{ g, a, bankCharId, bankCharName, bankCharDesc }` when linked to an Actor Bank character. `bankCharDesc` replaces `getCharDesc(g, a)` in scenario templates when set. | No (workspace profile) |
 | `scenario` | string\|null | `null` | Selected director scenario text | No (workspace profile) |
 | `chips` | object | `{}` | Active chip selections by group | No (workspace profile) |
 | `lastAppliedPresetLabel` | string\|null | `null` | Label of last applied preset | No |
@@ -952,7 +952,10 @@ All state relevant to the Prompt Builder:
 | `localOnly` | boolean | from localStorage | Block cloud fallback | `LOCAL_ONLY_KEY = 'qpb_local_only_v1'` |
 | `embeddedSetupOpen` | boolean | `false` | Embedded sidecar setup panel | No |
 | `embeddedStatus` | object\|null | `null` | Embedded sidecar connection state | No |
-| `characters` | object | from localStorage | Character bank slug→entry map | `CHARACTERS_KEY = 'qpb_characters_v1'` |
+| `characters` | object | from localStorage | Character Builder slug→entry map | `CHARACTERS_KEY = 'qpb_characters_v1'` |
+| `bankCharsForSelector` | array | `[]` (fetched on mount) | Actor Bank characters for slot linking and `@slug` expansion. Each entry: `{ id, name, desc, slug, optimizedDescription }`. Fetched via `GET /api/characters?sortBy=name` on mount. | No |
+| `bankCharDict` | object | derived from `bankCharsForSelector` | Slugified Actor Bank chars in characters-dict shape — used in `effectiveCharacters`. `{ [slug]: { name, rawDescription, optimizedDescription } }` | No (derived) |
+| `effectiveCharacters` | object | derived | `{ ...bankCharDict, ...characters }` — passed to `assemblePrompt` as the `characters` argument. localStorage entries win on slug collision. | No (derived) |
 
 **Inside PromptOutput.jsx (local state):**
 
@@ -974,7 +977,7 @@ All state relevant to the Prompt Builder:
 
 **`rewriteScene(raw, characters)`** — `src/utils/assembler.js`
 
-1. Expands `@slug` tokens: replaces any `@word` with the matching character's `optimizedDescription` or `rawDescription` from the characters object.
+1. Expands `@slug` tokens: replaces any `@word` with the matching character's `optimizedDescription` or `rawDescription` from the characters object. The `characters` argument is `effectiveCharacters` (Actor Bank chars merged with Character Builder localStorage entries), so both `@actor_bank_slug` and `@character_builder_slug` tokens resolve.
 2. Trims trailing period.
 3. Applies 29 REWRITES entries (regex replacements). Each replaces a common shorthand with a more material, specific phrase.
 
@@ -986,6 +989,8 @@ Representative REWRITES examples (total: 29 entries):
 - `gray raincoat` → `gray wool raincoat, collar turned up, dark with moisture at the shoulders`
 
 **`assemblePrompt({ scene, scenario, chips, characters })`** — `src/utils/assembler.js`
+
+`characters` is `effectiveCharacters` from App.jsx (Actor Bank chars + Character Builder localStorage, merged at call site).
 
 Priority order (fragments are pushed in this sequence):
 
@@ -1035,11 +1040,18 @@ Final result is passed through `dedupeFragments()`.
 }
 ```
 
-**Scenario structure:** Each scenario is a function that takes `c` (an array of character descriptor strings) and returns an array of scenario strings. The `c[]` values are resolved by `getCharDesc(gender, age)` in `assembler.js`, producing strings like:
-- `c[0]` = `"young woman in her mid-twenties"` (for gender='woman', age='20s')
-- `c[1]` = `"man in his mid-forties"` (for gender='man', age='40s')
+**Scenario structure:** Each scenario is a function that takes `c` (an array of character descriptor strings) and returns an array of scenario strings. The `c[]` values are resolved in `DirectorSection.jsx`:
+
+```js
+charDescs[i] = chars[i]?.bankCharDesc ?? getCharDesc(chars[i]?.g, chars[i]?.a)
+```
+
+- When a character slot is linked to an Actor Bank character, `bankCharDesc` (e.g. `"Aria Chen, femme fatale"`) is used instead of the anonymous demographic string.
+- When unlinked, `getCharDesc(gender, age)` produces strings like `"young woman in her mid-twenties"` (for gender='woman', age='20s').
 - Full descriptor map covers genders: `man`, `woman`, `person` × ages: `child`, `teen`, `20s`, `30s`, `40s`, `50s`, `60s`, `elderly`
 - Fallback for unknown combination: `"${gender}, ${age}"`
+
+**`bankCharDesc` construction** (`buildBankCharDesc` in `App.jsx`): `"{name}, {cinematicArchetype}"` if archetype is set; otherwise `"{name}, {age}yo {genderPresentation}"` if demographics available; otherwise just `"{name}"`.
 
 **DIRECTOR_PRESETS:** Defined separately in `src/data/constants.js`, keyed by the same director key (e.g. `tarkovsky`). They contain chip presets (shot, lens, env, texture, light, color, film, qual). They are entirely separate data structures from the scenario data in `directors.js`. Both can be used independently: a user can apply a director's chip preset without selecting a scenario, and can select a scenario without applying the chip preset.
 
@@ -1497,29 +1509,56 @@ If active jobs exist in DB, polling is restored. Audit jobs are stored in `dbRes
 
 ## SECTION 7 — Actor Bank Tab
 
-**Current actual state:** The Actor Bank tab (`src/components/ActorBank/ActorBankView.jsx`) is a functional read-oriented view of the `characters` table.
+**Files:** `src/components/ActorBank/ActorBankView.jsx`, `ActorCard.jsx`, `ActorBankFilters.jsx`, `ActorDetail.jsx` and their `.module.css` counterparts.
 
-**What it shows:**
-- A grid of character cards, each showing a thumbnail image (from `thumbnailUrl` — the `front_portrait` image or first available image).
-- Character count displayed in header.
-- Filters: search (by name or cinematicArchetype), gender, ageMin, ageMax.
-- Sort: always by `last_rendered_at` (most recent render first, falling back to `created_at`).
+### 7.1 Grid View (ActorBankView)
 
-**Data source:** Queries `GET /api/characters?sortBy=last_rendered_at` with filter params. This reads the `characters` table (non-archived only by default).
+**Data source:** `GET /api/characters` with filter params. Non-archived characters only by default; `includeArchived=only` for the archived section.
 
-**Actions available:**
-- Select a character → loads full detail view via `GET /api/characters?id=<id>`, which returns the character plus its generated images.
-- **Delete** — `ActorDetail` component has a delete action (confirmed by `handleDelete` prop in `ActorBankView`).
-- **Back** — returns to grid.
-- No approve/reject, no lifecycle transitions, no prompt pack actions visible in the Actor Bank tab.
+**ActorCard** shows per character:
+- Thumbnail (`thumbnailUrl` — `front_portrait` or first available image). Position-relative for the status badge overlay.
+- **Lifecycle status badge** — absolute-positioned pill at the bottom-left of the thumbnail. Colours: `ready`=green, `portfolio_pending`=amber (labelled "rendering"), `portfolio_failed`=red, `auditioned`=blue, `preview`=purple.
+- **Image count** — shown in the meta line alongside age + genderPresentation.
+- **Archived visual state** — `opacity: 0.55; filter: grayscale(0.4)` when `archived_at` is non-null.
 
-**Relationship to Active Character dropdown:** The Actor Bank and the Casting Room's Active Character dropdown both read from the same `characters` table, but they are independent components. Selecting a character in the Actor Bank does NOT affect the Casting Room's `selectedCharacterId`. There is no cross-tab communication.
+**`archived_at` availability:** `listCharacters` and `getCharacter` in `repositories.js` both SELECT `archived_at` alongside `payload_json` and merge it into the returned object. It is NOT stored inside `payload_json`.
 
-**What is planned but not yet built:**
-- Direct "Cast from Actor Bank" integration (selecting a ready Actor Bank character for use in the Prompt Builder).
-- Actor Bank ↔ Prompt Builder character token integration (using Actor Bank characters as `@slug` references in scene input).
-- Advanced portfolio management actions directly in the Actor Bank (re-queue renders, lifecycle management).
-- The `actor_candidates` and `actor_auditions` tables exist in the DB but the Actor Bank UI does not currently query or display them.
+**Filters (ActorBankFilters):**
+- Search (by name or cinematicArchetype) — debounced 300ms
+- Gender chips (All / Male / Female / Non-binary)
+- Age range (ageMin, ageMax)
+- **Sort select** — three options: `last_rendered_at` (Recent renders, default), `created_at` (Recently created), `name` (A–Z). Sort `name` uses `LOWER(JSON_EXTRACT(payload_json, '$.name')) ASC` in `repositories.js`.
+
+**Archived toggle:** "Show archived" button in the header. When active, makes a second fetch with `includeArchived=only` and renders the results in a separate section below the active grid. Toggling off clears the section. Filter changes refresh both lists when the toggle is on.
+
+### 7.2 Detail View (ActorDetail)
+
+Opened by selecting a card in the grid. Loaded via `GET /api/characters?id=<id>` which returns the character plus `images[]` (each with `imageUrl`, `viewType`, `approved`).
+
+**Top bar actions (left to right):**
+- **← Back to Actor Bank** — navigates back to grid (no reload)
+- **Open in Casting Room →** — switches `activeTab` to `'pipeline'` in App.jsx and sets `jumpToCharacterId` → consumed by `CastingPipelinePanel.jumpToCharacterId` useEffect which calls `setSelectedCharacterId(id)` then fires `onJumpConsumed()`.
+- **Archive / Restore** — calls `POST /api/character-archive` or `POST /api/character-restore`; on success calls `onArchive`/`onRestore` in parent (`handleDelete` — navigates back + reloads active grid).
+- **Delete** — two-step confirmation; calls `DELETE /api/characters?id=<id>`.
+
+**Hero section:**
+- Character name is a clickable button (`cursor: text`). Clicking enters **inline rename mode**: a pre-filled input appears; Enter commits (calls `POST /api/character-rename`), Escape or blur cancels. Name updates locally on success.
+- Archived characters show an "archived" badge in the hero.
+- Meta line: age · genderPresentation · cinematicArchetype.
+
+**Portfolio re-queue banner (AB6):**
+- When `lifecycleStatus === 'portfolio_failed'`: red-tinted banner + "Re-queue portfolio" button. Calls `POST /api/character-portfolio-queue` with `{ characterId }`. On success, local status updates to `'portfolio_pending'`.
+- When `lifecycleStatus === 'portfolio_pending'`: neutral info banner ("Portfolio generation in progress…").
+
+**Reference images section:**
+- Strip of all generated images for this character.
+- **Keep / Discard buttons** under each image:
+  - Keep → `POST /api/generated-image-approve` with `{ id }` → sets `approved: true`; green checkmark badge appears on image.
+  - Discard → `POST /api/generated-image-reject` with `{ id }` → sets `approved: false`; image fades to 45% opacity.
+- Discarded images are **hidden by default**. A "show N discarded" toggle in the section header reveals them.
+- State updates locally on success (no full reload).
+
+**Profile sections:** Face, Skin & Hair, Body, Screen presence — same as before. Distinctive features and visual keywords chips.
 
 ---
 
@@ -1545,7 +1584,7 @@ Transitions:
   Any          ─── restoreCharacter() ────────────────────────────────→ archived_at cleared
 ```
 
-**Note on `portfolio_failed`:** The transition fires in the portfolio poll tick when all jobs complete with `status='failed'` and no jobs have `retryCount >= 2`. This is automatic, not manually triggered.
+**Note on `portfolio_failed`:** The transition fires in the portfolio poll tick when all jobs complete with `status='failed'` and no jobs have `retryCount >= 2`. This is automatic, not manually triggered. Recovery: "Re-queue portfolio" button in ActorDetail (Actor Bank) or "Queue Portfolio" in the Active Character section (Casting Room) — both call `POST /api/character-portfolio-queue`.
 
 **Note on `preview` status:** Only used for temporary characters created during batch preview rendering. These characters are deleted after image ingestion; the `preview` status is never promoted to any other status.
 
@@ -1620,6 +1659,8 @@ These same thresholds are used at Save to Cast time (`saveCandidateAsCharacter` 
 
 **URL share encoding covers:** `scene`, `dirKey`, `charCount`, `chars`, `scenario`, `chips`, `blendEnabled`, `blendDir`, `blendWeight`, `narrativeBeat`, `useStyleKeyForPolish`, `aiEngine`, `localOnly`.
 
+**Cross-tab imperative bridge (Actor Bank → Casting Room):** `App.jsx` holds `castingRoomJumpId` state (null or a character id). `handleOpenInCastingRoom(id)` sets `activeTab='pipeline'` and `castingRoomJumpId=id`. These are passed to `CastingPipelinePanel` as `jumpToCharacterId` and `onJumpConsumed`. A `useEffect` in `CastingPipelinePanel` calls `setSelectedCharacterId(jumpToCharacterId)` and fires `onJumpConsumed()` when the prop is non-null. `selectedCharacterId` is never lifted to App.jsx — the bridge is one-directional and self-clearing.
+
 ---
 
 ### 8.5 APP_MODE
@@ -1650,9 +1691,7 @@ These same thresholds are used at Save to Cast time (`saveCandidateAsCharacter` 
 ## SECTION 9 — Known Gaps and In-Progress Work
 
 ### Actor Bank UI (full implementation)
-**Gap:** The Actor Bank tab is a functional read-only browser of the `characters` table. Advanced features (direct casting from bank, lifecycle management, Actor Bank ↔ Prompt Builder token integration) are not built.
-**Status:** Planned. The infrastructure (tables, APIs) exists; the UI layer is minimal.
-**Nothing currently breaks:** The tab works for browsing. The gap is missing features, not broken ones.
+**Status: DONE (P6).** Full management UI built across AB1–AB7: lifecycle badges, image count, archived toggle, inline rename, archive/restore, image keep/discard, sort options, portfolio re-queue, "Open in Casting Room" cross-tab bridge. See Section 7 for complete feature inventory.
 
 ### C2 — Generate Previews side effect (temp character records)
 **Gap:** `POST /api/batch-candidate-preview` creates a temporary `characters` row to compile a prompt pack and queue a render. C2 was the intention to use transient/non-persisted preview images on candidate records directly without creating character records.
@@ -1679,8 +1718,10 @@ These same thresholds are used at Save to Cast time (`saveCandidateAsCharacter` 
 **Status: DONE.** Workspace profiles are stored in `workspace_profiles` SQLite table. Same one-time migration from `qpb_workspace_profiles_v1`.
 
 ### Prompt Builder ↔ Actor Bank character integration
-**Gap:** The Prompt Builder's `@slug` token system reads from `localStorage['qpb_characters_v1']`, which is populated by the Character Builder tab. It does NOT read from the Actor Bank (`characters` table). There is no integration where a rendered Actor Bank character can be referenced as `@slug` in the Prompt Builder scene input.
-**Status:** Not built. The infrastructure for it exists (slug in bank entries, `@` token expansion in assembler) but the two systems are not connected.
+**Status: DONE (pv9).** Two integrations implemented:
+1. **Character slot linking** — each character slot in DirectorSection can be linked to an Actor Bank character via a "link actor…" dropdown. When linked, `bankCharDesc` replaces `getCharDesc(g, a)` as the `c[0]`/`c[1]`/`c[2]` value in director scenario templates.
+2. **`@slug` expansion** — `effectiveCharacters = { ...bankCharDict, ...characters }` is passed to `assemblePrompt`. Actor Bank characters are available as `@slug` tokens in scene input (e.g. `@aria_chen` expands to that character's `optimizedDescription`). localStorage Character Builder entries win on slug collision.
+See Section 4.1 (state variables) and Section 4.3 (director system) for implementation details.
 
 ### Custom directors cap
 **Note:** `customDirectors` array is capped at 3 entries (enforced in `saveCustomDirector` in `App.jsx`).
