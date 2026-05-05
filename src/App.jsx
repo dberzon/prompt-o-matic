@@ -1,5 +1,11 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { fetchWorkspaceProfiles, upsertWorkspaceProfileRemote, deleteWorkspaceProfileRemote } from './api/promptStorage.js'
+import {
+  allLegacyItemsMigrated,
+  fetchWorkspaceProfiles,
+  mergeRemoteWithLegacyById,
+  upsertWorkspaceProfileRemote,
+  deleteWorkspaceProfileRemote,
+} from './api/promptStorage.js'
 import { assemblePrompt } from './utils/assembler.js'
 import { PRESETS, DIRECTOR_PRESETS } from './data/constants.js'
 import { DIRECTORS } from './data/directors.js'
@@ -36,6 +42,12 @@ const WORKSPACE_PROFILES_KEY = 'qpb_workspace_profiles_v1' // kept for one-time 
 const AI_ENGINE_KEY = 'qpb_ai_engine_v1'
 const LOCAL_ONLY_KEY = 'qpb_local_only_v1'
 const CHARACTERS_KEY = 'qpb_characters_v1'
+
+function workspaceProfileListToMap(items = []) {
+  const obj = {}
+  for (const p of items) obj[p.id] = { label: p.label, state: p.state }
+  return obj
+}
 
 function encodeShareState(state) {
   const json = JSON.stringify(state)
@@ -213,30 +225,30 @@ export default function App() {
   // Load workspace profiles from DB on mount; migrate legacy localStorage entries once.
   useEffect(() => {
     let active = true
-    fetchWorkspaceProfiles().then((items) => {
+    fetchWorkspaceProfiles().then(async (items) => {
       if (!active) return
-      if (items.length === 0) {
-        try {
-          const raw = localStorage.getItem(WORKSPACE_PROFILES_KEY)
-          const legacy = raw ? JSON.parse(raw) : null
-          if (legacy && typeof legacy === 'object' && Object.keys(legacy).length) {
-            const entries = Object.entries(legacy)
-            Promise.all(entries.map(([id, p]) => upsertWorkspaceProfileRemote({ id, label: p.label, state: p.state }).catch(() => null)))
-              .then(() => fetchWorkspaceProfiles())
-              .then((migrated) => {
-                if (!active) return
-                const obj = {}
-                for (const p of migrated) obj[p.id] = { label: p.label, state: p.state }
-                setProfiles(obj)
-                localStorage.removeItem(WORKSPACE_PROFILES_KEY)
-              })
-            return
-          }
-        } catch { /* ignore */ }
+      let legacy = []
+      try {
+        const raw = localStorage.getItem(WORKSPACE_PROFILES_KEY)
+        const parsed = raw ? JSON.parse(raw) : null
+        legacy = parsed && typeof parsed === 'object'
+          ? Object.entries(parsed)
+            .filter(([id, p]) => id && p?.label)
+            .map(([id, p]) => ({ id, label: p.label, state: p.state }))
+          : []
+      } catch { /* ignore */ }
+      if (legacy.length) {
+        const knownIds = new Set(items.map((p) => p.id))
+        const missing = legacy.filter((p) => !knownIds.has(p.id))
+        await Promise.all(missing.map((p) => upsertWorkspaceProfileRemote(p).catch(() => null)))
+        const migrated = await fetchWorkspaceProfiles().catch(() => items)
+        if (!active) return
+        const combined = mergeRemoteWithLegacyById(migrated, legacy)
+        setProfiles(workspaceProfileListToMap(combined))
+        if (allLegacyItemsMigrated(migrated, legacy)) localStorage.removeItem(WORKSPACE_PROFILES_KEY)
+        return
       }
-      const obj = {}
-      for (const p of items) obj[p.id] = { label: p.label, state: p.state }
-      setProfiles(obj)
+      setProfiles(workspaceProfileListToMap(items))
     }).catch(() => { /* API unavailable — leave empty */ })
     return () => { active = false }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps

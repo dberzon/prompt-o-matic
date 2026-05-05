@@ -4,7 +4,14 @@ import { usePolish } from '../hooks/usePolish.js'
 import { scorePromptQuality } from '../utils/qualityScore.js'
 import { downloadPromptTxt } from '../utils/downloadPromptFile.js'
 import { listGeneratedImages } from '../lib/api/generatedImages.js'
-import { fetchSavedPrompts, createSavedPromptRemote, deleteSavedPromptRemote, renameSavedPromptRemote } from '../api/promptStorage.js'
+import {
+  allLegacyItemsMigrated,
+  createSavedPromptRemote,
+  fetchSavedPrompts,
+  mergeRemoteWithLegacyById,
+  deleteSavedPromptRemote,
+  renameSavedPromptRemote,
+} from '../api/promptStorage.js'
 import styles from './PromptOutput.module.css'
 
 const DEFAULT_FRONT_PREFIX = 'photorealistic film still'
@@ -202,20 +209,23 @@ export default function PromptOutput({
   // Load saved prompts from DB; migrate any existing localStorage entries on first run.
   useEffect(() => {
     let active = true
-    fetchSavedPrompts().then((items) => {
+    fetchSavedPrompts().then(async (items) => {
       if (!active) return
-      if (items.length === 0) {
-        // One-time migration from localStorage
-        try {
-          const raw = localStorage.getItem(SAVED_PROMPTS_KEY)
-          const legacy = raw ? JSON.parse(raw) : []
-          if (Array.isArray(legacy) && legacy.length) {
-            Promise.all(legacy.map((e) => createSavedPromptRemote({ id: e.id, name: e.name, text: e.text }).catch(() => null)))
-              .then(() => fetchSavedPrompts())
-              .then((migrated) => { if (active) { setSavedPrompts(migrated); localStorage.removeItem(SAVED_PROMPTS_KEY) } })
-            return
-          }
-        } catch { /* ignore */ }
+      let legacy = []
+      try {
+        const raw = localStorage.getItem(SAVED_PROMPTS_KEY)
+        const parsed = raw ? JSON.parse(raw) : []
+        legacy = Array.isArray(parsed) ? parsed.filter((e) => e?.id && e?.name && e?.text) : []
+      } catch { /* ignore */ }
+      if (legacy.length) {
+        const knownIds = new Set(items.map((e) => e.id))
+        const missing = legacy.filter((e) => !knownIds.has(e.id))
+        await Promise.all(missing.map((e) => createSavedPromptRemote({ id: e.id, name: e.name, text: e.text }).catch(() => null)))
+        const migrated = await fetchSavedPrompts().catch(() => items)
+        if (!active) return
+        setSavedPrompts(mergeRemoteWithLegacyById(migrated, legacy))
+        if (allLegacyItemsMigrated(migrated, legacy)) localStorage.removeItem(SAVED_PROMPTS_KEY)
+        return
       }
       setSavedPrompts(items)
     }).catch(() => { /* API unavailable — leave empty */ })
