@@ -119,7 +119,9 @@ export function listCharacters(db, filters = {}) {
 
   const orderBy = filters.sortBy === 'last_rendered_at'
     ? 'COALESCE(last_rendered_at, created_at) DESC'
-    : 'created_at DESC'
+    : filters.sortBy === 'name'
+      ? "LOWER(JSON_EXTRACT(payload_json, '$.name')) ASC"
+      : 'created_at DESC'
   const rows = db.prepare(`
     SELECT payload_json, archived_at
     FROM characters

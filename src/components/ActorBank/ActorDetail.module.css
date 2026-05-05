@@ -241,7 +241,52 @@
   border-bottom: 1px solid var(--border);
 }
 
-/* ── Images ─────────────────────────────── */
+/* ── Re-queue banner (AB6) ────────────────── */
+
+.requeueBanner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(180, 40, 40, 0.06);
+  border: 1px solid rgba(180, 40, 40, 0.3);
+  border-radius: var(--radius-sm);
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.requeueMsg {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.requeueBtn {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.requeueBtn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.requeueBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.requeueError {
+  font-size: 11px;
+  color: #e05c5c;
+}
+
+/* ── Images (AB4) ─────────────────────────── */
 
 .imageStrip {
   display: flex;
@@ -259,6 +304,14 @@
   gap: 6px;
 }
 
+.imageCardRejected {
+  opacity: 0.45;
+}
+
+.imageWrap {
+  position: relative;
+}
+
 .image {
   width: 150px;
   height: 200px;
@@ -269,12 +322,111 @@
   background: var(--surface-2);
 }
 
+.approvedBadge {
+  position: absolute;
+  bottom: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(34, 140, 80, 0.9);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
 .imageLabel {
   font-size: 10px;
   color: var(--text-2);
   text-align: center;
   font-family: var(--font-mono);
   text-transform: lowercase;
+}
+
+.imageActions {
+  display: flex;
+  gap: 4px;
+}
+
+.keepBtn {
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 10px;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+}
+
+.keepBtn:hover:not(:disabled) {
+  color: #3ab87a;
+  border-color: #3ab87a;
+}
+
+.keepBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.keepBtnActive {
+  border-color: #3ab87a;
+  color: #3ab87a;
+  background: rgba(58, 184, 122, 0.08);
+}
+
+.discardBtn {
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 10px;
+  cursor: pointer;
+  transition: color 0.1s, border-color 0.1s, background 0.1s;
+}
+
+.discardBtn:hover:not(:disabled) {
+  color: #e05c5c;
+  border-color: #e05c5c;
+}
+
+.discardBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.discardBtnActive {
+  border-color: #e05c5c;
+  color: #e05c5c;
+  background: rgba(224, 92, 92, 0.08);
+}
+
+.showRejectedToggle {
+  background: none;
+  border: none;
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+  padding: 0 0 0 10px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.showRejectedToggle:hover {
+  color: var(--text-2);
+}
+
+.imageActionError {
+  font-size: 11px;
+  color: #e05c5c;
+  margin: 0 0 8px;
 }
 
 /* ── Profile ─────────────────────────────── */

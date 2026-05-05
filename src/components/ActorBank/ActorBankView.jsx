@@ -25,7 +25,7 @@ async function fetchCharacters(params) {
 
 export default function ActorBankView() {
   const [state, dispatch] = useReducer(reducer, INIT)
-  const filtersRef = useRef({ search: '', gender: '', ageMin: '', ageMax: '' })
+  const filtersRef = useRef({ search: '', gender: '', ageMin: '', ageMax: '', sortBy: 'last_rendered_at' })
   const [detail, setDetail] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState(null)
@@ -39,7 +39,7 @@ export default function ActorBankView() {
     if (f.gender) params.set('gender', f.gender)
     if (f.ageMin !== '' && f.ageMin != null) params.set('ageMin', String(f.ageMin))
     if (f.ageMax !== '' && f.ageMax != null) params.set('ageMax', String(f.ageMax))
-    params.set('sortBy', 'last_rendered_at')
+    params.set('sortBy', f.sortBy || 'last_rendered_at')
     for (const [k, v] of Object.entries(extra)) params.set(k, v)
     return params
   }, [])

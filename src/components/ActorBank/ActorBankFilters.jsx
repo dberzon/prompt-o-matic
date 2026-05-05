@@ -3,6 +3,12 @@ import styles from './ActorBankFilters.module.css'
 
 const GENDERS = ['All', 'Male', 'Female', 'Non-binary']
 
+const SORT_OPTIONS = [
+  { value: 'last_rendered_at', label: 'Recent renders' },
+  { value: 'created_at', label: 'Recently created' },
+  { value: 'name', label: 'A–Z by name' },
+]
+
 export default function ActorBankFilters({ filters, onChange }) {
   const debounceRef = useRef(null)
 
@@ -15,6 +21,7 @@ export default function ActorBankFilters({ filters, onChange }) {
   const handleGender = (g) => emit({ gender: g === 'All' ? '' : g })
   const handleAgeMin = (e) => emit({ ageMin: e.target.value === '' ? '' : Number(e.target.value) })
   const handleAgeMax = (e) => emit({ ageMax: e.target.value === '' ? '' : Number(e.target.value) })
+  const handleSort = (e) => onChange({ sortBy: e.target.value })
 
   const activeGender = filters.gender || 'All'
 
@@ -64,6 +71,16 @@ export default function ActorBankFilters({ filters, onChange }) {
           aria-label="Maximum age"
         />
       </div>
+      <select
+        className={styles.sortSelect}
+        value={filters.sortBy || 'last_rendered_at'}
+        onChange={handleSort}
+        aria-label="Sort order"
+      >
+        {SORT_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
     </div>
   )
 }

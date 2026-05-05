@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { archiveCharacter, renameCharacter, restoreCharacter } from '../../lib/api/characterBatches.js'
+import { approveGeneratedImage, rejectGeneratedImage } from '../../lib/api/generatedImages.js'
+import { queueCharacterPortfolio } from '../../lib/api/portfolio.js'
 import styles from './ActorDetail.module.css'
 
 const PROFILE_SECTIONS = [
@@ -54,25 +56,42 @@ function renderValue(val) {
   return String(val ?? '—')
 }
 
-export default function ActorDetail({ character: initialCharacter, images, onBack, onDelete, onArchive, onRestore }) {
+export default function ActorDetail({ character: initialCharacter, images: initialImages, onBack, onDelete, onArchive, onRestore }) {
   const [character, setCharacter] = useState(initialCharacter)
   const { id, age, genderPresentation, cinematicArchetype, distinctiveFeatures, visualKeywords, archived_at } = character
   const [displayName, setDisplayName] = useState(character.name ?? 'Unnamed')
+  const [lifecycleStatus, setLifecycleStatus] = useState(character.lifecycleStatus ?? null)
 
+  // Images state (AB4)
+  const [images, setImages] = useState(initialImages)
+  const [showRejected, setShowRejected] = useState(false)
+  const [imageActionLoading, setImageActionLoading] = useState({})
+  const [imageActionError, setImageActionError] = useState(null)
+
+  // Delete state
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState(null)
 
+  // Rename state (AB3)
   const [isRenaming, setIsRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [renameLoading, setRenameLoading] = useState(false)
   const [renameError, setRenameError] = useState(null)
   const renameInputRef = useRef(null)
 
+  // Archive/restore state (AB3)
   const [archiving, setArchiving] = useState(false)
   const [archiveError, setArchiveError] = useState(null)
 
+  // Re-queue state (AB6)
+  const [requeueLoading, setRequeuLoading] = useState(false)
+  const [requeueError, setRequeuError] = useState(null)
+
   const metaParts = [age, genderPresentation, cinematicArchetype].filter(Boolean)
+
+  const visibleImages = showRejected ? images : images.filter((img) => img.approved !== false)
+  const rejectedCount = images.filter((img) => img.approved === false).length
 
   useEffect(() => {
     if (isRenaming) renameInputRef.current?.focus()
@@ -146,6 +165,45 @@ export default function ActorDetail({ character: initialCharacter, images, onBac
     } catch (err) {
       setArchiveError(err.message ?? 'Restore failed')
       setArchiving(false)
+    }
+  }
+
+  const handleImageApprove = async (imgId) => {
+    setImageActionLoading((prev) => ({ ...prev, [imgId]: true }))
+    setImageActionError(null)
+    try {
+      await approveGeneratedImage(imgId)
+      setImages((prev) => prev.map((img) => img.id === imgId ? { ...img, approved: true } : img))
+    } catch (err) {
+      setImageActionError(err.message ?? 'Action failed')
+    } finally {
+      setImageActionLoading((prev) => ({ ...prev, [imgId]: false }))
+    }
+  }
+
+  const handleImageReject = async (imgId) => {
+    setImageActionLoading((prev) => ({ ...prev, [imgId]: true }))
+    setImageActionError(null)
+    try {
+      await rejectGeneratedImage(imgId)
+      setImages((prev) => prev.map((img) => img.id === imgId ? { ...img, approved: false } : img))
+    } catch (err) {
+      setImageActionError(err.message ?? 'Action failed')
+    } finally {
+      setImageActionLoading((prev) => ({ ...prev, [imgId]: false }))
+    }
+  }
+
+  const handleRequeue = async () => {
+    setRequeuLoading(true)
+    setRequeuError(null)
+    try {
+      await queueCharacterPortfolio({ characterId: id })
+      setLifecycleStatus('portfolio_pending')
+    } catch (err) {
+      setRequeuError(err.message ?? 'Re-queue failed')
+    } finally {
+      setRequeuLoading(false)
     }
   }
 
@@ -237,23 +295,87 @@ export default function ActorDetail({ character: initialCharacter, images, onBac
         )}
       </div>
 
+      {/* AB6 — Re-queue when portfolio failed */}
+      {lifecycleStatus === 'portfolio_failed' && (
+        <div className={styles.requeueBanner}>
+          <span className={styles.requeueMsg}>Portfolio generation failed.</span>
+          <button
+            type="button"
+            className={styles.requeueBtn}
+            onClick={handleRequeue}
+            disabled={requeueLoading}
+          >
+            {requeueLoading ? 'Queuing…' : 'Re-queue portfolio'}
+          </button>
+          {requeueError && <span className={styles.requeueError}>{requeueError}</span>}
+        </div>
+      )}
+      {lifecycleStatus === 'portfolio_pending' && (
+        <div className={styles.requeueBanner}>
+          <span className={styles.requeueMsg}>Portfolio generation in progress…</span>
+        </div>
+      )}
+
       {images.length > 0 && (
         <section className={styles.section}>
-          <h3 className={styles.sectionTitle}>Reference images</h3>
+          <h3 className={styles.sectionTitle}>
+            Reference images
+            {rejectedCount > 0 && (
+              <button
+                type="button"
+                className={styles.showRejectedToggle}
+                onClick={() => setShowRejected((v) => !v)}
+              >
+                {showRejected ? `Hide ${rejectedCount} discarded` : `Show ${rejectedCount} discarded`}
+              </button>
+            )}
+          </h3>
+          {imageActionError && <p className={styles.imageActionError}>{imageActionError}</p>}
           <div className={styles.imageStrip}>
-            {images.map((img) => (
-              <div key={img.id} className={styles.imageCard}>
-                <img
-                  src={img.imageUrl}
-                  alt={img.viewType ?? 'character'}
-                  loading="lazy"
-                  className={styles.image}
-                />
-                <span className={styles.imageLabel}>
-                  {(img.viewType ?? '').replace(/_/g, ' ')}
-                </span>
-              </div>
-            ))}
+            {visibleImages.map((img) => {
+              const busy = imageActionLoading[img.id]
+              const isApproved = img.approved === true
+              const isRejected = img.approved === false
+              return (
+                <div
+                  key={img.id}
+                  className={`${styles.imageCard} ${isRejected ? styles.imageCardRejected : ''}`}
+                >
+                  <div className={styles.imageWrap}>
+                    <img
+                      src={img.imageUrl}
+                      alt={img.viewType ?? 'character'}
+                      loading="lazy"
+                      className={styles.image}
+                    />
+                    {isApproved && <div className={styles.approvedBadge} aria-label="Kept">✓</div>}
+                  </div>
+                  <span className={styles.imageLabel}>
+                    {(img.viewType ?? '').replace(/_/g, ' ')}
+                  </span>
+                  <div className={styles.imageActions}>
+                    <button
+                      type="button"
+                      className={`${styles.keepBtn} ${isApproved ? styles.keepBtnActive : ''}`}
+                      onClick={() => handleImageApprove(img.id)}
+                      disabled={busy || isApproved}
+                      title="Keep this image"
+                    >
+                      Keep
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.discardBtn} ${isRejected ? styles.discardBtnActive : ''}`}
+                      onClick={() => handleImageReject(img.id)}
+                      disabled={busy || isRejected}
+                      title="Discard this image"
+                    >
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </section>
       )}
