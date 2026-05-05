@@ -23,7 +23,7 @@ async function fetchCharacters(params) {
   return data
 }
 
-export default function ActorBankView() {
+export default function ActorBankView({ onOpenInCastingRoom }) {
   const [state, dispatch] = useReducer(reducer, INIT)
   const filtersRef = useRef({ search: '', gender: '', ageMin: '', ageMax: '', sortBy: 'last_rendered_at' })
   const [detail, setDetail] = useState(null)
@@ -145,6 +145,7 @@ export default function ActorBankView() {
           onDelete={handleDelete}
           onArchive={handleDelete}
           onRestore={handleDelete}
+          onOpenInCastingRoom={onOpenInCastingRoom}
         />
       </div>
     )

@@ -56,7 +56,7 @@ function renderValue(val) {
   return String(val ?? '—')
 }
 
-export default function ActorDetail({ character: initialCharacter, images: initialImages, onBack, onDelete, onArchive, onRestore }) {
+export default function ActorDetail({ character: initialCharacter, images: initialImages, onBack, onDelete, onArchive, onRestore, onOpenInCastingRoom }) {
   const [character, setCharacter] = useState(initialCharacter)
   const { id, age, genderPresentation, cinematicArchetype, distinctiveFeatures, visualKeywords, archived_at } = character
   const [displayName, setDisplayName] = useState(character.name ?? 'Unnamed')
@@ -214,6 +214,15 @@ export default function ActorDetail({ character: initialCharacter, images: initi
           ← Back to Actor Bank
         </button>
         <div className={styles.topBarActions}>
+          {onOpenInCastingRoom && (
+            <button
+              type="button"
+              className={styles.castingRoomBtn}
+              onClick={() => onOpenInCastingRoom(id)}
+            >
+              Open in Casting Room →
+            </button>
+          )}
           {archiveError && <span className={styles.actionError}>{archiveError}</span>}
 
           {archived_at ? (

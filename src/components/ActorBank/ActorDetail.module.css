@@ -177,6 +177,22 @@
   color: var(--text-2);
 }
 
+/* Open in Casting Room button */
+.castingRoomBtn {
+  padding: 4px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.castingRoomBtn:hover {
+  background: var(--accent-dim, rgba(100, 100, 255, 0.1));
+}
+
 /* Archive / Restore buttons */
 .archiveBtn {
   background: none;

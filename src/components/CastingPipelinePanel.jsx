@@ -112,7 +112,7 @@ function RenderStatusBar({ isPollingAudit, isPollingPortfolio, auditionStatuses,
   )
 }
 
-export default function CastingPipelinePanel() {
+export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed }) {
   // ── Global UI state ───────────────────────────────────────────────────────
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
@@ -471,6 +471,13 @@ export default function CastingPipelinePanel() {
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { selectedCharacterIdRef.current = selectedCharacterId }, [selectedCharacterId])
+
+  useEffect(() => {
+    if (jumpToCharacterId) {
+      setSelectedCharacterId(jumpToCharacterId)
+      onJumpConsumed?.()
+    }
+  }, [jumpToCharacterId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Data loading ──────────────────────────────────────────────────────────
   async function initialLoad() {

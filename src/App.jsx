@@ -174,6 +174,12 @@ function summarizeApplyDiff(before, after, source) {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('builder')
+  const [castingRoomJumpId, setCastingRoomJumpId] = useState(null)
+
+  const handleOpenInCastingRoom = useCallback((characterId) => {
+    setActiveTab('pipeline')
+    setCastingRoomJumpId(characterId)
+  }, [])
   const [scene, setScene] = useState('')
   const [selectedDir, setSelectedDir] = useState(null)
   const [charCount, setCharCount] = useState(1)
@@ -985,11 +991,14 @@ export default function App() {
         </div>
       ) : activeTab === 'pipeline' ? (
         <div className={styles.characterTab}>
-          <CastingPipelinePanel />
+          <CastingPipelinePanel
+            jumpToCharacterId={castingRoomJumpId}
+            onJumpConsumed={() => setCastingRoomJumpId(null)}
+          />
         </div>
       ) : (
         <div className={styles.characterTab}>
-          <ActorBankView />
+          <ActorBankView onOpenInCastingRoom={handleOpenInCastingRoom} />
         </div>
       )}
       <EmbeddedSetup
