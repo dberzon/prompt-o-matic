@@ -253,6 +253,9 @@ export default function PromptOutput({
     }
   }, [displayText])
 
+  // Clear selected variant when assembled prompt changes so stale variant text is never shown.
+  useEffect(() => { setSelectedVariant(null) }, [assembledText])
+
   // Clear manual edit when underlying assembled text changes (one-way sync)
   useEffect(() => {
     if (hasManualEdit) {
@@ -266,6 +269,7 @@ export default function PromptOutput({
   const handlePolish = () => {
     setRestoredText(null)
     setManualEdit(null)
+    setSelectedVariant(null)
     polish({
       fragments: prompt,
       directorName,
