@@ -10,7 +10,8 @@ function makeError(message, code) {
 }
 
 export function assertPromptPackApiEnabled(env = process.env) {
-  if (!isTrue(env.ENABLE_PROMPT_PACK_API)) {
+  const mode = String(env.APP_MODE || 'local-studio')
+  if (!isTrue(env.ENABLE_PROMPT_PACK_API) && mode === 'cloud') {
     throw makeError(
       'Prompt-pack API is disabled. Set ENABLE_PROMPT_PACK_API=true to enable.',
       'PROMPT_PACK_API_DISABLED',

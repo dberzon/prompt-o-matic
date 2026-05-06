@@ -10,7 +10,8 @@ function makeError(message, code) {
 }
 
 export function assertGeneratedImagesApiEnabled(env = process.env) {
-  if (!isTrue(env.ENABLE_GENERATED_IMAGES_API)) {
+  const mode = String(env.APP_MODE || 'local-studio')
+  if (!isTrue(env.ENABLE_GENERATED_IMAGES_API) && mode === 'cloud') {
     throw makeError(
       'Generated images API is disabled. Set ENABLE_GENERATED_IMAGES_API=true to enable.',
       'GENERATED_IMAGES_API_DISABLED',

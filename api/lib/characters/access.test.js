@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { assertCharacterBatchApiEnabled, assertCharacterBatchOperationAllowed } from './access.js'
 
 describe('character batch API access', () => {
-  it('blocks when flag disabled', () => {
-    expect(() => assertCharacterBatchApiEnabled({})).toThrow('Character batch API is disabled')
+  it('blocks in cloud mode when flag not set', () => {
+    expect(() => assertCharacterBatchApiEnabled({ APP_MODE: 'cloud' })).toThrow('Character batch API is disabled')
+  })
+
+  it('allows in local-studio mode without flag', () => {
+    expect(() => assertCharacterBatchApiEnabled({})).not.toThrow()
   })
 
   it('allows read operations in cloud when enabled', () => {

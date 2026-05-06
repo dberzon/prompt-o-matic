@@ -10,7 +10,8 @@ function accessError(message, code) {
 }
 
 export function assertVectorMaintenanceEnabled(env = process.env) {
-  if (!isTrue(env.ENABLE_VECTOR_MAINTENANCE_API)) {
+  const mode = String(env.APP_MODE || 'local-studio')
+  if (!isTrue(env.ENABLE_VECTOR_MAINTENANCE_API) && mode === 'cloud') {
     throw accessError(
       'Vector maintenance API is disabled. Set ENABLE_VECTOR_MAINTENANCE_API=true to enable.',
       'VECTOR_MAINTENANCE_DISABLED',

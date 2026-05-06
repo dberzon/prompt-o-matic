@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { assertPromptPackApiEnabled, assertPromptPackOperationAllowed } from './access.js'
 
 describe('prompt-pack API access', () => {
-  it('blocks when flag disabled', () => {
-    expect(() => assertPromptPackApiEnabled({})).toThrow('Prompt-pack API is disabled')
+  it('blocks in cloud mode when flag not set', () => {
+    expect(() => assertPromptPackApiEnabled({ APP_MODE: 'cloud' })).toThrow('Prompt-pack API is disabled')
+  })
+
+  it('allows in local-studio mode without flag', () => {
+    expect(() => assertPromptPackApiEnabled({})).not.toThrow()
   })
 
   it('allows list in cloud when enabled', () => {

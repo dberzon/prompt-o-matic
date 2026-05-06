@@ -10,7 +10,8 @@ function makeError(message, code) {
 }
 
 export function assertComfyApiEnabled(env = process.env) {
-  if (!isTrue(env.ENABLE_COMFY_API)) {
+  const mode = String(env.APP_MODE || 'local-studio')
+  if (!isTrue(env.ENABLE_COMFY_API) && mode === 'cloud') {
     throw makeError('Comfy API is disabled. Set ENABLE_COMFY_API=true to enable.', 'COMFY_API_DISABLED')
   }
 }

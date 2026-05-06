@@ -10,7 +10,8 @@ function makeError(message, code) {
 }
 
 export function assertCharacterBatchApiEnabled(env = process.env) {
-  if (!isTrue(env.ENABLE_CHARACTER_BATCH_API)) {
+  const mode = String(env.APP_MODE || 'local-studio')
+  if (!isTrue(env.ENABLE_CHARACTER_BATCH_API) && mode === 'cloud') {
     throw makeError(
       'Character batch API is disabled. Set ENABLE_CHARACTER_BATCH_API=true to enable.',
       'CHARACTER_BATCH_API_DISABLED',

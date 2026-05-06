@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { assertGeneratedImagesApiEnabled, assertGeneratedImagesOperationAllowed } from './access.js'
 
 describe('generated images access guards', () => {
-  it('blocks when disabled', () => {
-    expect(() => assertGeneratedImagesApiEnabled({})).toThrow('Generated images API is disabled')
+  it('blocks in cloud mode when flag not set', () => {
+    expect(() => assertGeneratedImagesApiEnabled({ APP_MODE: 'cloud' })).toThrow('Generated images API is disabled')
+  })
+
+  it('allows in local-studio mode without flag', () => {
+    expect(() => assertGeneratedImagesApiEnabled({})).not.toThrow()
   })
 
   it('allows list in cloud mode when enabled', () => {

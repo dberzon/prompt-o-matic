@@ -6,8 +6,12 @@ import {
 } from './access.js'
 
 describe('vector maintenance access guards', () => {
-  it('blocks maintenance when ENABLE_VECTOR_MAINTENANCE_API is not true', () => {
-    expect(() => assertVectorMaintenanceEnabled({})).toThrow('Vector maintenance API is disabled')
+  it('blocks in cloud mode when flag not set', () => {
+    expect(() => assertVectorMaintenanceEnabled({ APP_MODE: 'cloud' })).toThrow('Vector maintenance API is disabled')
+  })
+
+  it('allows in local-studio mode without flag', () => {
+    expect(() => assertVectorMaintenanceEnabled({})).not.toThrow()
   })
 
   it('blocks non-status operations in cloud mode', () => {
