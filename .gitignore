@@ -39,3 +39,9 @@ data/qpb-local.sqlite*
 .dolt/
 *.db
 .beads-credential-key
+
+# Serena MCP per-project cache/memories (local tool state)
+.serena/
+
+# Chroma vector DB (local runtime state)
+chroma_data/
