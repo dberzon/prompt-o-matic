@@ -53,14 +53,14 @@ Full character management interface for the `characters` table. Grid view with f
 
 ---
 
-## API Surface (10 Domains, 47+ Routes)
+## API Surface (10 Domains, 50+ Routes)
 
 All routes are registered in `vite.config.js` as Vite middleware. Prefix: `/api/`.
 
 | Domain | Routes | Gating |
 |---|---|---|
 | Polish | `POST /api/polish`, `GET /api/polish-health` | Always available |
-| Characters (CRUD + lifecycle) | `GET/DELETE /api/characters`, `POST /api/character-lifecycle`, `POST /api/character-rename`, `POST /api/character-archive`, `POST /api/character-restore` | `ENABLE_CHARACTER_BATCH_API` for list/delete |
+| Characters (CRUD + lifecycle + descriptors) | `GET/DELETE /api/characters`, `POST /api/character-lifecycle`, `POST /api/character-rename`, `POST /api/character-archive`, `POST /api/character-restore`, `GET /api/characters/slugs`, `POST /api/character-prompt-descriptor`, `POST /api/characters-backfill-descriptors` | `ENABLE_CHARACTER_BATCH_API` for list/delete; descriptor endpoints always available |
 | Casting / Audition (Path A) | `POST /api/audition/generate` | None |
 | Batch pipeline (Path B) | `POST /api/characters-generate-batch`, `GET /api/character-batches`, `GET /api/character-batch`, `GET /api/character-batch-candidates`, `POST /api/character-batch-candidate-approve/reject/reconsider/save/mutate`, `POST /api/character-batch-refill`, `POST /api/batch-candidate-preview`, `POST /api/batch-candidate-preview-image` | `ENABLE_CHARACTER_BATCH_API` |
 | Prompt packs | `POST /api/prompt-pack-compile-character`, `POST /api/prompt-pack-compile-batch`, `GET /api/prompt-packs` | `ENABLE_PROMPT_PACK_API` |
@@ -84,7 +84,7 @@ Schema defined in `api/lib/db/schema.js`. All query functions in `api/lib/db/rep
 
 | Table | Purpose |
 |---|---|
-| `characters` | Generated character profiles (output of audition or batch-save). Has `lifecycle_status`, `embedding_status`, `archived_at`, `last_rendered_at` columns. |
+| `characters` | Generated character profiles (output of audition or batch-save). Shadow columns: `lifecycle_status`, `embedding_status`, `archived_at`, `last_rendered_at`, `name`, `age`, `gender_presentation`, `cinematic_archetype`, `slug` (snake_case, unique), `prompt_descriptor` (15-25 word casting note for use in director scenario templates). |
 | `character_bank_entries` | Character descriptions authored in the Character Builder tab (input specs for audition). Keyed by slug. |
 | `prompt_packs` | Compiled prompt packs per character per view angle. Used to queue ComfyUI jobs. |
 | `generated_images` | Records of ComfyUI output images with metadata (approve/reject state, view type). |
@@ -118,8 +118,9 @@ Soft-archive is separate: `archived_at` column (ISO timestamp if archived, NULL 
 
 | File | Role |
 |---|---|
-| `src/App.jsx` | Root component; all Prompt Builder state; tab switching; blend, presets, profiles; `bankCharsForSelector` fetch + `effectiveCharacters` memo; `castingRoomJumpId` cross-tab bridge state |
-| `src/utils/assembler.js` | `rewriteScene`, `assemblePrompt`, `dedupeFragments`, `getCharDesc` |
+| `src/App.jsx` | Root component; all Prompt Builder state; tab switching; blend, presets, profiles; `actorBankSlugs` cache (fetched on mount + tab focus) + `effectiveCharacters` memo; `castingRoomJumpId` cross-tab bridge state |
+| `src/utils/assembler.js` | `rewriteScene(raw, characters, actorBankSlugs)`, `assemblePrompt`, `dedupeFragments`, `getCharDesc(gender, age, promptDescriptor?)` |
+| `src/utils/actorBankMapping.js` | `genderPresentationToG`, `ageToBracket` — derive chars `g`/`a` from Actor Bank character profile |
 | `src/utils/slugify.js` | `toSnakeSlug`, `resolveCharacterSlug` — used by `@slug` expansion and Actor Bank character linking |
 | `api/lib/polishCore.js` | System prompt, provider resolution, `runPolish`, `healthCheck` |
 | `vite.config.js` | All 47+ API route handlers registered as Vite middleware; Chroma auto-spawn; SSE watcher |
@@ -129,8 +130,10 @@ Soft-archive is separate: `archived_at` column (ISO timestamp if archived, NULL 
 | `src/components/ActorBank/ActorBankView.jsx` | Actor Bank tab root; archived toggle; passes `onOpenInCastingRoom` to ActorDetail |
 | `src/components/ActorBank/ActorCard.jsx` | Character card with lifecycle badge, image count, archived state |
 | `src/components/ActorBank/ActorBankFilters.jsx` | Filter bar with search, gender chips, age range, sort select |
-| `src/components/ActorBank/ActorDetail.jsx` | Character detail — inline rename, archive/restore, image keep/discard curation, portfolio re-queue, "Open in Casting Room" |
-| `src/components/DirectorSection.jsx` | Director + character slot UI; `bankChars` prop enables "link actor…" per slot |
+| `src/components/ActorBank/ActorDetail.jsx` | Character detail — inline rename, archive/restore, image keep/discard curation, portfolio re-queue, "Open in Casting Room"; prompt descriptor section with inline edit, [Generate] and [Regenerate] buttons |
+| `src/components/DirectorSection.jsx` | Director + character slot UI; "Import from Actor Bank" button opens `ActorBankPicker` per slot; when `actorBankId` is set, slot shows name/thumbnail + Clear button |
+| `src/components/ActorBankPicker/ActorBankPicker.jsx` | Inline character picker popover — search + scroll list from `/api/characters/slugs`; `onSelect`, `onClose`, `excludeIds` props |
+| `src/components/SceneInput.jsx` | Scene text input with `@slug` autocomplete dropdown (fires on `@`, Tab/Enter inserts, Esc dismisses) |
 | `src/components/CharacterBuilder.jsx` | Character bank entry form and management |
 | `api/lib/characterLifecycle.js` | Lifecycle transition functions |
 | `api/lib/characters/batchGeneration.js` | Batch generation, similarity thresholds, classification |
@@ -147,10 +150,13 @@ Soft-archive is separate: `archived_at` column (ISO timestamp if archived, NULL 
 - **Time / Weather Quick-Set buttons:** Not present in the current UI.
 - **Garment / Clothing Expander panel:** Not present as a panel; some garment rewrites exist in the REWRITES table.
 
-The following were previously listed as gaps and are now complete (P6):
+The following were previously listed as gaps and are now complete:
 
-- **Actor Bank full implementation (AB1–AB7):** Lifecycle badges, image count, archived toggle, inline rename, archive/restore, image keep/discard curation, sort options (recent renders / recently created / A–Z), portfolio re-queue on `portfolio_failed`, "Open in Casting Room" cross-tab bridge.
-- **Prompt Builder ↔ Actor Bank character integration (pv9):** `effectiveCharacters` merges Actor Bank chars with Character Builder localStorage so Actor Bank characters resolve as `@slug` tokens in scene text. Director scenario slots can be linked to a named Actor Bank character (`bankCharId/bankCharName/bankCharDesc`); linked character's description replaces the anonymous demographic descriptor.
+- **Actor Bank full implementation (AB1–AB7, P6):** Lifecycle badges, image count, archived toggle, inline rename, archive/restore, image keep/discard curation, sort options (recent renders / recently created / A–Z), portfolio re-queue on `portfolio_failed`, "Open in Casting Room" cross-tab bridge.
+- **Prompt Builder ↔ Actor Bank integration Phase 1-3 (P7):**
+  - Phase 1: `slug` + `prompt_descriptor` shadow columns on `characters`; LLM descriptor generation via `POST /api/character-prompt-descriptor`; auto-gen on character creation (both audition and batch-save paths); slug backfill on startup; ActorDetail descriptor UI with inline edit + Generate/Regenerate.
+  - Phase 2: `ActorBankPicker` component; "Import from Actor Bank" in DirectorSection; `chars` state shape now `{ g, a, actorBankId, name, promptDescriptor, thumbnailUrl }`; `actorBankMapping.js` derives g/a from Actor Bank profile; share URL v2 encodes actorBankId.
+  - Phase 3: `rewriteScene` extended with `actorBankSlugs` third parameter; Character Builder entries take priority on slug collision; `actorBankSlugs` cache in App.jsx refreshed on tab focus; SceneInput @slug autocomplete dropdown.
 
 ---
 

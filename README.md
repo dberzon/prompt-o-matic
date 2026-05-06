@@ -25,7 +25,7 @@ Cinematic prompt builder for [Qwen image generation](https://chat.qwen.ai). Dire
 | **Prompt Builder** | Assemble cinematic text-to-image prompts from director chips, scenario templates, and scene input. Optional LLM polish via Ollama, LM Studio, or Claude. |
 | **Character Builder** | Define named character bank entries with descriptions. These entries feed into the Casting Room's Path A (audition) workflow. |
 | **Casting Room** | Generate AI actor portraits through two paths: Path A (cast from a bank brief via LLM + ComfyUI) and Path B (batch-generate diverse candidates with vector similarity screening). Manage the active character's portfolio and image gallery. |
-| **Actor Bank** | Browse all saved characters with search, gender, and age filters. Read-oriented; all write actions happen in the Casting Room. |
+| **Actor Bank** | Browse all saved characters with search, gender, and age filters. Full detail view: inline rename, archive/restore, image keep/discard curation, portfolio re-queue, prompt descriptor edit/generate. Characters can be imported directly into Prompt Builder character slots. |
 
 **Dependency chain:** Character Builder → Casting Room → Actor Bank. Prompt Builder is independent.
 

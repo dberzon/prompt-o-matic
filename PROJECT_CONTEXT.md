@@ -13,7 +13,7 @@ For full technical detail, see `APPLICATION_REFERENCE.md`.
 | **Prompt Builder** | Assemble a prompt from scene input, director chips (61 directors), scenario templates, and optional LLM polish. Independent of the other tabs. |
 | **Character Builder** | Author named character descriptions (bank entries) stored in SQLite and mirrored to localStorage. These feed Path A in the Casting Room. |
 | **Casting Room** | Two paths: Path A (audition from bank entry, LLM generates profiles, ComfyUI renders) and Path B (batch generation with vector similarity screening). Shared Active Character section for portfolio management and image gallery. |
-| **Actor Bank** | Read-only browser of the `characters` table with search/filter. Most writes happen in the Casting Room. |
+| **Actor Bank** | Full character management interface for the `characters` table. Grid with search/filter. Detail view: inline rename, archive/restore, image curation, portfolio re-queue, prompt descriptor edit/generate. Characters can be imported into Prompt Builder slots. |
 
 ---
 

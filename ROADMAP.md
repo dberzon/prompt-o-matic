@@ -28,7 +28,8 @@ None at this time. All planned milestones through P6 are complete.
 - P3 — Character management (rename, archive/restore)
 - P4 — Flow fixes and documentation sync (archive migration to SQLite, Journey A promotion, portfolio conditional copy, project tone)
 - P5 — Prompt storage migration to SQLite, blend fix, display priority fixes, documentation update
-- P6 — Actor Bank full UI (AB1–AB7) + Prompt Builder ↔ Actor Bank integration (pv9)
+- P6 — Actor Bank full UI (AB1–AB7) + initial Prompt Builder ↔ Actor Bank integration (pv9: bankCharId slot linking + effectiveCharacters @slug merge)
+- P7 — Prompt Builder ↔ Actor Bank integration Phase 1-3: slug + prompt_descriptor columns on characters, LLM descriptor generation endpoint, auto-gen on creation (both paths), slug/descriptor backfill, ActorDetail descriptor UI; ActorBankPicker component + character slot import in DirectorSection, actorBankId state shape, share URL v2; actorBankSlugs cache + @slug expansion reads from Actor Bank, SceneInput @slug autocomplete
 
 ---
 
