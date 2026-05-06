@@ -433,7 +433,7 @@ export default function App() {
         next[idx] = entry
         return next
       }
-      if (prev.length >= 3) return prev
+      if (prev.length >= 10) return prev
       return [...prev, entry]
     })
   }, [])

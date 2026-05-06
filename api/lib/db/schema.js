@@ -1,7 +1,7 @@
 export const CREATE_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS characters (
   id TEXT PRIMARY KEY,
-  project_id TEXT,
+  project_id TEXT, -- Reserved for Production Room feature (Horizon 2). Not currently used.
   embedding_status TEXT NOT NULL DEFAULT 'not_indexed',
   payload_json TEXT NOT NULL,
   created_at TEXT NOT NULL,
@@ -14,7 +14,7 @@ CREATE INDEX IF NOT EXISTS idx_characters_created_at ON characters(created_at);
 CREATE TABLE IF NOT EXISTS prompt_packs (
   id TEXT PRIMARY KEY,
   character_id TEXT NOT NULL,
-  project_id TEXT,
+  project_id TEXT, -- Reserved for Production Room feature (Horizon 2). Not currently used.
   payload_json TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS generated_images (
   id TEXT PRIMARY KEY,
   character_id TEXT,
   prompt_pack_id TEXT NOT NULL,
-  project_id TEXT,
+  project_id TEXT, -- Reserved for Production Room feature (Horizon 2). Not currently used.
   payload_json TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL

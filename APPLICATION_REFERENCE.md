@@ -1725,7 +1725,10 @@ These same thresholds are used at Save to Cast time (`saveCandidateAsCharacter` 
 See Section 4.1 (state variables) and Section 4.3 (director system) for implementation details.
 
 ### Custom directors cap
-**Note:** `customDirectors` array is capped at 3 entries (enforced in `saveCustomDirector` in `App.jsx`).
+**Note:** `customDirectors` array is capped at 10 entries (enforced in `saveCustomDirector` in `App.jsx`).
+
+### project_id columns (reserved)
+`project_id TEXT NULL` columns exist on `characters`, `prompt_packs`, and `generated_images` tables, along with corresponding indexes. These are forward-looking placeholders reserved for a Production Room feature (Horizon 2). They are not populated or queried by any current code path.
 
 ---
 
