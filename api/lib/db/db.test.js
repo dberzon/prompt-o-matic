@@ -130,6 +130,23 @@ describe('sqlite canonical storage', () => {
     db.close()
   })
 
+  it('embedding_status column is authoritative over payload_json on read', () => {
+    const { db } = createTempDb()
+    createCharacter(db, { ...validCharacterProfile, id: 'char_emb_col', embeddingStatus: 'not_indexed' })
+
+    // Directly advance the column without touching payload_json — simulates the column winning
+    db.prepare("UPDATE characters SET embedding_status = 'embedded' WHERE id = 'char_emb_col'").run()
+
+    const fetched = getCharacter(db, 'char_emb_col')
+    expect(fetched.embeddingStatus).toBe('embedded')
+
+    const listed = listCharacters(db, {})
+    const found = listed.find((c) => c.id === 'char_emb_col')
+    expect(found.embeddingStatus).toBe('embedded')
+
+    db.close()
+  })
+
   it('lists generated image records by character and prompt pack', () => {
     const { db } = createTempDb()
     createGeneratedImageRecord(db, {
