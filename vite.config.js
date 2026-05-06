@@ -1983,5 +1983,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   return {
     plugins: [react(), apiDevPlugin(env)],
+    test: {
+      exclude: ['node_modules/**', '.claude/worktrees/**'],
+    },
   }
 })
