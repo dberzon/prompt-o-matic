@@ -54,9 +54,9 @@ export function createCharacter(db, profile) {
 }
 
 export function getCharacter(db, id) {
-  const row = db.prepare('SELECT payload_json, archived_at FROM characters WHERE id = ?').get(id)
+  const row = db.prepare('SELECT payload_json, lifecycle_status, archived_at FROM characters WHERE id = ?').get(id)
   if (!row) return null
-  return { ...rowToPayload(row), archived_at: row.archived_at ?? null }
+  return { ...rowToPayload(row), lifecycleStatus: row.lifecycle_status, archived_at: row.archived_at ?? null }
 }
 
 export function countCharacters(db) {
@@ -123,14 +123,14 @@ export function listCharacters(db, filters = {}) {
       ? "LOWER(JSON_EXTRACT(payload_json, '$.name')) ASC"
       : 'created_at DESC'
   const rows = db.prepare(`
-    SELECT payload_json, archived_at
+    SELECT payload_json, lifecycle_status, archived_at
     FROM characters
     ${whereSql}
     ORDER BY ${orderBy}
     ${limitSql}
   `).all(...values)
 
-  let items = rows.map((row) => ({ ...rowToPayload(row), archived_at: row.archived_at ?? null }))
+  let items = rows.map((row) => ({ ...rowToPayload(row), lifecycleStatus: row.lifecycle_status, archived_at: row.archived_at ?? null }))
 
   if (filters.gender) {
     const g = filters.gender.toLowerCase()

@@ -113,6 +113,23 @@ describe('sqlite canonical storage', () => {
     db.close()
   })
 
+  it('lifecycle_status column is authoritative over payload_json on read', () => {
+    const { db } = createTempDb()
+    createCharacter(db, { ...validCharacterProfile, id: 'char_lc_col', lifecycleStatus: 'auditioned' })
+
+    // Directly advance the column without touching payload_json — simulates the column winning
+    db.prepare("UPDATE characters SET lifecycle_status = 'ready' WHERE id = 'char_lc_col'").run()
+
+    const fetched = getCharacter(db, 'char_lc_col')
+    expect(fetched.lifecycleStatus).toBe('ready')
+
+    const listed = listCharacters(db, {})
+    const found = listed.find((c) => c.id === 'char_lc_col')
+    expect(found.lifecycleStatus).toBe('ready')
+
+    db.close()
+  })
+
   it('lists generated image records by character and prompt pack', () => {
     const { db } = createTempDb()
     createGeneratedImageRecord(db, {
