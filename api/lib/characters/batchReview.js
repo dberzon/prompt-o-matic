@@ -78,29 +78,14 @@ export function persistBatchFromGeneration(db, generationResult) {
   return batch
 }
 
-export function recalculateCharacterBatchSummary({ db, batchId }) {
-  const batch = getCharacterBatch(db, batchId)
-  if (!batch) return null
+function computeDerivedFields(db, batchId) {
   const items = listBatchCandidates(db, batchId)
-
   const summary = {
     totalCandidates: items.length,
-    byClassification: {
-      accepted: 0,
-      rejected: 0,
-      needsMutation: 0,
-      pendingReview: 0,
-    },
-    byReviewStatus: {
-      pending: 0,
-      approved: 0,
-      rejected: 0,
-      mutated: 0,
-      saved: 0,
-    },
+    byClassification: { accepted: 0, rejected: 0, needsMutation: 0, pendingReview: 0 },
+    byReviewStatus: { pending: 0, approved: 0, rejected: 0, mutated: 0, saved: 0 },
     usableCount: 0,
   }
-
   for (const item of items) {
     if (item.classification in summary.byClassification) summary.byClassification[item.classification] += 1
     if (item.reviewStatus in summary.byReviewStatus) summary.byReviewStatus[item.reviewStatus] += 1
@@ -108,23 +93,31 @@ export function recalculateCharacterBatchSummary({ db, batchId }) {
       summary.usableCount += 1
     }
   }
-
   const pending = summary.byReviewStatus.pending
-  const status = items.length === 0
-    ? 'generated'
-    : pending > 0
-      ? 'partially_reviewed'
-      : 'completed'
+  const status = items.length === 0 ? 'generated' : pending > 0 ? 'partially_reviewed' : 'completed'
+  return { summary, status }
+}
 
+export function recalculateCharacterBatchSummary({ db, batchId }) {
+  const batch = getCharacterBatch(db, batchId)
+  if (!batch) return null
+  const { summary, status } = computeDerivedFields(db, batchId)
   return updateCharacterBatch(db, batchId, { summary, status })
 }
 
 export function listBatches(db, filters = {}) {
-  return listCharacterBatches(db, filters)
+  const batches = listCharacterBatches(db, filters)
+  return batches.map((batch) => {
+    const { summary, status } = computeDerivedFields(db, batch.id)
+    return { ...batch, summary, status }
+  })
 }
 
 export function getBatch(db, id) {
-  return getCharacterBatch(db, id)
+  const batch = getCharacterBatch(db, id)
+  if (!batch) return null
+  const { summary, status } = computeDerivedFields(db, id)
+  return { ...batch, summary, status }
 }
 
 export function listCandidatesForBatch(db, query) {
@@ -137,16 +130,12 @@ export function listCandidatesForBatch(db, query) {
 
 export function approveCandidate(db, payload) {
   const parsed = CandidateActionSchema.parse(payload)
-  const updated = approveBatchCandidate(db, parsed.candidateId)
-  if (updated) recalculateCharacterBatchSummary({ db, batchId: updated.batchId })
-  return updated
+  return approveBatchCandidate(db, parsed.candidateId)
 }
 
 export function rejectCandidate(db, payload) {
   const parsed = CandidateActionSchema.parse(payload)
-  const updated = rejectBatchCandidate(db, parsed.candidateId, parsed.reason || null)
-  if (updated) recalculateCharacterBatchSummary({ db, batchId: updated.batchId })
-  return updated
+  return rejectBatchCandidate(db, parsed.candidateId, parsed.reason || null)
 }
 
 export async function saveCandidateAsCharacter({ db, vectorStore, embeddingProvider }, payload) {
