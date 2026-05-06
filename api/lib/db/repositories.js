@@ -158,8 +158,10 @@ export function listCharacters(db, filters = {}) {
 export function updateCharacter(db, id, patch) {
   const current = getCharacter(db, id)
   if (!current) return null
+  // archived_at is a DB-level column, not part of the character profile schema.
+  const { archived_at: _archived, ...currentProfile } = current
   const merged = {
-    ...current,
+    ...currentProfile,
     ...patch,
     id,
     updatedAt: nowIso(),

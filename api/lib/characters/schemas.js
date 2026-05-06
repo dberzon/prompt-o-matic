@@ -57,7 +57,7 @@ export const CharacterProfileSchema = z.object({
   approved: z.boolean().optional(),
   lifecycleStatus: z.enum(['draft', 'auditioned', 'portfolio_pending', 'portfolio_failed', 'ready', 'finalized', 'preview']).optional(),
   lastRenderedAt: isoDateTime.optional(),
-})
+}).strict()
 
 export const QwenImagePromptPackSchema = z.object({
   id: nonEmpty.optional(),
@@ -120,7 +120,9 @@ export const CharacterGenerationRequestSchema = z.object({
 }).strict()
 
 export function parseCharacterProfile(input) {
-  return CharacterProfileSchema.parse(input)
+  // Strip archived_at — it is a DB-level column, not part of the profile schema.
+  const { archived_at: _a, ...profile } = input ?? {}
+  return CharacterProfileSchema.parse(profile)
 }
 
 export function parseQwenImagePromptPack(input) {
