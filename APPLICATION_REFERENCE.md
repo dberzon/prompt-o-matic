@@ -336,6 +336,7 @@ All routes are registered as Vite dev-server middleware in `vite.config.js`. The
 | `COMFY_BASE_URL` / `COMFYUI_BASE_URL` | ComfyUI base URL | `http://127.0.0.1:8188` | All image rendering |
 | `CHROMA_URL` | Chroma vector DB URL | `http://127.0.0.1:8000` | Vector similarity |
 | `CHROMA_DATA_PATH` | Chroma data directory for auto-spawn | `./chroma_data` | Chroma auto-start |
+| `AUTO_START_CHROMA` | Set to `false` to skip Chroma auto-spawn on dev server start | `true` | CI / Docker / production |
 | `CHROMA_COLLECTION_CHARACTERS` | Chroma collection name | `characters` | Vector storage |
 | `EMBEDDED_TIMEOUT_MS` | Timeout for embedded sidecar LLM | `180000` (3 min) | Embedded polish |
 | `SQLITE_DB_PATH` | Path to SQLite database file | *(default in sqlite.js)* | All DB ops |

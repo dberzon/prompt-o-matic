@@ -221,8 +221,9 @@ function apiDevPlugin(env) {
     configureServer(server) {
       const chromaUrl = env.CHROMA_URL || 'http://127.0.0.1:8000'
 
+      const autoStartChroma = env.AUTO_START_CHROMA !== 'false'
       server.httpServer?.once('listening', () => {
-        startChromaServer(env.CHROMA_DATA_PATH || './chroma_data')
+        if (autoStartChroma) startChromaServer(env.CHROMA_DATA_PATH || './chroma_data')
       })
 
       server.middlewares.use('/api/chroma-health', async (req, res) => {
