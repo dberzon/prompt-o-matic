@@ -7,6 +7,7 @@ import {
   getCharacter,
   getCharacterBatch,
   listBatchCandidates,
+  reconsiderBatchCandidate,
 } from '../db/repositories.js'
 import { validCharacterProfile } from './fixtures.js'
 import {
@@ -185,6 +186,33 @@ describe('batch review repository/service', () => {
     })
     expect(result.ok).toBe(true)
     expect(result.added).toBe(2)
+    db.close()
+  })
+
+  it('approve/reject/reconsider preserve original classification', () => {
+    const db = createTempDb()
+    const batch = persistBatchFromGeneration(db, {
+      ...makeGenerationResult(),
+      accepted: [],
+      rejected: [],
+      needsMutation: [{ candidate: { ...validCharacterProfile, id: 'cand_mut' }, nearestMatches: [] }],
+      summary: { generated: 1, accepted: 0, rejected: 0, needsMutation: 1, saved: 0 },
+    })
+    const [candidate] = listBatchCandidates(db, batch.id)
+    expect(candidate.classification).toBe('needsMutation')
+
+    const approved = approveCandidate(db, { candidateId: candidate.id })
+    expect(approved.reviewStatus).toBe('approved')
+    expect(approved.classification).toBe('needsMutation')
+
+    const rejected = rejectCandidate(db, { candidateId: candidate.id, reason: 'second thoughts' })
+    expect(rejected.reviewStatus).toBe('rejected')
+    expect(rejected.classification).toBe('needsMutation')
+
+    const reconsidered = reconsiderBatchCandidate(db, candidate.id)
+    expect(reconsidered.reviewStatus).toBe('pending')
+    expect(reconsidered.classification).toBe('needsMutation')
+
     db.close()
   })
 

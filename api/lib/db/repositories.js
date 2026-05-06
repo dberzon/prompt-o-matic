@@ -573,13 +573,12 @@ export function updateBatchCandidate(db, id, patch) {
 }
 
 export function approveBatchCandidate(db, id) {
-  return updateBatchCandidate(db, id, { reviewStatus: 'approved', classification: 'accepted' })
+  return updateBatchCandidate(db, id, { reviewStatus: 'approved' })
 }
 
 export function rejectBatchCandidate(db, id, reason = null) {
   return updateBatchCandidate(db, id, {
     reviewStatus: 'rejected',
-    classification: 'rejected',
     reviewNote: reason || null,
   })
 }
@@ -587,7 +586,6 @@ export function rejectBatchCandidate(db, id, reason = null) {
 export function reconsiderBatchCandidate(db, id) {
   return updateBatchCandidate(db, id, {
     reviewStatus: 'pending',
-    classification: 'accepted',
     reviewNote: null,
   })
 }

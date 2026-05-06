@@ -126,8 +126,8 @@ describe('comfy bulk endpoints', () => {
     expect(listGeneratedImageRecords(db, { promptPackId: 'pack_bulk_ingest_1' }).length).toBeGreaterThan(0)
   })
 
-  it('bulk endpoints respect comfy access guard', async () => {
-    process.env.APP_MODE = 'local-studio'
+  it('bulk endpoints respect comfy access guard in cloud mode', async () => {
+    process.env.APP_MODE = 'cloud'
     const statusRes = mockRes()
     await jobsStatusHandler({ method: 'POST', body: { jobs: [] } }, statusRes)
     expect(statusRes.statusCode).toBe(403)

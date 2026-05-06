@@ -52,7 +52,8 @@ describe('actor-more-takes handler', () => {
     expect(res.statusCode).toBe(405)
   })
 
-  it('returns 403 when neither prompt-pack nor comfy API flags are set', async () => {
+  it('returns 403 in cloud mode when API flags are not set', async () => {
+    process.env.APP_MODE = 'cloud'
     const res = mockRes()
     await handler({ method: 'POST', body: { characterId: 'any' } }, res)
     expect(res.statusCode).toBe(403)

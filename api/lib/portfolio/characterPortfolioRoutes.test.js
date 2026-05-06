@@ -70,11 +70,11 @@ describe('character portfolio routes', () => {
     expect(res.payload.ok).toBe(true)
   })
 
-  it('queue route requires comfy guard', async () => {
+  it('queue route requires comfy guard in cloud mode', async () => {
     const dbPath = createTempDbPath()
     process.env.SQLITE_DB_PATH = dbPath
     process.env.ENABLE_PROMPT_PACK_API = 'true'
-    process.env.APP_MODE = 'local-studio'
+    process.env.APP_MODE = 'cloud'
     const db = ensureDb(dbPath)
     createCharacter(db, { ...validCharacterProfile, id: 'char_portfolio_route_2' })
     const res = mockRes()

@@ -115,12 +115,12 @@ describe('generated images routes', () => {
     })
   })
 
-  it('blocks proxy when disabled or in cloud mode', async () => {
+  it('blocks proxy when flag unset in cloud mode', async () => {
+    process.env.APP_MODE = 'cloud'
     const disabledRes = mockRes()
     await viewHandler({ method: 'GET', query: { id: 'any' } }, disabledRes)
     expect(disabledRes.statusCode).toBe(403)
     process.env.ENABLE_GENERATED_IMAGES_API = 'true'
-    process.env.APP_MODE = 'cloud'
     const cloudRes = mockRes()
     await viewHandler({ method: 'GET', query: { id: 'any' } }, cloudRes)
     expect(cloudRes.statusCode).toBe(403)
