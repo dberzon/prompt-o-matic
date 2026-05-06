@@ -700,7 +700,16 @@ export default function PromptOutput({
         </div>
       )}
 
-      {issues.length > 0 && (
+      {hasManualEdit && (
+        <p className={styles.engineHint}>
+          Manual edit active — chip-derived rules are not reflected in this text.{' '}
+          <button type="button" className={styles.ruleFixBtn} onClick={handleResetToAssembled}>
+            Reset to assembled
+          </button>
+        </p>
+      )}
+
+      {!hasManualEdit && issues.length > 0 && (
         <div className={styles.rulePanel}>
           {issues.map((issue) => (
             <div key={issue.id} className={styles.ruleItem}>
