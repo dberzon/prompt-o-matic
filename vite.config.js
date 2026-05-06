@@ -224,6 +224,18 @@ function apiDevPlugin(env) {
       const autoStartChroma = env.AUTO_START_CHROMA !== 'false'
       server.httpServer?.once('listening', () => {
         if (autoStartChroma) startChromaServer(env.CHROMA_DATA_PATH || './chroma_data')
+        // Clean up orphaned preview characters (older than 1 hour) left by failed ingest deletions.
+        try {
+          const db = getWatcherDb(env)
+          if (db) {
+            const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+            const orphans = listCharacters(db, { lifecycleStatus: 'preview' })
+              .filter((c) => c.createdAt && c.createdAt < cutoff)
+            for (const c of orphans) {
+              try { deleteCharacter(db, c.id) } catch { /* best-effort */ }
+            }
+          }
+        } catch { /* best-effort — never block startup */ }
       })
 
       server.middlewares.use('/api/chroma-health', async (req, res) => {
@@ -422,6 +434,7 @@ function apiDevPlugin(env) {
           const ageMax = url.searchParams.has('ageMax') ? Number(url.searchParams.get('ageMax')) : undefined
           const includeArchivedParam = url.searchParams.get('includeArchived') || ''
           const includeArchived = includeArchivedParam === 'only' ? 'only' : includeArchivedParam === 'true' ? true : false
+          const lifecycleStatus = url.searchParams.get('lifecycleStatus') || undefined
           runtime = createVectorRuntime({ env })
           const singleId = url.searchParams.get('id') || ''
           if (singleId) {
@@ -444,6 +457,7 @@ function apiDevPlugin(env) {
             ageMin: Number.isFinite(ageMin) ? ageMin : undefined,
             ageMax: Number.isFinite(ageMax) ? ageMax : undefined,
             includeArchived,
+            lifecycleStatus,
           })
           const allImages = listGeneratedImageRecords(runtime.db, {})
           const imagesByChar = {}
