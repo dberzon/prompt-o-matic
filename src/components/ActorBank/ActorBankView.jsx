@@ -142,7 +142,6 @@ export default function ActorBankView({ onOpenInCastingRoom }) {
           character={detail.character}
           images={detail.images}
           onBack={handleBack}
-          onDelete={handleDelete}
           onArchive={handleDelete}
           onRestore={handleDelete}
           onOpenInCastingRoom={onOpenInCastingRoom}

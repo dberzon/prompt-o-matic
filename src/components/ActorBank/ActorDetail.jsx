@@ -56,7 +56,7 @@ function renderValue(val) {
   return String(val ?? '—')
 }
 
-export default function ActorDetail({ character: initialCharacter, images: initialImages, onBack, onDelete, onArchive, onRestore, onOpenInCastingRoom }) {
+export default function ActorDetail({ character: initialCharacter, images: initialImages, onBack, onArchive, onRestore, onOpenInCastingRoom }) {
   const [character, setCharacter] = useState(initialCharacter)
   const { id, age, genderPresentation, cinematicArchetype, distinctiveFeatures, visualKeywords, archived_at } = character
   const [displayName, setDisplayName] = useState(character.name ?? 'Unnamed')
@@ -67,11 +67,6 @@ export default function ActorDetail({ character: initialCharacter, images: initi
   const [showRejected, setShowRejected] = useState(false)
   const [imageActionLoading, setImageActionLoading] = useState({})
   const [imageActionError, setImageActionError] = useState(null)
-
-  // Delete state
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState(null)
 
   // Rename state (AB3)
   const [isRenaming, setIsRenaming] = useState(false)
@@ -128,20 +123,6 @@ export default function ActorDetail({ character: initialCharacter, images: initi
   const handleRenameKeyDown = (e) => {
     if (e.key === 'Enter') { e.preventDefault(); commitRename() }
     if (e.key === 'Escape') cancelRename()
-  }
-
-  const handleDeleteConfirm = async () => {
-    setDeleting(true)
-    setDeleteError(null)
-    try {
-      const res = await fetch(`/api/characters?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
-      onDelete?.(id)
-    } catch (err) {
-      setDeleteError(err.message ?? 'Delete failed')
-      setDeleting(false)
-    }
   }
 
   const handleArchive = async () => {
@@ -245,36 +226,6 @@ export default function ActorDetail({ character: initialCharacter, images: initi
             </button>
           )}
 
-          {confirmDelete ? (
-            <div className={styles.confirmRow}>
-              <span className={styles.confirmPrompt}>Delete {displayName}?</span>
-              <button
-                type="button"
-                className={styles.confirmYes}
-                onClick={handleDeleteConfirm}
-                disabled={deleting}
-              >
-                {deleting ? 'Deleting…' : 'Yes, delete'}
-              </button>
-              <button
-                type="button"
-                className={styles.confirmNo}
-                onClick={() => { setConfirmDelete(false); setDeleteError(null) }}
-                disabled={deleting}
-              >
-                Cancel
-              </button>
-              {deleteError && <span className={styles.deleteError}>{deleteError}</span>}
-            </div>
-          ) : (
-            <button
-              type="button"
-              className={styles.deleteBtn}
-              onClick={() => setConfirmDelete(true)}
-            >
-              Delete
-            </button>
-          )}
         </div>
       </div>
 
