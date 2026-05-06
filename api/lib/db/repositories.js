@@ -39,13 +39,17 @@ export function createCharacter(db, profile) {
   const record = { ...payload, id, createdAt, updatedAt, embeddingStatus, lifecycleStatus }
 
   db.prepare(`
-    INSERT INTO characters (id, project_id, embedding_status, lifecycle_status, payload_json, created_at, updated_at)
-    VALUES (@id, @project_id, @embedding_status, @lifecycle_status, @payload_json, @created_at, @updated_at)
+    INSERT INTO characters (id, project_id, embedding_status, lifecycle_status, name, age, gender_presentation, cinematic_archetype, payload_json, created_at, updated_at)
+    VALUES (@id, @project_id, @embedding_status, @lifecycle_status, @name, @age, @gender_presentation, @cinematic_archetype, @payload_json, @created_at, @updated_at)
   `).run({
     id: record.id,
     project_id: record.projectId ?? null,
     embedding_status: record.embeddingStatus,
     lifecycle_status: record.lifecycleStatus,
+    name: record.name ?? null,
+    age: typeof record.age === 'number' ? record.age : null,
+    gender_presentation: record.genderPresentation ?? null,
+    cinematic_archetype: record.cinematicArchetype ?? null,
     payload_json: JSON.stringify(record),
     created_at: record.createdAt,
     updated_at: record.updatedAt,
@@ -112,6 +116,24 @@ export function listCharacters(db, filters = {}) {
     clauses.push(`lifecycle_status NOT IN (${statuses.map(() => '?').join(',')})`)
     values.push(...statuses)
   }
+  if (filters.gender) {
+    clauses.push('LOWER(gender_presentation) LIKE ?')
+    values.push(`%${filters.gender.toLowerCase()}%`)
+  }
+  if (Number.isFinite(filters.ageMin)) {
+    clauses.push('age >= ?')
+    values.push(filters.ageMin)
+  }
+  if (Number.isFinite(filters.ageMax)) {
+    clauses.push('age <= ?')
+    values.push(filters.ageMax)
+  }
+  if (filters.search) {
+    const q = `%${filters.search.toLowerCase()}%`
+    clauses.push('(LOWER(name) LIKE ? OR LOWER(cinematic_archetype) LIKE ?)')
+    values.push(q, q)
+  }
+
   const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
   const limit = Number.isInteger(filters.limit) ? filters.limit : null
   const limitSql = limit && limit > 0 ? 'LIMIT ?' : ''
@@ -120,7 +142,7 @@ export function listCharacters(db, filters = {}) {
   const orderBy = filters.sortBy === 'last_rendered_at'
     ? 'COALESCE(last_rendered_at, created_at) DESC'
     : filters.sortBy === 'name'
-      ? "LOWER(JSON_EXTRACT(payload_json, '$.name')) ASC"
+      ? 'LOWER(name) ASC'
       : 'created_at DESC'
   const rows = db.prepare(`
     SELECT payload_json, lifecycle_status, embedding_status, archived_at
@@ -130,28 +152,7 @@ export function listCharacters(db, filters = {}) {
     ${limitSql}
   `).all(...values)
 
-  let items = rows.map((row) => ({ ...rowToPayload(row), lifecycleStatus: row.lifecycle_status, embeddingStatus: row.embedding_status, archived_at: row.archived_at ?? null }))
-
-  if (filters.gender) {
-    const g = filters.gender.toLowerCase()
-    items = items.filter((c) => (c?.genderPresentation ?? '').toLowerCase().includes(g))
-  }
-  if (Number.isFinite(filters.ageMin)) {
-    items = items.filter((c) => typeof c?.age === 'number' && c.age >= filters.ageMin)
-  }
-  if (Number.isFinite(filters.ageMax)) {
-    items = items.filter((c) => typeof c?.age === 'number' && c.age <= filters.ageMax)
-  }
-  if (filters.search) {
-    const q = filters.search.toLowerCase()
-    items = items.filter((c) => {
-      const name = (c?.name ?? '').toLowerCase()
-      const archetype = (c?.cinematicArchetype ?? '').toLowerCase()
-      return name.includes(q) || archetype.includes(q)
-    })
-  }
-
-  return items
+  return rows.map((row) => ({ ...rowToPayload(row), lifecycleStatus: row.lifecycle_status, embeddingStatus: row.embedding_status, archived_at: row.archived_at ?? null }))
 }
 
 export function updateCharacter(db, id, patch) {
@@ -170,6 +171,10 @@ export function updateCharacter(db, id, patch) {
         embedding_status = @embedding_status,
         lifecycle_status = @lifecycle_status,
         last_rendered_at = @last_rendered_at,
+        name = @name,
+        age = @age,
+        gender_presentation = @gender_presentation,
+        cinematic_archetype = @cinematic_archetype,
         payload_json = @payload_json,
         updated_at = @updated_at
     WHERE id = @id
@@ -179,6 +184,10 @@ export function updateCharacter(db, id, patch) {
     embedding_status: record.embeddingStatus || 'not_indexed',
     lifecycle_status: record.lifecycleStatus || 'auditioned',
     last_rendered_at: record.lastRenderedAt ?? null,
+    name: record.name ?? null,
+    age: typeof record.age === 'number' ? record.age : null,
+    gender_presentation: record.genderPresentation ?? null,
+    cinematic_archetype: record.cinematicArchetype ?? null,
     payload_json: JSON.stringify(record),
     updated_at: record.updatedAt,
   })

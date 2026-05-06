@@ -158,4 +158,12 @@ export const MIGRATIONS = [
     created_at TEXT NOT NULL,
     completed_at TEXT
   )`,
+  'ALTER TABLE characters ADD COLUMN name TEXT',
+  'ALTER TABLE characters ADD COLUMN age INTEGER',
+  'ALTER TABLE characters ADD COLUMN gender_presentation TEXT',
+  'ALTER TABLE characters ADD COLUMN cinematic_archetype TEXT',
+  'CREATE INDEX IF NOT EXISTS idx_characters_name ON characters(name)',
+  'CREATE INDEX IF NOT EXISTS idx_characters_age ON characters(age)',
+  'CREATE INDEX IF NOT EXISTS idx_characters_gender_presentation ON characters(gender_presentation)',
+  'CREATE INDEX IF NOT EXISTS idx_characters_cinematic_archetype ON characters(cinematic_archetype)',
 ]
