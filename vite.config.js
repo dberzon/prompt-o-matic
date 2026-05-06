@@ -73,6 +73,7 @@ import {
   deleteWorkspaceProfile,
 } from './api/lib/db/repositories.js'
 import { createVectorRuntime } from './api/lib/vector/runtime.js'
+import { createSqliteDatabase, initializeDatabase } from './api/lib/db/sqlite.js'
 import {
   setAuditioned as lcSetAuditioned,
   setPreview as lcSetPreview,
@@ -168,10 +169,34 @@ function broadcastSSE(data) {
   }
 }
 
-function startComfyWatcher(comfyBaseUrl) {
+let watcherDb = null
+
+function getWatcherDb(env) {
+  if (watcherDb) return watcherDb
+  try {
+    watcherDb = createSqliteDatabase({ env })
+    initializeDatabase(watcherDb)
+    for (const sig of ['exit', 'SIGINT', 'SIGTERM']) {
+      process.once(sig, () => { try { watcherDb?.close() } catch { /* ignore */ } })
+    }
+  } catch { watcherDb = null }
+  return watcherDb
+}
+
+function startComfyWatcher(comfyBaseUrl, env) {
   if (comfyWatcherTimer) return
   comfyWatcherTimer = setInterval(async () => {
     if (sseClients.size === 0) return
+    // Skip poll when no active jobs exist — avoids 2s ComfyUI hammering at idle.
+    const db = getWatcherDb(env)
+    if (db) {
+      try {
+        const activeCount = db.prepare(
+          "SELECT COUNT(*) as n FROM comfy_jobs WHERE status NOT IN ('success','failed')"
+        ).get()?.n ?? 0
+        if (activeCount === 0) return
+      } catch { /* DB query failed — proceed with poll */ }
+    }
     try {
       const res = await fetch(`${comfyBaseUrl}/history?max_items=40`, { signal: AbortSignal.timeout(3000) })
       if (!res.ok) return
@@ -470,7 +495,7 @@ function apiDevPlugin(env) {
       server.middlewares.use('/api/render-events', (req, res) => {
         if (req.method !== 'GET') { res.statusCode = 405; res.end(); return }
         const comfyBaseUrl = env.COMFY_BASE_URL || 'http://127.0.0.1:8188'
-        startComfyWatcher(comfyBaseUrl)
+        startComfyWatcher(comfyBaseUrl, env)
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
