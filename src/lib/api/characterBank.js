@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from './http.js'
+import { apiGet, apiPost, apiPut, apiDelete } from './http.js'
 
 /**
  * GET /api/character-bank
@@ -41,4 +41,12 @@ export function createBankEntry(payload) {
  */
 export function updateBankEntry(id, patch) {
   return apiPut('/api/character-bank', { id, ...patch })
+}
+
+/**
+ * DELETE /api/character-bank?id=<id>
+ * Returns: { ok: true, deleted: true } or throws on 404.
+ */
+export function deleteBankEntry(id) {
+  return apiDelete('/api/character-bank', { id })
 }

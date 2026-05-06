@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useCharacterOptimize } from '../hooks/useCharacterOptimize.js'
-import { listBankEntries, createBankEntry, updateBankEntry } from '../lib/api/characterBank.js'
+import { listBankEntries, createBankEntry, updateBankEntry, deleteBankEntry } from '../lib/api/characterBank.js'
 import { toSnakeSlug, withUniqueSuffix } from '../utils/slugify.js'
 import styles from './CharacterBuilder.module.css'
 
@@ -25,6 +25,7 @@ export default function CharacterBuilder({
   const [description, setDescription] = useState('')
   const [acceptedText, setAcceptedText] = useState('')
   const [flash, setFlash] = useState('')
+  const [flashIsError, setFlashIsError] = useState(false)
   const {
     state,
     optimized,
@@ -37,6 +38,7 @@ export default function CharacterBuilder({
   const [bankEntries, setBankEntries] = useState([])
   const [bankSyncStatus, setBankSyncStatus] = useState({})
   const [bankSyncError, setBankSyncError] = useState({})
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -52,24 +54,20 @@ export default function CharacterBuilder({
           }
         }
         setBankSyncStatus((prev) => ({ ...initialStatus, ...prev }))
-        // Pull bank entries not present in localStorage (DB is source of truth).
+        // DB is the authority — overwrite localStorage cache with DB values.
         if (items.length > 0) {
           setCharacters((prev) => {
             const merged = { ...prev }
-            let changed = false
             for (const bankEntry of items) {
-              if (!merged[bankEntry.slug]) {
-                merged[bankEntry.slug] = {
-                  slug: bankEntry.slug,
-                  name: bankEntry.name,
-                  rawDescription: bankEntry.description,
-                  optimizedDescription: bankEntry.optimizedDescription || '',
-                  createdAt: new Date(bankEntry.createdAt).getTime(),
-                }
-                changed = true
+              merged[bankEntry.slug] = {
+                slug: bankEntry.slug,
+                name: bankEntry.name,
+                rawDescription: bankEntry.description,
+                optimizedDescription: bankEntry.optimizedDescription || '',
+                createdAt: new Date(bankEntry.createdAt).getTime(),
               }
             }
-            return changed ? merged : prev
+            return merged
           })
         }
       })
@@ -111,8 +109,8 @@ export default function CharacterBuilder({
     })
   }, [description, aiEngine, localOnly, embeddedStatus, optimize])
 
-  const saveCharacter = () => {
-    if (!canSave) return
+  const saveCharacter = async () => {
+    if (!canSave || saving) return
     const isManualSlug = Boolean(slugDraft.trim())
     const baseSlug = slug
     // Auto-suffix only when slug is auto-derived. Manual override preserves
@@ -128,22 +126,56 @@ export default function CharacterBuilder({
       optimizedDescription: (acceptedText || optimized || '').trim(),
       createdAt: Date.now(),
     }
-    setCharacters((prev) => {
-      const next = { ...prev, [finalSlug]: value }
-      // Opportunistic per-edit migration: if a kebab-equivalent of this snake
-      // slug exists with the same name, remove the old kebab entry.
-      const kebabEquivalent = finalSlug.replace(/_/g, '-')
-      if (kebabEquivalent !== finalSlug && next[kebabEquivalent]?.name === value.name) {
-        delete next[kebabEquivalent]
+    setSaving(true)
+    setFlash('')
+    setFlashIsError(false)
+    try {
+      const desc = (value.rawDescription || value.optimizedDescription || '').trim()
+      if (!desc) throw new Error('Description is required')
+      const existing = bankEntries.find((e) => e.slug === finalSlug)
+      let result
+      if (existing) {
+        result = await updateBankEntry(existing.id, {
+          name: value.name,
+          description: desc,
+          optimizedDescription: value.optimizedDescription || undefined,
+        })
+        setBankEntries((prev) => prev.map((e) => (e.id === existing.id ? result.item : e)))
+      } else {
+        result = await createBankEntry({
+          slug: finalSlug,
+          name: value.name,
+          description: desc,
+          optimizedDescription: value.optimizedDescription || undefined,
+        })
+        setBankEntries((prev) => [...prev, result.item])
       }
-      return next
-    })
-    const suffixApplied = finalSlug !== baseSlug
-    setFlash(suffixApplied ? `Saved @${finalSlug} (auto-suffixed)` : `Saved @${finalSlug}`)
-    setTimeout(() => setFlash(''), 1300)
-    // Best-effort background sync to DB. Failures are silent — localStorage
-    // remains the fallback if the bank is unreachable.
-    syncCharacter(value)
+      // DB write succeeded — cache to localStorage.
+      setCharacters((prev) => {
+        const next = { ...prev, [finalSlug]: value }
+        // Opportunistic per-edit migration: if a kebab-equivalent of this snake
+        // slug exists with the same name, remove the old kebab entry.
+        const kebabEquivalent = finalSlug.replace(/_/g, '-')
+        if (kebabEquivalent !== finalSlug && next[kebabEquivalent]?.name === value.name) {
+          delete next[kebabEquivalent]
+        }
+        return next
+      })
+      setBankSyncStatus((prev) => ({ ...prev, [finalSlug]: 'synced' }))
+      setBankSyncError((prev) => ({ ...prev, [finalSlug]: null }))
+      const suffixApplied = finalSlug !== baseSlug
+      setFlash(suffixApplied ? `Saved @${finalSlug} (auto-suffixed)` : `Saved @${finalSlug}`)
+      setFlashIsError(false)
+      setTimeout(() => setFlash(''), 1300)
+    } catch (err) {
+      const message = err?.code === 'SLUG_COLLISION'
+        ? 'Slug already in bank under a different character'
+        : (err?.message || 'Save failed')
+      setFlash(`Save failed: ${message}`)
+      setFlashIsError(true)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const loadCharacter = (entry) => {
@@ -154,8 +186,23 @@ export default function CharacterBuilder({
     reset()
   }
 
-  const removeCharacter = (entry) => {
+  const removeCharacter = async (entry) => {
+    const bankEntry = bankEntries.find((e) => e.slug === entry.slug)
+    if (bankEntry) {
+      try {
+        await deleteBankEntry(bankEntry.id)
+        setBankEntries((prev) => prev.filter((e) => e.id !== bankEntry.id))
+      } catch (err) {
+        setFlash(`Delete failed: ${err?.message || 'API error'}`)
+        setFlashIsError(true)
+        return
+      }
+    }
     setCharacters((prev) => {
+      const { [entry.slug]: _, ...rest } = prev
+      return rest
+    })
+    setBankSyncStatus((prev) => {
       const { [entry.slug]: _, ...rest } = prev
       return rest
     })
@@ -265,8 +312,10 @@ export default function CharacterBuilder({
           {isDuplicate ? <span className={styles.error}> Slug belongs to another character.</span> : null}
         </div>
         <div className={styles.row}>
-          <button className={styles.btn} onClick={saveCharacter} disabled={!canSave || isDuplicate}>Save character</button>
-          {flash ? <span className={styles.ok}>{flash}</span> : null}
+          <button className={styles.btn} onClick={saveCharacter} disabled={!canSave || isDuplicate || saving}>
+            {saving ? 'Saving…' : 'Save character'}
+          </button>
+          {flash ? <span className={flashIsError ? styles.error : styles.ok}>{flash}</span> : null}
         </div>
       </div>
 
