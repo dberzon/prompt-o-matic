@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { fetchWorkspaceProfiles, upsertWorkspaceProfileRemote, deleteWorkspaceProfileRemote } from './api/promptStorage.js'
 import { assemblePrompt } from './utils/assembler.js'
+import { hydrateActorBankSlots } from './utils/actorBankSlots.js'
 import { toSnakeSlug } from './utils/slugify.js'
 import { ageToBracket, genderPresentationToG } from './utils/actorBankMapping.js'
 import { PRESETS, DIRECTOR_PRESETS } from './data/constants.js'
@@ -317,31 +318,7 @@ export default function App() {
   // setChars returns prev when nothing actually changes.
   useEffect(() => {
     if (bankCharsForSelector.length === 0) return
-    setChars((prev) => {
-      let changed = false
-      const byId = new Map(bankCharsForSelector.map((c) => [c.id, c]))
-      const next = prev.map((slot) => {
-        if (!slot?.actorBankId) return slot
-        const found = byId.get(slot.actorBankId)
-        if (!found) {
-          changed = true
-          const { actorBankId: _a, name: _n, promptDescriptor: _pd, thumbnailUrl: _t, ...rest } = slot
-          return { g: rest.g ?? 'person', a: rest.a ?? '30s', ...rest }
-        }
-        const needsName = !slot.name && found.name
-        const needsDesc = !slot.promptDescriptor && found.promptDescriptor
-        const needsThumb = !slot.thumbnailUrl && found.thumbnailUrl
-        if (!needsName && !needsDesc && !needsThumb) return slot
-        changed = true
-        return {
-          ...slot,
-          name: slot.name ?? found.name,
-          promptDescriptor: slot.promptDescriptor ?? found.promptDescriptor,
-          thumbnailUrl: slot.thumbnailUrl ?? found.thumbnailUrl,
-        }
-      })
-      return changed ? next : prev
-    })
+    setChars((prev) => hydrateActorBankSlots(prev, bankCharsForSelector))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bankCharsForSelector, chars])
 
