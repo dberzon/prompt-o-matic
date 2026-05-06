@@ -5,6 +5,7 @@ import { buildMutationPrompt } from './prompts.js'
 import { parseCharacterProfile } from './schemas.js'
 import { findSimilarCharacters } from '../vector/characterIndexing.js'
 import { triggerReindex } from '../characterLifecycle.js'
+import { generateCharacterPromptDescriptor } from './promptDescriptor.js'
 import { runBatchCharacterGeneration } from './batchGeneration.js'
 import {
   approveBatchCandidate,
@@ -167,6 +168,11 @@ export async function saveCandidateAsCharacter({ db, vectorStore, embeddingProvi
 
   if (vectorStore && embeddingProvider && updated.savedCharacterId) {
     triggerReindex(db, updated.savedCharacterId, { vectorStore, embeddingProvider }).catch(() => {})
+  }
+
+  if (updated.savedCharacterId) {
+    generateCharacterPromptDescriptor({ db, characterId: updated.savedCharacterId })
+      .catch((err) => console.warn('[autogen-descriptor] failed for', updated.savedCharacterId, err?.message))
   }
 
   return updated

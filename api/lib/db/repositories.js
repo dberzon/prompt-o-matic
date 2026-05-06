@@ -29,6 +29,29 @@ function validateGeneratedImageOrThrow(input) {
   return parseGeneratedImageRecord(input)
 }
 
+function toSlugFromName(name) {
+  return String(name ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
+export function generateUniqueCharacterSlug(db, name, { excludeId = null } = {}) {
+  const base = toSlugFromName(name)
+  if (!base) return null
+  const stmt = excludeId
+    ? db.prepare('SELECT 1 FROM characters WHERE slug = ? AND id != ? LIMIT 1')
+    : db.prepare('SELECT 1 FROM characters WHERE slug = ? LIMIT 1')
+  const exists = (slug) => Boolean(excludeId ? stmt.get(slug, excludeId) : stmt.get(slug))
+  if (!exists(base)) return base
+  for (let n = 2; n <= 999; n += 1) {
+    const candidate = `${base}_${n}`
+    if (!exists(candidate)) return candidate
+  }
+  return `${base}_${Date.now()}`
+}
+
 export function createCharacter(db, profile) {
   const createdAt = profile.createdAt || nowIso()
   const payload = validateCharacterOrThrow({ ...profile, createdAt, updatedAt: profile.updatedAt || createdAt })
@@ -36,11 +59,12 @@ export function createCharacter(db, profile) {
   const embeddingStatus = payload.embeddingStatus || 'not_indexed'
   const lifecycleStatus = payload.lifecycleStatus || 'auditioned'
   const id = payload.id || randomUUID()
-  const record = { ...payload, id, createdAt, updatedAt, embeddingStatus, lifecycleStatus }
+  const slug = payload.slug || (payload.name ? generateUniqueCharacterSlug(db, payload.name) : null)
+  const record = { ...payload, id, createdAt, updatedAt, embeddingStatus, lifecycleStatus, ...(slug ? { slug } : {}) }
 
   db.prepare(`
-    INSERT INTO characters (id, project_id, embedding_status, lifecycle_status, name, age, gender_presentation, cinematic_archetype, payload_json, created_at, updated_at)
-    VALUES (@id, @project_id, @embedding_status, @lifecycle_status, @name, @age, @gender_presentation, @cinematic_archetype, @payload_json, @created_at, @updated_at)
+    INSERT INTO characters (id, project_id, embedding_status, lifecycle_status, name, age, gender_presentation, cinematic_archetype, slug, prompt_descriptor, payload_json, created_at, updated_at)
+    VALUES (@id, @project_id, @embedding_status, @lifecycle_status, @name, @age, @gender_presentation, @cinematic_archetype, @slug, @prompt_descriptor, @payload_json, @created_at, @updated_at)
   `).run({
     id: record.id,
     project_id: record.projectId ?? null,
@@ -50,6 +74,8 @@ export function createCharacter(db, profile) {
     age: typeof record.age === 'number' ? record.age : null,
     gender_presentation: record.genderPresentation ?? null,
     cinematic_archetype: record.cinematicArchetype ?? null,
+    slug: record.slug ?? null,
+    prompt_descriptor: record.promptDescriptor ?? null,
     payload_json: JSON.stringify(record),
     created_at: record.createdAt,
     updated_at: record.updatedAt,
@@ -88,6 +114,38 @@ export function countCharactersByEmbeddingStatus(db) {
     }
   }
   return base
+}
+
+export function listCharacterSlugs(db) {
+  const rows = db.prepare(`
+    SELECT c.id, c.slug, c.name, c.age, c.gender_presentation, c.prompt_descriptor,
+           (SELECT g.payload_json FROM generated_images g
+            WHERE g.character_id = c.id
+            ORDER BY g.created_at ASC LIMIT 1) AS first_image_payload
+    FROM characters c
+    WHERE c.archived_at IS NULL
+      AND c.lifecycle_status != 'preview'
+      AND c.slug IS NOT NULL
+    ORDER BY LOWER(c.name) ASC
+  `).all()
+  return rows.map((row) => {
+    let thumbnailUrl = null
+    if (row.first_image_payload) {
+      try {
+        const p = JSON.parse(row.first_image_payload)
+        thumbnailUrl = p?.imageUrl || p?.url || null
+      } catch { /* ignore */ }
+    }
+    return {
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      age: row.age,
+      genderPresentation: row.gender_presentation,
+      promptDescriptor: row.prompt_descriptor,
+      thumbnailUrl,
+    }
+  })
 }
 
 export function listCharacters(db, filters = {}) {
@@ -177,6 +235,8 @@ export function updateCharacter(db, id, patch) {
         age = @age,
         gender_presentation = @gender_presentation,
         cinematic_archetype = @cinematic_archetype,
+        slug = @slug,
+        prompt_descriptor = @prompt_descriptor,
         payload_json = @payload_json,
         updated_at = @updated_at
     WHERE id = @id
@@ -190,6 +250,8 @@ export function updateCharacter(db, id, patch) {
     age: typeof record.age === 'number' ? record.age : null,
     gender_presentation: record.genderPresentation ?? null,
     cinematic_archetype: record.cinematicArchetype ?? null,
+    slug: record.slug ?? null,
+    prompt_descriptor: record.promptDescriptor ?? null,
     payload_json: JSON.stringify(record),
     updated_at: record.updatedAt,
   })

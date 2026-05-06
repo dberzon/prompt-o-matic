@@ -659,3 +659,18 @@ Before starting a local session, confirm these are running:
 | **Chroma** | `chroma run --path ./chroma-data` | `localhost:8000` | Similarity search (Journey B only) |
 | **App (dev)** | `npm run dev` | `localhost:5173` | Frontend + API |
 | **Ollama** | `ollama serve` | `localhost:11434` | Only needed if `LLM_PROVIDER=ollama` |
+
+---
+
+## Developer Tools
+
+### Backfill prompt descriptors
+
+One-time backfill that generates prompt descriptors via the configured LLM for all characters that have a slug but no `prompt_descriptor`. Includes a 500ms delay between calls so it does not overwhelm the local provider.
+
+```bash
+curl -X POST http://localhost:5173/api/characters-backfill-descriptors
+# → { "ok": true, "processed": 12, "failed": 0 }
+```
+
+Trigger this once after deploying the prompt-descriptor feature. Idempotent — characters that already have descriptors are skipped.

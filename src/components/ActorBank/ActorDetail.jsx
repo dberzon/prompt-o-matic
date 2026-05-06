@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { archiveCharacter, renameCharacter, restoreCharacter } from '../../lib/api/characterBatches.js'
+import { archiveCharacter, renameCharacter, restoreCharacter, regenerateCharacterPromptDescriptor, setCharacterPromptDescriptor } from '../../lib/api/characterBatches.js'
 import { approveGeneratedImage, rejectGeneratedImage } from '../../lib/api/generatedImages.js'
 import { queueCharacterPortfolio } from '../../lib/api/portfolio.js'
 import styles from './ActorDetail.module.css'
@@ -83,6 +83,14 @@ export default function ActorDetail({ character: initialCharacter, images: initi
   const [requeueLoading, setRequeuLoading] = useState(false)
   const [requeueError, setRequeuError] = useState(null)
 
+  // Prompt descriptor state
+  const [promptDescriptor, setPromptDescriptor] = useState(character.promptDescriptor ?? '')
+  const [isEditingDescriptor, setIsEditingDescriptor] = useState(false)
+  const [descriptorDraft, setDescriptorDraft] = useState('')
+  const [descriptorBusy, setDescriptorBusy] = useState(false)
+  const [descriptorError, setDescriptorError] = useState(null)
+  const descriptorInputRef = useRef(null)
+
   const metaParts = [age, genderPresentation, cinematicArchetype].filter(Boolean)
 
   const visibleImages = showRejected ? images : images.filter((img) => img.approved !== false)
@@ -91,6 +99,59 @@ export default function ActorDetail({ character: initialCharacter, images: initi
   useEffect(() => {
     if (isRenaming) renameInputRef.current?.focus()
   }, [isRenaming])
+
+  useEffect(() => {
+    if (isEditingDescriptor) descriptorInputRef.current?.focus()
+  }, [isEditingDescriptor])
+
+  const startEditDescriptor = () => {
+    setDescriptorDraft(promptDescriptor || '')
+    setDescriptorError(null)
+    setIsEditingDescriptor(true)
+  }
+
+  const cancelEditDescriptor = () => {
+    setIsEditingDescriptor(false)
+    setDescriptorError(null)
+  }
+
+  const commitDescriptor = async () => {
+    const trimmed = descriptorDraft.trim().slice(0, 150)
+    if (trimmed === (promptDescriptor || '').trim()) { cancelEditDescriptor(); return }
+    setDescriptorBusy(true)
+    setDescriptorError(null)
+    try {
+      const result = await setCharacterPromptDescriptor(id, trimmed)
+      const next = result?.promptDescriptor ?? trimmed
+      setPromptDescriptor(next)
+      setCharacter((prev) => ({ ...prev, promptDescriptor: next }))
+      setIsEditingDescriptor(false)
+    } catch (err) {
+      setDescriptorError(err.message ?? 'Save failed')
+    } finally {
+      setDescriptorBusy(false)
+    }
+  }
+
+  const handleDescriptorKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); commitDescriptor() }
+    if (e.key === 'Escape') cancelEditDescriptor()
+  }
+
+  const regenerateDescriptor = async () => {
+    setDescriptorBusy(true)
+    setDescriptorError(null)
+    try {
+      const result = await regenerateCharacterPromptDescriptor(id)
+      const next = result?.promptDescriptor ?? ''
+      setPromptDescriptor(next)
+      setCharacter((prev) => ({ ...prev, promptDescriptor: next }))
+    } catch (err) {
+      setDescriptorError(err.message ?? 'Generate failed')
+    } finally {
+      setDescriptorBusy(false)
+    }
+  }
 
   const startRename = () => {
     setRenameValue(displayName)
@@ -275,6 +336,43 @@ export default function ActorDetail({ character: initialCharacter, images: initi
           <span className={styles.requeueMsg}>Portfolio generation in progress…</span>
         </div>
       )}
+
+      <section className={styles.section}>
+        <h3 className={styles.sectionTitle}>Prompt descriptor</h3>
+        {isEditingDescriptor ? (
+          <div className={styles.descriptorEditRow}>
+            <textarea
+              ref={descriptorInputRef}
+              className={styles.descriptorTextarea}
+              value={descriptorDraft}
+              onChange={(e) => setDescriptorDraft(e.target.value.slice(0, 150))}
+              onKeyDown={handleDescriptorKeyDown}
+              onBlur={commitDescriptor}
+              disabled={descriptorBusy}
+              maxLength={150}
+              rows={2}
+            />
+            <span className={styles.descriptorHint}>{descriptorDraft.length}/150 · Enter to save · Esc to cancel</span>
+          </div>
+        ) : promptDescriptor ? (
+          <p className={styles.descriptorText}>{promptDescriptor}</p>
+        ) : (
+          <p className={styles.descriptorEmpty}>No descriptor yet</p>
+        )}
+        {descriptorError && <p className={styles.descriptorError}>{descriptorError}</p>}
+        {!isEditingDescriptor && (
+          <div className={styles.descriptorActions}>
+            {promptDescriptor && (
+              <button type="button" className={styles.descriptorBtn} onClick={startEditDescriptor} disabled={descriptorBusy}>
+                Edit
+              </button>
+            )}
+            <button type="button" className={styles.descriptorBtn} onClick={regenerateDescriptor} disabled={descriptorBusy}>
+              {descriptorBusy ? 'Working…' : promptDescriptor ? 'Regenerate' : 'Generate'}
+            </button>
+          </div>
+        )}
+      </section>
 
       {images.length > 0 && (
         <section className={styles.section}>

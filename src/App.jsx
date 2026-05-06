@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { fetchWorkspaceProfiles, upsertWorkspaceProfileRemote, deleteWorkspaceProfileRemote } from './api/promptStorage.js'
 import { assemblePrompt } from './utils/assembler.js'
 import { toSnakeSlug } from './utils/slugify.js'
+import { ageToBracket, genderPresentationToG } from './utils/actorBankMapping.js'
 import { PRESETS, DIRECTOR_PRESETS } from './data/constants.js'
 import { DIRECTORS } from './data/directors.js'
 import { getSceneBankEntry } from './data/sceneBank.js'
@@ -38,14 +39,28 @@ const AI_ENGINE_KEY = 'qpb_ai_engine_v1'
 const LOCAL_ONLY_KEY = 'qpb_local_only_v1'
 const CHARACTERS_KEY = 'qpb_characters_v1'
 
-const CURRENT_SHARE_VERSION = 1
+const CURRENT_SHARE_VERSION = 2
+
+function sanitizeCharsForShare(chars) {
+  if (!Array.isArray(chars)) return chars
+  return chars.map((c) => {
+    if (!c || typeof c !== 'object') return c
+    // Drop thumbnailUrl: it can change and inflates URLs. promptDescriptor
+    // is also recoverable from /api/characters/slugs via actorBankId, but
+    // keep it so the URL works even if the character is briefly unavailable.
+    const { thumbnailUrl: _t, ...rest } = c
+    return rest
+  })
+}
 
 function migrateShareState(decoded) {
+  // v1 → v2: chars only had {g, a}. New optional fields default to undefined.
   return decoded
 }
 
 function encodeShareState(state) {
-  const json = JSON.stringify({ v: CURRENT_SHARE_VERSION, ...state })
+  const sanitized = { ...state, chars: sanitizeCharsForShare(state.chars) }
+  const json = JSON.stringify({ v: CURRENT_SHARE_VERSION, ...sanitized })
   return btoa(unescape(encodeURIComponent(json)))
 }
 
@@ -102,17 +117,6 @@ function readLocalOnly() {
   }
 }
 
-function buildBankCharDesc(char) {
-  const parts = [char.name ?? 'Unnamed']
-  if (char.cinematicArchetype) {
-    parts.push(char.cinematicArchetype)
-  } else {
-    const agePart = typeof char.age === 'number' ? `${char.age}yo` : char.age
-    const demo = [agePart, char.genderPresentation].filter(Boolean).join(' ')
-    if (demo) parts.push(demo)
-  }
-  return parts.join(', ')
-}
 
 function readCharacters() {
   try {
@@ -282,40 +286,85 @@ export default function App() {
     localStorage.setItem(CHARACTERS_KEY, JSON.stringify(characters))
   }, [characters])
 
-  useEffect(() => {
-    fetch('/api/characters?sortBy=name')
+  const fetchBankSlugs = useCallback(() => {
+    fetch('/api/characters/slugs')
       .then(r => r.json())
       .then(data => {
         const items = data.items ?? []
         setBankCharsForSelector(items.map(char => ({
           id: char.id,
+          slug: char.slug ?? toSnakeSlug(char.name ?? ''),
           name: char.name ?? 'Unnamed',
-          desc: buildBankCharDesc(char),
-          optimizedDescription: char.optimizedDescription || char.rawDescription || '',
-          slug: toSnakeSlug(char.name ?? ''),
+          age: char.age ?? null,
+          genderPresentation: char.genderPresentation ?? null,
+          promptDescriptor: char.promptDescriptor ?? null,
+          thumbnailUrl: char.thumbnailUrl ?? null,
         })))
       })
       .catch(() => {})
   }, [])
 
-  const bankCharDict = useMemo(() => {
+  useEffect(() => { fetchBankSlugs() }, [fetchBankSlugs])
+
+  useEffect(() => {
+    if (activeTab === 'builder') fetchBankSlugs()
+  }, [activeTab, fetchBankSlugs])
+
+  // After bank slugs load (and after any chars change such as profile restore),
+  // hydrate any chars slot that has an actorBankId: fill in missing
+  // promptDescriptor/thumbnailUrl from the lookup, or clear bank fields if
+  // the referenced character no longer exists. Settles in one cycle since
+  // setChars returns prev when nothing actually changes.
+  useEffect(() => {
+    if (bankCharsForSelector.length === 0) return
+    setChars((prev) => {
+      let changed = false
+      const byId = new Map(bankCharsForSelector.map((c) => [c.id, c]))
+      const next = prev.map((slot) => {
+        if (!slot?.actorBankId) return slot
+        const found = byId.get(slot.actorBankId)
+        if (!found) {
+          changed = true
+          const { actorBankId: _a, name: _n, promptDescriptor: _pd, thumbnailUrl: _t, ...rest } = slot
+          return { g: rest.g ?? 'person', a: rest.a ?? '30s', ...rest }
+        }
+        const needsName = !slot.name && found.name
+        const needsDesc = !slot.promptDescriptor && found.promptDescriptor
+        const needsThumb = !slot.thumbnailUrl && found.thumbnailUrl
+        if (!needsName && !needsDesc && !needsThumb) return slot
+        changed = true
+        return {
+          ...slot,
+          name: slot.name ?? found.name,
+          promptDescriptor: slot.promptDescriptor ?? found.promptDescriptor,
+          thumbnailUrl: slot.thumbnailUrl ?? found.thumbnailUrl,
+        }
+      })
+      return changed ? next : prev
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bankCharsForSelector, chars])
+
+  const actorBankSlugs = useMemo(() => {
     const dict = {}
     for (const c of bankCharsForSelector) {
-      if (c.slug) {
-        dict[c.slug] = {
-          name: c.name,
-          rawDescription: c.desc,
-          optimizedDescription: c.optimizedDescription || c.desc,
-        }
-      }
+      if (c.slug) dict[c.slug] = { promptDescriptor: c.promptDescriptor ?? null }
     }
     return dict
   }, [bankCharsForSelector])
 
-  const effectiveCharacters = useMemo(() => ({
-    ...bankCharDict,
-    ...characters,
-  }), [bankCharDict, characters])
+  const availableSlugs = useMemo(() => {
+    const cbSlugs = Object.entries(characters).map(([slug, entry]) => ({
+      slug,
+      name: entry.name ?? slug,
+      source: 'Cast',
+    }))
+    const cbSlugSet = new Set(cbSlugs.map(s => s.slug))
+    const bankSlugs = bankCharsForSelector
+      .filter(c => c.slug && !cbSlugSet.has(c.slug))
+      .map(c => ({ slug: c.slug, name: c.name, source: 'Bank' }))
+    return [...cbSlugs, ...bankSlugs]
+  }, [characters, bankCharsForSelector])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -339,10 +388,16 @@ export default function App() {
     }
     if ([1, 2, 3].includes(decoded.charCount)) setCharCount(decoded.charCount)
     if (Array.isArray(decoded.chars) && decoded.chars.length > 0) {
-      const normalized = DEFAULT_CHARS.map((base, i) => ({
-        g: decoded.chars[i]?.g ?? base.g,
-        a: decoded.chars[i]?.a ?? base.a,
-      }))
+      const normalized = DEFAULT_CHARS.map((base, i) => {
+        const src = decoded.chars[i] ?? {}
+        const slot = { g: src.g ?? base.g, a: src.a ?? base.a }
+        if (src.actorBankId) {
+          slot.actorBankId = src.actorBankId
+          if (src.name) slot.name = src.name
+          if (src.promptDescriptor) slot.promptDescriptor = src.promptDescriptor
+        }
+        return slot
+      })
       setChars(normalized)
     }
     if (typeof decoded.scenario === 'string' || decoded.scenario === null) {
@@ -394,8 +449,8 @@ export default function App() {
   }, [selectedDir])
 
   const prompt = useMemo(
-    () => assemblePrompt({ scene, scenario, chips, characters: effectiveCharacters }),
-    [scene, scenario, chips, effectiveCharacters]
+    () => assemblePrompt({ scene, scenario, chips, characters, actorBankSlugs }),
+    [scene, scenario, chips, characters, actorBankSlugs]
   )
   const variants = useMemo(() => generatePromptVariants(prompt), [prompt])
   const issues = useMemo(
@@ -675,10 +730,18 @@ export default function App() {
       const next = [...prev]
       if (field === 'bankLink') {
         if (value) {
-          next[index] = { ...next[index], bankCharId: value.id, bankCharName: value.name, bankCharDesc: value.desc }
+          next[index] = {
+            ...next[index],
+            actorBankId: value.id,
+            name: value.name,
+            promptDescriptor: value.promptDescriptor ?? null,
+            thumbnailUrl: value.thumbnailUrl ?? null,
+            g: genderPresentationToG(value.genderPresentation),
+            a: ageToBracket(value.age),
+          }
         } else {
-          const { bankCharId: _bid, bankCharName: _bname, bankCharDesc: _bdesc, ...rest } = next[index]
-          next[index] = rest
+          const { actorBankId: _id, name: _n, promptDescriptor: _pd, thumbnailUrl: _t, ...rest } = next[index]
+          next[index] = { g: rest.g ?? 'person', a: rest.a ?? '30s', ...rest }
         }
       } else {
         next[index] = { ...next[index], [field]: value }
@@ -971,7 +1034,7 @@ export default function App() {
               Delete
             </button>
           </div>
-          <SceneInput value={scene} onChange={setScene} />
+          <SceneInput value={scene} onChange={setScene} availableSlugs={availableSlugs} />
           <SceneScaffold charCount={charCount} chars={chars} onApply={applyScaffold} />
           <SceneDeck onApply={applyDeck} selectedDir={selectedDir} />
           <SceneMatcher onApply={applyMatch} matcherRef={matcherRef} />

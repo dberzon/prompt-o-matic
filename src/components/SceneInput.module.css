@@ -51,3 +51,70 @@
 .textarea::placeholder {
   color: var(--text-3);
 }
+
+.inputWrap {
+  position: relative;
+}
+
+.dropdown {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius-lg);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+}
+
+.dropdownItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.dropdownItem:not(:last-child) {
+  border-bottom: 1px solid var(--border);
+}
+
+.dropdownItemActive {
+  background: var(--surface-3, var(--surface));
+}
+
+.dropdownSlug {
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  color: var(--accent, #7c9ef8);
+  flex-shrink: 0;
+  min-width: 120px;
+}
+
+.dropdownName {
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropdownSource {
+  font-size: 10px;
+  color: var(--text-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+
+.dropdownEmpty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-3);
+}

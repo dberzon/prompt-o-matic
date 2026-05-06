@@ -99,6 +99,22 @@ describe('rewriteScene', () => {
     expect(rewriteScene('@unknown_person sits')).toContain('@unknown_person')
   })
 
+  it('falls back to actorBankSlugs when @slug not in characters', () => {
+    const actorBankSlugs = { lena_sholk: { promptDescriptor: 'sharp eastern european features' } }
+    expect(rewriteScene('@lena_sholk reads', {}, actorBankSlugs)).toContain('sharp eastern european features')
+  })
+
+  it('Character Builder entry wins over actorBankSlugs for same slug', () => {
+    const characters = { lena_sholk: { optimizedDescription: 'CB version' } }
+    const actorBankSlugs = { lena_sholk: { promptDescriptor: 'bank version' } }
+    expect(rewriteScene('@lena_sholk reads', characters, actorBankSlugs)).toContain('CB version')
+  })
+
+  it('leaves @slug intact if bank entry has no promptDescriptor', () => {
+    const actorBankSlugs = { lena_sholk: { promptDescriptor: null } }
+    expect(rewriteScene('@lena_sholk reads', {}, actorBankSlugs)).toContain('@lena_sholk')
+  })
+
   it('slug resolves kebab-case from snake_case entry', () => {
     const characters = { aria_chen: { optimizedDescription: 'the detective' } }
     expect(rewriteScene('@aria-chen in the rain', characters)).toContain('the detective')

@@ -166,4 +166,7 @@ export const MIGRATIONS = [
   'CREATE INDEX IF NOT EXISTS idx_characters_age ON characters(age)',
   'CREATE INDEX IF NOT EXISTS idx_characters_gender_presentation ON characters(gender_presentation)',
   'CREATE INDEX IF NOT EXISTS idx_characters_cinematic_archetype ON characters(cinematic_archetype)',
+  'ALTER TABLE characters ADD COLUMN prompt_descriptor TEXT',
+  'ALTER TABLE characters ADD COLUMN slug TEXT',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_characters_slug ON characters(slug)',
 ]

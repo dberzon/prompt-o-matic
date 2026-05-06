@@ -48,27 +48,34 @@ export function dedupeFragments(parts = []) {
   return out
 }
 
-function expandCharacterTokens(raw = '', characters = {}) {
+// Character Builder entries take priority over Actor Bank characters (same slug → CB wins).
+function expandCharacterTokens(raw = '', characters = {}, actorBankSlugs = {}) {
   return String(raw).replace(/@([a-z0-9][a-z0-9_-]*)/gi, (full, rawSlug) => {
     const resolved = resolveCharacterSlug(String(rawSlug), characters)
-    if (!resolved) return full
-    const entry = characters[resolved]
-    const value = (entry?.optimizedDescription || entry?.rawDescription || '').trim()
-    return value || full
+    if (resolved) {
+      const entry = characters[resolved]
+      const value = (entry?.optimizedDescription || entry?.rawDescription || '').trim()
+      return value || full
+    }
+    const normalized = String(rawSlug).toLowerCase()
+    const alternate = normalized.includes('_') ? normalized.replace(/_/g, '-') : normalized.replace(/-/g, '_')
+    const bankEntry = actorBankSlugs[normalized] || actorBankSlugs[alternate]
+    const bankValue = (bankEntry?.promptDescriptor || '').trim()
+    return bankValue || full
   })
 }
 
-export function rewriteScene(raw, characters = {}) {
+export function rewriteScene(raw, characters = {}, actorBankSlugs = {}) {
   if (!raw.trim()) return ''
-  let s = expandCharacterTokens(raw, characters).trim().replace(/\.\s*$/, '')
+  let s = expandCharacterTokens(raw, characters, actorBankSlugs).trim().replace(/\.\s*$/, '')
   REWRITES.forEach(([pattern, replacement]) => {
     s = s.replace(pattern, replacement)
   })
   return s
 }
 
-export function assemblePrompt({ scene, scenario, chips, characters = {} }) {
-  const rewritten = rewriteScene(scene, characters)
+export function assemblePrompt({ scene, scenario, chips, characters = {}, actorBankSlugs = {} }) {
+  const rewritten = rewriteScene(scene, characters, actorBankSlugs)
   const hasMeat = scenario || rewritten
   const parts = []
 
@@ -122,7 +129,7 @@ export function assemblePrompt({ scene, scenario, chips, characters = {} }) {
   return dedupeFragments(parts)
 }
 
-export function getCharDesc(gender, age) {
+export function getCharDesc(gender, age, promptDescriptor) {
   const MAP = {
     man: {
       child: 'boy',
@@ -155,5 +162,7 @@ export function getCharDesc(gender, age) {
       elderly: 'elderly person',
     },
   }
-  return MAP[gender]?.[age] ?? `${gender}, ${age}`
+  const base = MAP[gender]?.[age] ?? `${gender}, ${age}`
+  const trimmed = typeof promptDescriptor === 'string' ? promptDescriptor.trim() : ''
+  return trimmed ? `${base}, ${trimmed}` : base
 }

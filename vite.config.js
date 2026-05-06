@@ -30,6 +30,7 @@ import { generateCharacterPortfolioPlan, queueCharacterPortfolio } from './api/l
 import { assertComfyOperationAllowed } from './api/lib/comfy/access.js'
 import { createComfyService } from './api/lib/comfy/comfyService.js'
 import { runAudition } from './api/lib/audition/auditionOrchestrator.js'
+import { generateCharacterPromptDescriptor, setCharacterPromptDescriptor, backfillCharacterPromptDescriptors } from './api/lib/characters/promptDescriptor.js'
 import {
   createActorAudition,
   createActorCandidate,
@@ -58,6 +59,7 @@ import {
   updateGeneratedImageRecord,
   archiveCharacter,
   restoreCharacter,
+  listCharacterSlugs,
   reconsiderBatchCandidate,
   getBatchCandidate,
   updateBatchCandidate,
@@ -399,6 +401,19 @@ function apiDevPlugin(env) {
         }
       })
 
+      server.middlewares.use('/api/characters/slugs', async (req, res) => {
+        if (req.method !== 'GET') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
+        let runtime = null
+        try {
+          runtime = createVectorRuntime({ env })
+          const items = listCharacterSlugs(runtime.db)
+          sendJsonMiddleware(res, 200, { ok: true, items })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTERS_SLUGS_ERROR' })
+        } finally { runtime?.close?.() }
+      })
+
       server.middlewares.use('/api/characters', async (req, res) => {
         if (req.method === 'DELETE') {
           let runtime = null
@@ -574,6 +589,40 @@ function apiDevPlugin(env) {
         } catch (err) {
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_RESTORE_ERROR' })
+        } finally { runtime?.close?.() }
+      })
+
+      server.middlewares.use('/api/characters-backfill-descriptors', async (req, res) => {
+        if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
+        let runtime = null
+        try {
+          runtime = createVectorRuntime({ env })
+          const result = await backfillCharacterPromptDescriptors({ db: runtime.db, env })
+          sendJsonMiddleware(res, 200, { ok: true, ...result })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTERS_BACKFILL_DESCRIPTORS_ERROR' })
+        } finally { runtime?.close?.() }
+      })
+
+      server.middlewares.use('/api/character-prompt-descriptor', async (req, res) => {
+        if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
+        let runtime = null
+        try {
+          const body = await readJsonBody(req)
+          const characterId = body?.characterId
+          if (!characterId) { sendJsonMiddleware(res, 400, { error: 'Missing characterId' }); return }
+          runtime = createVectorRuntime({ env })
+          if (typeof body?.descriptor === 'string') {
+            const item = setCharacterPromptDescriptor(runtime.db, characterId, body.descriptor)
+            sendJsonMiddleware(res, 200, { ok: true, promptDescriptor: item.promptDescriptor ?? '' })
+            return
+          }
+          const result = await generateCharacterPromptDescriptor({ db: runtime.db, characterId, env })
+          sendJsonMiddleware(res, 200, { ok: true, ...result })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_PROMPT_DESCRIPTOR_ERROR' })
         } finally { runtime?.close?.() }
       })
 

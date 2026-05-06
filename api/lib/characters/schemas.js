@@ -57,6 +57,8 @@ export const CharacterProfileSchema = z.object({
   approved: z.boolean().optional(),
   lifecycleStatus: z.enum(['draft', 'auditioned', 'portfolio_pending', 'portfolio_failed', 'ready', 'finalized', 'preview']).optional(),
   lastRenderedAt: isoDateTime.optional(),
+  slug: nonEmpty.optional(),
+  promptDescriptor: z.string().optional(),
 }).strict()
 
 export const QwenImagePromptPackSchema = z.object({

@@ -44,6 +44,14 @@ export function restoreCharacter(characterId) {
   return apiPost('/api/character-restore', { characterId })
 }
 
+export function regenerateCharacterPromptDescriptor(characterId) {
+  return apiPost('/api/character-prompt-descriptor', { characterId })
+}
+
+export function setCharacterPromptDescriptor(characterId, descriptor) {
+  return apiPost('/api/character-prompt-descriptor', { characterId, descriptor })
+}
+
 export function reconsiderBatchCandidate(candidateId) {
   return apiPost('/api/character-batch-candidate-reconsider', { candidateId })
 }

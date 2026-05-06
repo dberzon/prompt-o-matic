@@ -1,8 +1,9 @@
-import { useState, useMemo, useRef } from 'react'
+import { useState, useMemo, useRef, useEffect } from 'react'
 import { DIRECTORS, DIRECTOR_LIST } from '../data/directors.js'
 import { getSceneBankEntry } from '../data/sceneBank.js'
 import { getCharDesc } from '../utils/assembler.js'
 import { useSectionState } from '../hooks/useSectionState.js'
+import ActorBankPicker from './ActorBankPicker/ActorBankPicker.jsx'
 import styles from './DirectorSection.module.css'
 
 const GENDERS = ['man', 'woman', 'person']
@@ -95,7 +96,19 @@ export default function DirectorSection({
   const [customOpen, setCustomOpen] = useState(false)
   const [editForm, setEditForm] = useState(EMPTY_FORM)
   const [editingKey, setEditingKey] = useState(null)
+  const [pickerSlot, setPickerSlot] = useState(null) // index of slot whose picker is open
+  const pickerRefs = useRef([])
   const panelId = 'director-section-panel'
+
+  useEffect(() => {
+    if (pickerSlot === null) return
+    const onClickOutside = (e) => {
+      const node = pickerRefs.current[pickerSlot]
+      if (node && !node.contains(e.target)) setPickerSlot(null)
+    }
+    window.addEventListener('mousedown', onClickOutside)
+    return () => window.removeEventListener('mousedown', onClickOutside)
+  }, [pickerSlot])
 
   const allDirMap = useMemo(() => {
     const custom = Object.fromEntries(customDirectors.map(d => [d.key, customToRuntimeDir(d)]))
@@ -116,9 +129,10 @@ export default function DirectorSection({
   const blendData = blendDir ? allDirMap[blendDir] : null
   const bank = selectedDir ? getSceneBankEntry(selectedDir) : null
 
-  const charDescs = Array.from({ length: charCount }, (_, i) =>
-    chars[i]?.bankCharDesc ?? getCharDesc(chars[i]?.g ?? 'person', chars[i]?.a ?? '30s')
-  )
+  const charDescs = Array.from({ length: charCount }, (_, i) => {
+    const c = chars[i]
+    return getCharDesc(c?.g ?? 'person', c?.a ?? '30s', c?.promptDescriptor)
+  })
 
   const primaryScenarios = dirData ? dirData.s[charCount]?.(charDescs) ?? [] : []
   const secondaryScenarios = blendData ? blendData.s[charCount]?.(charDescs) ?? [] : []
@@ -429,58 +443,76 @@ export default function DirectorSection({
 
           {/* Character config */}
           <div className={styles.charConfig}>
-            {Array.from({ length: charCount }, (_, i) => (
-              <div key={i} className={styles.charRow}>
-                <span className={styles.charNum}>Character {i + 1}</span>
-                {chars[i]?.bankCharId ? (
-                  <span className={styles.bankCharChip}>
-                    <span className={styles.bankCharName}>{chars[i].bankCharName}</span>
-                    <button
-                      type="button"
-                      className={styles.bankCharUnlink}
-                      onClick={() => onCharChange(i, 'bankLink', null)}
-                      title="Unlink character"
-                    >×</button>
-                  </span>
-                ) : (
-                  <>
-                    <select
-                      className={styles.charSelect}
-                      value={chars[i]?.g ?? 'person'}
-                      onChange={e => onCharChange(i, 'g', e.target.value)}
-                    >
-                      {GENDERS.map(g => (
-                        <option key={g} value={g}>{g}</option>
-                      ))}
-                    </select>
-                    <select
-                      className={styles.charSelect}
-                      value={chars[i]?.a ?? '30s'}
-                      onChange={e => onCharChange(i, 'a', e.target.value)}
-                    >
-                      {AGES.map(a => (
-                        <option key={a} value={a}>{a}</option>
-                      ))}
-                    </select>
-                    {bankChars.length > 0 && (
+            {Array.from({ length: charCount }, (_, i) => {
+              const slot = chars[i]
+              const linked = !!slot?.actorBankId
+              const otherIds = chars
+                .map((c, idx) => (idx !== i && c?.actorBankId ? c.actorBankId : null))
+                .filter(Boolean)
+              return (
+                <div key={i} className={styles.charRow}>
+                  <span className={styles.charNum}>Character {i + 1}</span>
+                  {linked ? (
+                    <span className={styles.bankCharChip}>
+                      {slot.thumbnailUrl && (
+                        <img src={slot.thumbnailUrl} alt="" className={styles.bankCharThumb} />
+                      )}
+                      <span className={styles.bankCharName}>{slot.name}</span>
+                      <span className={styles.bankCharMeta}>· {slot.a} · {slot.g.charAt(0).toUpperCase()}</span>
+                      <button
+                        type="button"
+                        className={styles.bankCharUnlink}
+                        onClick={() => onCharChange(i, 'bankLink', null)}
+                        title="Unlink character"
+                      >×</button>
+                    </span>
+                  ) : (
+                    <>
                       <select
-                        className={styles.bankSelect}
-                        value=""
-                        onChange={e => {
-                          const found = bankChars.find(c => c.id === e.target.value)
-                          if (found) onCharChange(i, 'bankLink', found)
-                        }}
+                        className={styles.charSelect}
+                        value={slot?.g ?? 'person'}
+                        onChange={e => onCharChange(i, 'g', e.target.value)}
                       >
-                        <option value="">link actor…</option>
-                        {bankChars.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
+                        {GENDERS.map(g => (
+                          <option key={g} value={g}>{g}</option>
                         ))}
                       </select>
-                    )}
-                  </>
-                )}
-              </div>
-            ))}
+                      <select
+                        className={styles.charSelect}
+                        value={slot?.a ?? '30s'}
+                        onChange={e => onCharChange(i, 'a', e.target.value)}
+                      >
+                        {AGES.map(a => (
+                          <option key={a} value={a}>{a}</option>
+                        ))}
+                      </select>
+                      {bankChars.length > 0 && (
+                        <div
+                          className={styles.bankPickerWrap}
+                          ref={(el) => { pickerRefs.current[i] = el }}
+                        >
+                          <button
+                            type="button"
+                            className={styles.bankImportBtn}
+                            onClick={() => setPickerSlot(pickerSlot === i ? null : i)}
+                          >
+                            Import from Actor Bank
+                          </button>
+                          {pickerSlot === i && (
+                            <ActorBankPicker
+                              characters={bankChars}
+                              excludeIds={otherIds}
+                              onSelect={(c) => { onCharChange(i, 'bankLink', c); setPickerSlot(null) }}
+                              onClose={() => setPickerSlot(null)}
+                            />
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
           {/* Scenario list */}

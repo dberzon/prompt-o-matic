@@ -9,6 +9,7 @@ import { parseJsonFromLlmText } from '../characters/jsonUtils.js'
 import { parseCharacterProfile } from '../characters/schemas.js'
 import { compileCharacterPromptPacks } from '../prompts/qwenPromptCompiler.js'
 import { buildBankEntryAuditionPrompt } from './auditionPrompts.js'
+import { generateCharacterPromptDescriptor } from '../characters/promptDescriptor.js'
 
 const DEFAULT_VIEWS = ['front_portrait', 'profile_portrait']
 
@@ -81,6 +82,10 @@ export async function runAudition({
       }
       const validated = parseCharacterProfile(candidatePayload)
       const character = createCharacter(db, validated)
+
+      // Fire-and-forget descriptor generation (does not block audition flow).
+      generateCharacterPromptDescriptor({ db, characterId: character.id })
+        .catch((err) => console.warn('[autogen-descriptor] failed for', character.id, err?.message))
 
       // Generate one actor_candidate + audition per view in the pair.
       const viewResults = []
