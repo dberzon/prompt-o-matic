@@ -38,15 +38,24 @@ const AI_ENGINE_KEY = 'qpb_ai_engine_v1'
 const LOCAL_ONLY_KEY = 'qpb_local_only_v1'
 const CHARACTERS_KEY = 'qpb_characters_v1'
 
+const CURRENT_SHARE_VERSION = 1
+
+function migrateShareState(decoded) {
+  return decoded
+}
+
 function encodeShareState(state) {
-  const json = JSON.stringify(state)
+  const json = JSON.stringify({ v: CURRENT_SHARE_VERSION, ...state })
   return btoa(unescape(encodeURIComponent(json)))
 }
 
 function decodeShareState(raw) {
   try {
     const json = decodeURIComponent(escape(atob(raw)))
-    return JSON.parse(json)
+    const parsed = JSON.parse(json)
+    if (!parsed || typeof parsed !== 'object') return null
+    if (!parsed.v || parsed.v < CURRENT_SHARE_VERSION) return migrateShareState(parsed)
+    return parsed
   } catch {
     return null
   }
