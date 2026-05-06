@@ -9,17 +9,25 @@ import {
   validQwenImagePromptPack,
 } from '../characters/fixtures.js'
 import {
+  createActorAudition,
+  createActorCandidate,
+  createBatchCandidate,
   createCharacter,
+  createCharacterBatch,
   createGeneratedImageRecord,
   createPromptPack,
   deleteCharacter,
+  getActorAudition,
+  getActorCandidate,
+  getBatchCandidate,
   getCharacter,
   getGeneratedImageRecord,
-  listGeneratedImageRecords,
   getPromptPack,
+  listGeneratedImageRecords,
   listCharacters,
   updateGeneratedImageRecord,
   updateCharacter,
+  upsertComfyJob,
 } from './repositories.js'
 import { createSqliteDatabase, initializeDatabase } from './sqlite.js'
 
@@ -240,5 +248,36 @@ describe('sqlite canonical storage', () => {
     expect(() => createSqliteDatabase({ env: { APP_MODE: 'cloud' }, dbPath: ':memory:' })).toThrow(
       'SQLite canonical storage is local-studio only',
     )
+  })
+
+  it('deleteCharacter cascades to all related tables', () => {
+    const { db } = createTempDb()
+    try {
+      createCharacter(db, { ...validCharacterProfile, id: 'char_cascade' })
+      const pack = createPromptPack(db, { ...validQwenImagePromptPack, id: 'pack_cascade', characterId: 'char_cascade' })
+      createGeneratedImageRecord(db, { ...validGeneratedImageRecord, id: 'img_cascade', characterId: 'char_cascade', promptPackId: pack.id })
+      upsertComfyJob(db, { id: 'job_cascade', promptId: 'prompt_cascade', characterId: 'char_cascade', viewType: 'front_portrait', jobType: 'portfolio', status: 'queued', createdAt: new Date().toISOString() })
+      const actor = createActorCandidate(db, { id: 'actor_cascade', promptPackId: pack.id })
+      const audition = createActorAudition(db, { id: 'audition_cascade', actorCandidateId: actor.id, bankEntryId: 'bank_x' })
+
+      const batch = createCharacterBatch(db, { id: 'batch_cascade', request: {}, options: {}, provider: {}, summary: {}, status: 'completed' })
+      const batchCand = createBatchCandidate(db, { batchId: batch.id, candidate: validCharacterProfile, classification: 'accepted', reviewStatus: 'saved', similarity: [] })
+      db.prepare("UPDATE character_batch_candidates SET saved_character_id = 'char_cascade' WHERE id = ?").run(batchCand.id)
+
+      const deleted = deleteCharacter(db, 'char_cascade')
+      expect(deleted).toBe(true)
+      expect(getCharacter(db, 'char_cascade')).toBeNull()
+      expect(getPromptPack(db, pack.id)).toBeNull()
+      expect(getGeneratedImageRecord(db, 'img_cascade')).toBeNull()
+      expect(db.prepare("SELECT id FROM comfy_jobs WHERE id = 'job_cascade'").get()).toBeUndefined()
+      expect(getActorCandidate(db, actor.id)).toBeNull()
+      expect(getActorAudition(db, audition.id)).toBeNull()
+
+      const detached = getBatchCandidate(db, batchCand.id)
+      expect(detached.savedCharacterId).toBeNull()
+      expect(detached.reviewStatus).toBe('approved')
+    } finally {
+      db.close()
+    }
   })
 })

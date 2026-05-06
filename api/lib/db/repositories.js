@@ -186,8 +186,38 @@ export function updateCharacter(db, id, patch) {
 }
 
 export function deleteCharacter(db, id) {
-  const result = db.prepare('DELETE FROM characters WHERE id = ?').run(id)
-  return result.changes > 0
+  const deleteFn = db.transaction((charId) => {
+    // comfy_jobs and generated_images reference character directly
+    db.prepare('DELETE FROM comfy_jobs WHERE character_id = ?').run(charId)
+    db.prepare('DELETE FROM generated_images WHERE character_id = ?').run(charId)
+
+    // actor_candidates link to characters via prompt_packs; cascade through that join
+    db.prepare(`
+      DELETE FROM actor_auditions WHERE actor_candidate_id IN (
+        SELECT id FROM actor_candidates WHERE prompt_pack_id IN (
+          SELECT id FROM prompt_packs WHERE character_id = ?
+        )
+      )
+    `).run(charId)
+    db.prepare(`
+      DELETE FROM actor_candidates WHERE prompt_pack_id IN (
+        SELECT id FROM prompt_packs WHERE character_id = ?
+      )
+    `).run(charId)
+
+    db.prepare('DELETE FROM prompt_packs WHERE character_id = ?').run(charId)
+
+    // Detach batch candidates that were saved as this character
+    db.prepare(`
+      UPDATE character_batch_candidates
+      SET saved_character_id = NULL, review_status = 'approved'
+      WHERE saved_character_id = ? AND review_status = 'saved'
+    `).run(charId)
+
+    const result = db.prepare('DELETE FROM characters WHERE id = ?').run(charId)
+    return result.changes > 0
+  })
+  return deleteFn(id)
 }
 
 export function archiveCharacter(db, id) {
