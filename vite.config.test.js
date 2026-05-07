@@ -78,8 +78,8 @@ describe('apiDevPlugin character batch middleware', () => {
     const env = makeEnv(dbPath)
     const seedDb = createSqliteDatabase({ env })
     initializeDatabase(seedDb)
-    persistBatchFromGeneration(seedDb, makeGenerationResult())
-    const candidate = listBatchCandidates(seedDb).find((item) => item.classification === 'accepted')
+    const batch = persistBatchFromGeneration(seedDb, makeGenerationResult())
+    const candidate = listBatchCandidates(seedDb, batch.id).find((item) => item.classification === 'accepted')
     approveCandidate(seedDb, { candidateId: candidate.id })
     seedDb.close()
 
