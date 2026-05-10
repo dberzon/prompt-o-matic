@@ -1165,3 +1165,56 @@ export function archiveEntity(db, id) {
   )
   return result.changes > 0
 }
+
+
+const ATTRIBUTE_PROVENANCES = new Set(['canon', 'inferred', 'suggested', 'temporary', 'derived'])
+
+function mapAttributeRow(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    entityId: row.entity_id,
+    key: row.key,
+    value: row.value === null ? null : JSON.parse(row.value),
+    provenance: row.provenance,
+    confidence: row.confidence,
+    sourceStage: row.source_stage,
+    supersededBy: row.superseded_by,
+    createdAt: row.created_at,
+  }
+}
+
+function selectAttributeById(db, id) {
+  return mapAttributeRow(db.prepare('SELECT * FROM entity_attributes WHERE id = ?').get(id))
+}
+
+export function writeAttribute(db, { entityId, key, value, provenance, confidence, sourceStage, supersedes } = {}) {
+  if (!provenance) {
+    throw new Error('writeAttribute: provenance is required')
+  }
+  if (!ATTRIBUTE_PROVENANCES.has(provenance)) {
+    throw new Error(`writeAttribute: provenance must be one of ${[...ATTRIBUTE_PROVENANCES].join(', ')}`)
+  }
+  if (!entityId) throw new Error('writeAttribute: entityId is required')
+  if (!key) throw new Error('writeAttribute: key is required')
+
+  const id = randomUUID()
+  const createdAt = nowIso()
+  const stringValue = value === undefined || value === null ? null : JSON.stringify(value)
+
+  const apply = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO entity_attributes (id, entity_id, key, value, provenance, confidence, source_stage, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, entityId, key, stringValue, provenance, confidence ?? null, sourceStage ?? null, createdAt)
+    if (supersedes) {
+      const result = db.prepare('UPDATE entity_attributes SET superseded_by = ? WHERE id = ?').run(id, supersedes)
+      if (result.changes === 0) {
+        throw new Error(`writeAttribute: supersedes target ${supersedes} not found`)
+      }
+    }
+  })
+  apply()
+
+  return selectAttributeById(db, id)
+}

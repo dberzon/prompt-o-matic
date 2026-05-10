@@ -22,6 +22,7 @@ import {
   getEntity,
   listEntities,
   updateEntity,
+  writeAttribute,
   getActorAudition,
   getActorCandidate,
   getBatchCandidate,
@@ -457,6 +458,111 @@ describe('entity repository (createEntity / getEntity / listEntities / updateEnt
     const fetched = getEntity(db, 'ent_hist')
     expect(fetched).not.toBeNull()
     expect(fetched.name).toBe('Ghost')
+    db.close()
+  })
+})
+
+describe('writeAttribute (provenance enforcement, supersedes chain)', () => {
+  it('writes a canon attribute and round-trips the value', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_attr', type: 'character', name: 'Elena' })
+    const attr = writeAttribute(db, {
+      entityId: 'e_attr',
+      key: 'eyes',
+      value: 'green',
+      provenance: 'canon',
+    })
+    expect(attr.id).toBeTruthy()
+    expect(attr.entityId).toBe('e_attr')
+    expect(attr.key).toBe('eyes')
+    expect(attr.value).toBe('green')
+    expect(attr.provenance).toBe('canon')
+    expect(attr.confidence).toBeNull()
+    expect(attr.sourceStage).toBeNull()
+    expect(attr.supersededBy).toBeNull()
+    db.close()
+  })
+
+  it('JSON-encodes object values', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_obj', type: 'character', name: 'Marcus' })
+    const attr = writeAttribute(db, {
+      entityId: 'e_obj',
+      key: 'wardrobe',
+      value: { jacket: 'leather', boots: 'tan' },
+      provenance: 'inferred',
+      confidence: 0.7,
+      sourceStage: 5,
+    })
+    expect(attr.value).toEqual({ jacket: 'leather', boots: 'tan' })
+    expect(attr.confidence).toBe(0.7)
+    expect(attr.sourceStage).toBe(5)
+    db.close()
+  })
+
+  it('throws if provenance is missing', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_p', type: 'character', name: 'X' })
+    expect(() =>
+      writeAttribute(db, { entityId: 'e_p', key: 'eyes', value: 'green' }),
+    ).toThrow(/provenance is required/)
+    db.close()
+  })
+
+  it('throws on invalid provenance before hitting the DB', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_pi', type: 'character', name: 'X' })
+    expect(() =>
+      writeAttribute(db, { entityId: 'e_pi', key: 'eyes', value: 'green', provenance: 'guess' }),
+    ).toThrow(/provenance must be one of/)
+    db.close()
+  })
+
+  it('requires entityId and key', () => {
+    const { db } = createTempDb()
+    expect(() => writeAttribute(db, { key: 'eyes', value: 'g', provenance: 'canon' })).toThrow(/entityId is required/)
+    expect(() =>
+      writeAttribute(db, { entityId: 'e1', value: 'g', provenance: 'canon' }),
+    ).toThrow(/key is required/)
+    db.close()
+  })
+
+  it('chains supersedes: old attribute gets superseded_by = new id', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_sup', type: 'character', name: 'X' })
+    const v1 = writeAttribute(db, {
+      entityId: 'e_sup',
+      key: 'eyes',
+      value: 'blue',
+      provenance: 'inferred',
+    })
+    const v2 = writeAttribute(db, {
+      entityId: 'e_sup',
+      key: 'eyes',
+      value: 'green',
+      provenance: 'canon',
+      supersedes: v1.id,
+    })
+    const v1Reloaded = db.prepare('SELECT * FROM entity_attributes WHERE id = ?').get(v1.id)
+    expect(v1Reloaded.superseded_by).toBe(v2.id)
+    expect(v2.supersededBy).toBeNull()
+    db.close()
+  })
+
+  it('throws if supersedes target does not exist (and rolls back the insert)', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_sup_bad', type: 'character', name: 'X' })
+    expect(() =>
+      writeAttribute(db, {
+        entityId: 'e_sup_bad',
+        key: 'eyes',
+        value: 'green',
+        provenance: 'canon',
+        supersedes: 'nonexistent_attr',
+      }),
+    ).toThrow(/supersedes target nonexistent_attr not found/)
+    const count = db.prepare('SELECT COUNT(*) AS n FROM entity_attributes WHERE entity_id = ?').get('e_sup_bad').n
+    expect(count).toBe(0)
     db.close()
   })
 })
