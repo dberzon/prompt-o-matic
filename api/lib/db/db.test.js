@@ -281,3 +281,79 @@ describe('sqlite canonical storage', () => {
     }
   })
 })
+
+
+describe('entity layer schema migrations', () => {
+  it('creates entities, entity_attributes, entity_relationships, visual_anchors tables', () => {
+    const { db } = createTempDb()
+    const tables = db.prepare(`
+      SELECT name FROM sqlite_master WHERE type = 'table'
+        AND name IN ('entities', 'entity_attributes', 'entity_relationships', 'visual_anchors')
+    `).all()
+    const names = tables.map((row) => row.name).sort()
+    expect(names).toEqual(['entities', 'entity_attributes', 'entity_relationships', 'visual_anchors'])
+    db.close()
+  })
+
+  it('entities: enforces type CHECK', () => {
+    const { db } = createTempDb()
+    const now = new Date().toISOString()
+    db.prepare("INSERT INTO entities (id, type, name, created_at, updated_at) VALUES ('e1', 'character', 'Elena', ?, ?)").run(now, now)
+    expect(() =>
+      db.prepare("INSERT INTO entities (id, type, name, created_at, updated_at) VALUES ('e2', 'invalid_type', 'X', ?, ?)").run(now, now),
+    ).toThrow(/CHECK/i)
+    db.close()
+  })
+
+  it('entities: indexes on type and name exist', () => {
+    const { db } = createTempDb()
+    const idx = db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'entities'").all().map((r) => r.name)
+    expect(idx).toContain('idx_entities_type')
+    expect(idx).toContain('idx_entities_name')
+    db.close()
+  })
+
+  it('entity_attributes: enforces provenance CHECK', () => {
+    const { db } = createTempDb()
+    const now = new Date().toISOString()
+    db.prepare("INSERT INTO entity_attributes (id, entity_id, key, value, provenance, created_at) VALUES ('a1', 'e1', 'eyes', 'green', 'canon', ?)").run(now)
+    expect(() =>
+      db.prepare("INSERT INTO entity_attributes (id, entity_id, key, value, provenance, created_at) VALUES ('a2', 'e1', 'eyes', 'green', 'guess', ?)").run(now),
+    ).toThrow(/CHECK/i)
+    db.close()
+  })
+
+  it('entity_attributes: provenance NOT NULL is enforced', () => {
+    const { db } = createTempDb()
+    const now = new Date().toISOString()
+    expect(() =>
+      db.prepare("INSERT INTO entity_attributes (id, entity_id, key, value, created_at) VALUES ('a3', 'e1', 'eyes', 'green', ?)").run(now),
+    ).toThrow(/NOT NULL/i)
+    db.close()
+  })
+
+  it('entity_relationships: enforces provenance CHECK', () => {
+    const { db } = createTempDb()
+    db.prepare("INSERT INTO entity_relationships (id, from_id, to_id, type, provenance) VALUES ('r1', 'e1', 'e2', 'parent_of', 'canon')").run()
+    expect(() =>
+      db.prepare("INSERT INTO entity_relationships (id, from_id, to_id, type, provenance) VALUES ('r2', 'e1', 'e2', 'parent_of', 'maybe')").run(),
+    ).toThrow(/CHECK/i)
+    db.close()
+  })
+
+  it('visual_anchors: enforces type CHECK and partial unique on is_primary', () => {
+    const { db } = createTempDb()
+    const now = new Date().toISOString()
+    db.prepare("INSERT INTO visual_anchors (id, entity_id, type, is_primary, created_at) VALUES ('v1', 'e1', 'reference_image', 1, ?)").run(now)
+    db.prepare("INSERT INTO visual_anchors (id, entity_id, type, is_primary, created_at) VALUES ('v2', 'e1', 'reference_image', 0, ?)").run(now)
+    expect(() =>
+      db.prepare("INSERT INTO visual_anchors (id, entity_id, type, is_primary, created_at) VALUES ('v3', 'e1', 'bad_type', 0, ?)").run(now),
+    ).toThrow(/CHECK/i)
+    expect(() =>
+      db.prepare("INSERT INTO visual_anchors (id, entity_id, type, is_primary, created_at) VALUES ('v4', 'e1', 'reference_image', 1, ?)").run(now),
+    ).toThrow(/UNIQUE/i)
+    // Different entity may also have a primary
+    db.prepare("INSERT INTO visual_anchors (id, entity_id, type, is_primary, created_at) VALUES ('v5', 'e2', 'reference_image', 1, ?)").run(now)
+    db.close()
+  })
+})

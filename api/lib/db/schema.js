@@ -169,4 +169,49 @@ export const MIGRATIONS = [
   'ALTER TABLE characters ADD COLUMN prompt_descriptor TEXT',
   'ALTER TABLE characters ADD COLUMN slug TEXT',
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_characters_slug ON characters(slug)',
+  `CREATE TABLE IF NOT EXISTS entities (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL CHECK (type IN ('character', 'environment', 'prop', 'institution')),
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type)',
+  'CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name)',
+  `CREATE TABLE IF NOT EXISTS entity_attributes (
+    id TEXT PRIMARY KEY,
+    entity_id TEXT NOT NULL,
+    key TEXT NOT NULL,
+    value TEXT,
+    provenance TEXT NOT NULL CHECK (provenance IN ('canon', 'inferred', 'suggested', 'temporary', 'derived')),
+    confidence REAL,
+    source_stage INTEGER,
+    superseded_by TEXT,
+    created_at TEXT NOT NULL
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_entity_attributes_entity_id ON entity_attributes(entity_id)',
+  'CREATE INDEX IF NOT EXISTS idx_entity_attributes_entity_key ON entity_attributes(entity_id, key)',
+  'CREATE INDEX IF NOT EXISTS idx_entity_attributes_provenance ON entity_attributes(provenance)',
+  `CREATE TABLE IF NOT EXISTS entity_relationships (
+    id TEXT PRIMARY KEY,
+    from_id TEXT NOT NULL,
+    to_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    provenance TEXT NOT NULL CHECK (provenance IN ('canon', 'inferred', 'suggested', 'temporary', 'derived')),
+    confidence REAL,
+    attributes TEXT
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_entity_relationships_from_id ON entity_relationships(from_id)',
+  'CREATE INDEX IF NOT EXISTS idx_entity_relationships_to_id ON entity_relationships(to_id)',
+  'CREATE INDEX IF NOT EXISTS idx_entity_relationships_type ON entity_relationships(type)',
+  `CREATE TABLE IF NOT EXISTS visual_anchors (
+    id TEXT PRIMARY KEY,
+    entity_id TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('reference_image', 'ipadapter_embedding', 'seed', 'prompt_anchor')),
+    payload BLOB,
+    is_primary INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  )`,
+  'CREATE INDEX IF NOT EXISTS idx_visual_anchors_entity_id ON visual_anchors(entity_id)',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_visual_anchors_primary ON visual_anchors(entity_id) WHERE is_primary = 1',
 ]
