@@ -1,0 +1,31 @@
+# Files Cursor's indexer should skip.
+# Inherits from .gitignore automatically; this list is for git-tracked files
+# that bloat context without helping the AI understand the codebase.
+
+# Beads issue tracker dump — JSONL of all issues, useful for bd CLI but
+# noisy in Cursor's context window
+.beads/issues.jsonl
+.beads/worldbuilding-plan.json
+
+# Lockfiles — large, generated, no semantic value for code understanding
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Test fixtures and snapshots
+**/__snapshots__/**
+**/*.snap
+
+# Build / dev output
+.vercel/
+src-tauri/gen/
+src-tauri/target/
+
+# Local editor / agent state
+.claude-flow/
+.swarm/
+.ruflo/
+.serena/
+
+# Archive directories
+Archive_not_needed/

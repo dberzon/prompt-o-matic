@@ -1,121 +1,172 @@
-# Cursor Rules — Prompt-o-matic
+# Cursor Rules — Qwen Prompt Builder
+
+## Issue Tracking — Beads (bd)
+
+This project uses **bd (beads)** for ALL task tracking. Do NOT use TODO comments, markdown TODO lists, or ad-hoc task notes.
+
+### Required workflow
+- `bd ready` — find available work (no blockers)
+- `bd show <id>` — review details before claiming
+- `bd update <id> --claim` — claim before writing code
+- `bd close <id>` — mark complete when done
+- `bd remember "insight"` — persist knowledge across sessions (do NOT use MEMORY.md files)
+
+### Rules
+- Create a `bd` issue BEFORE writing code for non-trivial work.
+- Mark issues `in_progress` when starting, `closed` when done.
+- Run `bd prime` for the full command reference.
+- Priority is `0-4` or `P0-P4` (0 = critical, 2 = medium, 4 = backlog). Never use `"high"`/`"medium"`/`"low"`.
+
+## Session Completion
+
+Work is NOT complete until `git push` succeeds. Mandatory steps before declaring done:
+
+1. File `bd` issues for follow-up work
+2. Run quality gates: `npm test`, build if relevant
+3. Update issue status (close finished, update in-progress)
+4. Push:
+   ```bash
+   git pull --rebase --autostash
+   bd dolt push
+   git push
+   git status   # MUST show "up to date with origin"
+   ```
+5. Verify everything committed AND pushed
+
+NEVER stop before pushing. NEVER say "ready to push when you are" — push it.
+
+## Build & Test
+
+ESM project (`"type": "module"`). Vite + React 18 + Vitest + Node 18+.
+
+```bash
+npm install              # First time only
+npm run dev              # Vite dev server (frontend + ~47 API middleware routes on one port)
+npm run build            # Production build
+npm test                 # Vitest run (excludes .claude/worktrees)
+npm test -- <pattern>    # Single file or pattern
+npm run tauri:dev        # Tauri desktop dev
+npm run tauri:build      # Tauri desktop build (runs preflight:embedded first)
+```
+
+Tests sit beside source: `foo.js` + `foo.test.js` in the same folder. Use Vitest (`describe`, `it`, `expect`, `vi.fn()`).
+
+## MCP Servers Available
+
+Configured in `.cursor/mcp.json`. Use them when relevant:
+
+- **`serena`** — semantic code navigation (symbol find/edit, reference lookup). Prefer over plain text search for refactors.
+- **`sqlite`** — query the local SQLite database at `data/qpb-local.sqlite`. Use for inspecting character/portfolio/comfy state.
+- **`git`** — git status/log/diff via MCP. Useful but the terminal also works.
 
 ## General Principles
 
-- Always prioritize understanding existing code before modifying it
-- Never rewrite large parts of the system unless explicitly instructed
-- Prefer minimal, surgical changes
-- Preserve existing behavior unless explicitly changing it
-
----
+- Always prioritize understanding existing code before modifying it.
+- Never rewrite large parts of the system unless explicitly instructed.
+- Prefer minimal, surgical changes.
+- Preserve existing behavior unless explicitly changing it.
 
 ## Architecture Awareness
 
-This is a 3-layer system:
+This is a 3-layer system. **There is NO separate API server** — all ~47 API routes are Vite dev-server middleware registered in `vite.config.js`.
 
-1. React frontend (Vite)
-2. Node API layer
-3. Domain logic core
+```
+src/         React 18 frontend (Vite)
+  App.jsx              root state, tab switching
+  components/          UI (4 tabs: Prompt Builder, Character Builder, Casting Room, Actor Bank)
+  hooks/               React hooks (usePolish, useCharacterOptimize, ...)
+  lib/api/             fetch wrappers per domain
+  utils/assembler.js   prompt-fragment assembler (29 REWRITES + dedupe)
+  data/                static data (60+ directors, scenarios, chips)
 
-Key flow:
+api/         Vite middleware route handlers (one file = one route)
+  lib/                 shared domain logic
+    polishCore.js      LLM provider resolution + polish prompt
+    llm/providers/     claudeProvider, lmStudioProvider, ollamaProvider, mockProvider
+    db/                better-sqlite3, schema, repositories
+    characters/        entity logic, batch review, prompt descriptors
+    comfy/             ComfyUI workflow mapping + queue
+    vector/            Chroma store + character indexing
+    embeddings/        embedding providers
+```
 
-App.jsx
-→ assembler.js
-→ PromptOutput.jsx
-→ usePolish.js
-→ /api/polish
-→ polishCore.js
-→ provider
-→ UI display
+**Polish flow (do NOT break):**
+`App.jsx` → `utils/assembler.js` → `PromptOutput.jsx` → `hooks/usePolish.js` → `POST /api/polish` → `api/lib/polishCore.js` → provider
 
-Do not break this flow.
+**Provider resolution in `polishCore.js`:** embedded sidecar → local (LM Studio or Ollama, controlled by `LLM_PROVIDER`) → Claude cloud.
 
----
+**Data layer:** SQLite at `data/qpb-local.sqlite` is canonical. localStorage holds UI prefs only.
 
 ## Safe Zones (Preferred Areas for Changes)
 
 - UI display logic (`PromptOutput.jsx`)
-- Prompt assembly (`assembler.js`)
-- Fragment ordering and formatting
-- Minor API payload changes
-
----
+- Prompt assembly (`utils/assembler.js`) — fragment ordering and formatting
+- Static data in `src/data/` (directors, chips, scenarios)
+- New API routes when adding a feature
+- Minor API payload additions (additive)
 
 ## Dangerous Zones (Handle Carefully)
 
-- `polishCore.js`
-- Provider resolution logic
-- Async API flow
-- LLM provider integrations (Ollama, Claude, LM Studio)
+If modifying these: explain reasoning first, propose minimal changes, highlight risks.
 
-If modifying these:
-- explain reasoning first
-- suggest minimal changes
-- highlight risks
-
----
+- `api/lib/polishCore.js` — provider resolution + system prompt
+- `api/lib/llm/providers/*` — Claude, LM Studio, Ollama, mock
+- `api/lib/db/schema.js` and repositories — schema migrations need care
+- `api/lib/comfy/comfyService.js` and the SSE/polling flow
+- The `/api/polish` request/response contract
+- LLM provider integrations and async API flow
 
 ## Coding Approach
 
-- Follow existing patterns in the file being modified
-- Do not introduce new frameworks or paradigms
-- Avoid unnecessary abstractions
-- Keep logic readable and explicit
-
----
+- Follow existing patterns in the file being modified.
+- Do not introduce new frameworks, state libraries, or build tooling.
+- Avoid unnecessary abstractions.
+- Keep logic readable and explicit.
+- ESM imports/exports only (no CommonJS).
+- One component per file, PascalCase, default export.
+- One API route per file in `api/`. Filename = route path (`api/polish.js` → `/api/polish`).
 
 ## API Changes
 
-- Do not change API contracts unless necessary
+- Do not change API contracts unless necessary.
 - If changing `/api/polish`, clearly document:
   - input changes
   - output changes
   - compatibility risks
 
----
-
 ## LLM Integration Rules
 
-- Preserve system prompt behavior
-- Do not significantly change prompt structure without explanation
-- Respect provider selection logic
-- Avoid introducing non-deterministic behavior changes without warning
-
----
+- Preserve the polish system prompt behavior — it's tuned (see `polishCore.js` `SYSTEM_PROMPT`).
+- Do not significantly change prompt structure without explanation.
+- Respect provider selection logic — don't reorder without thinking about local-only mode.
+- LM Studio provider auto-injects `/no_think` and `enable_thinking:false` for Qwen3 models. Leave alone unless you understand the trade-off.
+- Avoid introducing non-deterministic behavior changes without warning.
 
 ## Debugging Strategy
 
 When fixing bugs:
-
-1. Identify exact location in flow
-2. Trace data from input → output
-3. Avoid guessing
-4. Confirm assumptions before modifying
-
----
+1. Identify exact location in the polish/render/assembly flow.
+2. Trace data input → output before patching.
+3. Avoid guessing.
+4. Confirm assumptions before modifying.
 
 ## When Unsure
 
-- Ask for clarification instead of guessing
-- Point out ambiguity explicitly
-- Suggest multiple options if needed
-
----
+- Ask for clarification instead of guessing.
+- Point out ambiguity explicitly.
+- Suggest multiple options if needed.
 
 ## Output Expectations
 
-- Prefer diff-style patches
-- Keep changes minimal
-- Explain what changed and why
-- Highlight potential side effects
+- Prefer diff-style patches.
+- Keep changes minimal.
+- Explain what changed and why.
+- Highlight potential side effects.
 
----
+## Canonical Reference Docs
 
-## Project Context
+For deeper detail, read these directly rather than guessing:
 
-Always refer to:
-
-- `PROJECT_CONTEXT.md`
-- `docs/TAKEOVER_FLOW.md`
-
-before making decisions
+- `PROJECT_CONTEXT.md` — subsystem map, runtime modes, key files
+- `APPLICATION_REFERENCE.md` — full technical reference
+- `CLAUDE.md` / `.clinerules` — same workflow rules in other-tool form (kept in sync with this file)

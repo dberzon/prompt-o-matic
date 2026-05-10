@@ -1,0 +1,30 @@
+{
+  "mcpServers": {
+    "serena": {
+      "command": "serena",
+      "args": [
+        "start-mcp-server",
+        "--context",
+        "ide-assistant",
+        "--project",
+        "C:\\Users\\user\\Documents\\qwen-prompt-builder"
+      ]
+    },
+    "sqlite": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-sqlite",
+        "--db-path",
+        "C:\\Users\\user\\Documents\\qwen-prompt-builder\\data\\qpb-local.sqlite"
+      ]
+    },
+    "git": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-git",
+        "--repository",
+        "C:\\Users\\user\\Documents\\qwen-prompt-builder"
+      ]
+    }
+  }
+}
