@@ -1,0 +1,150 @@
+# Project Instructions for AI Agents
+
+This file provides instructions and context for AI coding agents working on this project.
+
+<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
+## Beads Issue Tracker
+
+This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
+
+### Quick Reference
+
+```bash
+bd ready              # Find available work
+bd show <id>          # View issue details
+bd update <id> --claim  # Claim work
+bd close <id>         # Complete work
+```
+
+### Rules
+
+- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
+- Run `bd prime` for detailed command reference and session close protocol
+- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
+
+## Session Completion
+
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+
+**MANDATORY WORKFLOW:**
+
+1. **File issues for remaining work** - Create issues for anything that needs follow-up
+2. **Run quality gates** (if code changed) - Tests, linters, builds
+3. **Update issue status** - Close finished work, update in-progress items
+4. **PUSH TO REMOTE** - This is MANDATORY:
+   ```bash
+   git pull --rebase
+   bd dolt push
+   git push
+   git status  # MUST show "up to date with origin"
+   ```
+5. **Clean up** - Clear stashes, prune remote branches
+6. **Verify** - All changes committed AND pushed
+7. **Hand off** - Provide context for next session
+
+**CRITICAL RULES:**
+- Work is NOT complete until `git push` succeeds
+- NEVER stop before pushing - that leaves work stranded locally
+- NEVER say "ready to push when you are" - YOU must push
+- If push fails, resolve and retry until it succeeds
+<!-- END BEADS INTEGRATION -->
+
+
+## Build & Test
+
+ESM project (`"type": "module"`). Vite + React 18 + Vitest. Node 18+.
+
+```bash
+npm install              # First time only
+npm run dev              # Start Vite dev server (frontend + API middleware on one port)
+npm run build            # Production build
+npm test                 # Run Vitest suite (excludes .claude/worktrees)
+npm test -- <pattern>    # Run a single test file
+npm run tauri:dev        # Tauri desktop dev
+npm run tauri:build      # Tauri desktop build (runs preflight:embedded first)
+```
+
+Tests sit next to the code: `foo.js` + `foo.test.js` in the same folder. Use Vitest (`describe`, `it`, `expect`, `vi.fn()`).
+
+External services the app expects (start manually unless noted):
+- ComfyUI on `localhost:8188` — image rendering
+- LM Studio at `LMSTUDIO_BASE_URL` (current: `http://192.168.1.135:1234/v1`) — polish + embeddings
+- Chroma on `localhost:8000` — auto-spawned by `vite.config.js` on dev start
+- Ollama on `localhost:11434` — fallback option
+
+Env config lives in `.env.local` (gitignored). Key vars: `LLM_PROVIDER`, `LMSTUDIO_BASE_URL`, `LMSTUDIO_MODEL`, `APP_MODE`, `ENABLE_*` feature flags.
+
+## Architecture Overview
+
+**Three-layer, single-process architecture. There is NO separate API server.** All ~47 API routes are registered as Vite dev-server middleware in `vite.config.js`. `npm run dev` runs everything.
+
+```
+src/        React 18 frontend (Vite)
+  App.jsx               root state, tab switching
+  components/           UI components (4 tabs: Prompt Builder, Character Builder, Casting Room, Actor Bank)
+  hooks/                React hooks (usePolish, useCharacterOptimize, ...)
+  lib/api/              fetch wrappers per domain (http.js, comfy.js, characterBank.js, ...)
+  utils/                pure functions — assembler.js is the prompt-fragment assembler
+  data/                 static data (60+ directors, scenarios, chips, scene bank)
+
+api/        Vite middleware route handlers (one file = one route)
+  polish.js, comfy-*.js, character-*.js, vector-*.js, ...
+  lib/                  shared domain logic (the third layer)
+    polishCore.js                LLM-provider resolution + polish prompt
+    llm/providers/               claudeProvider, lmStudioProvider, ollamaProvider, mockProvider
+    db/                          better-sqlite3, schema, repositories
+    characters/                  character entity logic, batch review, prompt descriptors
+    comfy/                       ComfyUI workflow mapping + queue management
+    vector/                      Chroma store + character indexing
+    embeddings/                  embedding providers (Ollama / LM Studio / mock)
+    portfolio/, audition/, prompts/, generatedImages/    feature modules
+```
+
+**The polish flow (do NOT break this chain):**
+`App.jsx` → `utils/assembler.js` → `PromptOutput.jsx` → `hooks/usePolish.js` → `POST /api/polish` → `api/lib/polishCore.js` → provider (LM Studio / Claude / Ollama)
+
+**Provider resolution order in `polishCore.js`:** embedded sidecar → local (LM Studio or Ollama, controlled by `LLM_PROVIDER`) → Claude cloud. Engine selector in UI: `auto | local | cloud | embedded`.
+
+**Data layer:** SQLite (`better-sqlite3`) at `data/qpb-local.sqlite` is canonical. 10+ tables incl. `characters`, `character_bank_entries`, `prompt_packs`, `generated_images`, `character_batches`, `comfy_jobs`. localStorage holds UI prefs + custom presets only — saved prompts/workspaces live in SQLite.
+
+**Runtime modes (`APP_MODE`):** `local-studio` (full access, current mode) vs `cloud` (read-only, intended for Vercel polish-only deploy).
+
+**For deeper detail, prefer reading these files over guessing:**
+- `PROJECT_CONTEXT.md` — fuller subsystem map
+- `APPLICATION_REFERENCE.md` — full technical reference
+- `.cursorrules` — safe-zone / danger-zone breakdown
+
+## Conventions & Patterns
+
+**Touch lightly.** This codebase rewards surgical edits; punish broad refactors. Match the patterns of the file you're in rather than introducing new ones.
+
+### File & module conventions
+- ESM imports/exports only (no CommonJS).
+- One API route per file in `api/`. Filename = route path (`api/polish.js` → `/api/polish`).
+- Shared domain logic goes in `api/lib/<domain>/`, never in route files.
+- Tests live next to source: `foo.js` + `foo.test.js`.
+- React components: one component per file, PascalCase filename, default export.
+
+### Safe zones (changes here are usually fine)
+- `src/components/PromptOutput.jsx` (UI display)
+- `src/utils/assembler.js` (prompt assembly + ordering + dedupe)
+- Static data in `src/data/` (directors, chips, scenarios)
+- New API routes when adding a feature
+
+### Danger zones (explain reasoning + propose minimal change first)
+- `api/lib/polishCore.js` and provider resolution logic
+- `api/lib/llm/providers/*` (Claude, LM Studio, Ollama, mock)
+- `api/lib/db/schema.js` and repositories — schema migrations need care
+- `api/lib/comfy/comfyService.js` and the SSE/polling flow
+- The `/api/polish` request/response contract
+
+### LLM-integration rules
+- Don't change the polish system prompt without explaining why — it's tuned (see `polishCore.js` SYSTEM_PROMPT).
+- Don't reorder provider resolution in `polishCore.js` without thinking about local-only mode.
+- LM Studio provider auto-injects `/no_think` and `enable_thinking:false` for Qwen3 models — leave that alone unless you understand the trade-off.
+
+### When uncertain
+- Ask for clarification rather than guessing.
+- Trace data input → output before patching a bug.
+- Prefer diff-style proposals; explain what changed and why.
+- Don't introduce new frameworks, state libraries, or build tooling.
