@@ -19,8 +19,11 @@ import {
   createGeneratedImageRecord,
   createPromptPack,
   deleteCharacter,
+  createVisualAnchor,
   getEntity,
   listEntities,
+  listVisualAnchors,
+  setPrimaryAnchor,
   updateEntity,
   writeAttribute,
   getActorAudition,
@@ -563,6 +566,107 @@ describe('writeAttribute (provenance enforcement, supersedes chain)', () => {
     ).toThrow(/supersedes target nonexistent_attr not found/)
     const count = db.prepare('SELECT COUNT(*) AS n FROM entity_attributes WHERE entity_id = ?').get('e_sup_bad').n
     expect(count).toBe(0)
+    db.close()
+  })
+})
+
+describe('visual anchor repository (createVisualAnchor / listVisualAnchors / setPrimaryAnchor)', () => {
+  it('creates an anchor with default isPrimary=false', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_va', type: 'character', name: 'X' })
+    const anchor = createVisualAnchor(db, {
+      entityId: 'e_va',
+      type: 'reference_image',
+      payload: Buffer.from('imgbytes'),
+    })
+    expect(anchor.id).toBeTruthy()
+    expect(anchor.entityId).toBe('e_va')
+    expect(anchor.type).toBe('reference_image')
+    expect(anchor.isPrimary).toBe(false)
+    expect(Buffer.isBuffer(anchor.payload)).toBe(true)
+    db.close()
+  })
+
+  it('createVisualAnchor with isPrimary=true demotes existing primary', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_va2', type: 'character', name: 'X' })
+    const a = createVisualAnchor(db, { entityId: 'e_va2', type: 'reference_image', isPrimary: true })
+    expect(a.isPrimary).toBe(true)
+    const b = createVisualAnchor(db, { entityId: 'e_va2', type: 'reference_image', isPrimary: true })
+    expect(b.isPrimary).toBe(true)
+    const aReloaded = listVisualAnchors(db, { entityId: 'e_va2' }).find((x) => x.id === a.id)
+    expect(aReloaded.isPrimary).toBe(false)
+    db.close()
+  })
+
+  it('rejects invalid type', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_vb', type: 'character', name: 'X' })
+    expect(() => createVisualAnchor(db, { entityId: 'e_vb', type: 'mystery' })).toThrow(/type must be one of/)
+    db.close()
+  })
+
+  it('requires entityId', () => {
+    const { db } = createTempDb()
+    expect(() => createVisualAnchor(db, { type: 'reference_image' })).toThrow(/entityId is required/)
+    db.close()
+  })
+
+  it('listVisualAnchors filters by entityId and type', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_la', type: 'character', name: 'X' })
+    createEntity(db, { id: 'e_lb', type: 'character', name: 'Y' })
+    createVisualAnchor(db, { id: 'va1', entityId: 'e_la', type: 'reference_image' })
+    createVisualAnchor(db, { id: 'va2', entityId: 'e_la', type: 'seed' })
+    createVisualAnchor(db, { id: 'va3', entityId: 'e_lb', type: 'reference_image' })
+    const onlyA = listVisualAnchors(db, { entityId: 'e_la' }).map((x) => x.id).sort()
+    expect(onlyA).toEqual(['va1', 'va2'])
+    const onlyRefImages = listVisualAnchors(db, { type: 'reference_image' }).map((x) => x.id).sort()
+    expect(onlyRefImages).toEqual(['va1', 'va3'])
+    const both = listVisualAnchors(db, { entityId: 'e_la', type: 'seed' }).map((x) => x.id)
+    expect(both).toEqual(['va2'])
+    db.close()
+  })
+
+  it('setPrimaryAnchor flips is_primary atomically and enforces single primary per entity', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_sp', type: 'character', name: 'X' })
+    const a = createVisualAnchor(db, { entityId: 'e_sp', type: 'reference_image', isPrimary: true })
+    const b = createVisualAnchor(db, { entityId: 'e_sp', type: 'reference_image' })
+    const c = createVisualAnchor(db, { entityId: 'e_sp', type: 'seed' })
+    expect(setPrimaryAnchor(db, b.id)).toBe(true)
+    const all = listVisualAnchors(db, { entityId: 'e_sp' })
+    const primaries = all.filter((x) => x.isPrimary).map((x) => x.id)
+    expect(primaries).toEqual([b.id])
+    expect(setPrimaryAnchor(db, c.id)).toBe(true)
+    const after = listVisualAnchors(db, { entityId: 'e_sp' })
+    expect(after.filter((x) => x.isPrimary).map((x) => x.id)).toEqual([c.id])
+    db.close()
+  })
+
+  it('setPrimaryAnchor on already-primary anchor is a no-op (returns true)', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_sp2', type: 'character', name: 'X' })
+    const a = createVisualAnchor(db, { entityId: 'e_sp2', type: 'reference_image', isPrimary: true })
+    expect(setPrimaryAnchor(db, a.id)).toBe(true)
+    expect(listVisualAnchors(db, { entityId: 'e_sp2' }).filter((x) => x.isPrimary).map((x) => x.id)).toEqual([a.id])
+    db.close()
+  })
+
+  it('setPrimaryAnchor returns false for unknown anchor id', () => {
+    const { db } = createTempDb()
+    expect(setPrimaryAnchor(db, 'nope')).toBe(false)
+    db.close()
+  })
+
+  it('primary anchors are scoped per entity (different entities can each have one)', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_x', type: 'character', name: 'X' })
+    createEntity(db, { id: 'e_y', type: 'character', name: 'Y' })
+    const ax = createVisualAnchor(db, { entityId: 'e_x', type: 'reference_image', isPrimary: true })
+    const ay = createVisualAnchor(db, { entityId: 'e_y', type: 'reference_image', isPrimary: true })
+    expect(ax.isPrimary).toBe(true)
+    expect(ay.isPrimary).toBe(true)
     db.close()
   })
 })

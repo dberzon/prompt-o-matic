@@ -1218,3 +1218,69 @@ export function writeAttribute(db, { entityId, key, value, provenance, confidenc
 
   return selectAttributeById(db, id)
 }
+
+
+const VISUAL_ANCHOR_TYPES = new Set(['reference_image', 'ipadapter_embedding', 'seed', 'prompt_anchor'])
+
+function mapVisualAnchorRow(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    entityId: row.entity_id,
+    type: row.type,
+    payload: row.payload ?? null,
+    isPrimary: row.is_primary === 1,
+    createdAt: row.created_at,
+  }
+}
+
+export function createVisualAnchor(db, { id, entityId, type, payload, isPrimary = false } = {}) {
+  if (!entityId) throw new Error('createVisualAnchor: entityId is required')
+  if (!type || !VISUAL_ANCHOR_TYPES.has(type)) {
+    throw new Error(`createVisualAnchor: type must be one of ${[...VISUAL_ANCHOR_TYPES].join(', ')}`)
+  }
+  const anchorId = id || randomUUID()
+  const createdAt = nowIso()
+
+  const apply = db.transaction(() => {
+    if (isPrimary) {
+      db.prepare('UPDATE visual_anchors SET is_primary = 0 WHERE entity_id = ? AND is_primary = 1').run(entityId)
+    }
+    db.prepare(`
+      INSERT INTO visual_anchors (id, entity_id, type, payload, is_primary, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(anchorId, entityId, type, payload ?? null, isPrimary ? 1 : 0, createdAt)
+  })
+  apply()
+
+  return mapVisualAnchorRow(db.prepare('SELECT * FROM visual_anchors WHERE id = ?').get(anchorId))
+}
+
+export function listVisualAnchors(db, { entityId, type } = {}) {
+  const conditions = []
+  const params = []
+  if (entityId) {
+    conditions.push('entity_id = ?')
+    params.push(entityId)
+  }
+  if (type) {
+    conditions.push('type = ?')
+    params.push(type)
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  const rows = db.prepare(`SELECT * FROM visual_anchors ${where} ORDER BY created_at DESC`).all(...params)
+  return rows.map(mapVisualAnchorRow)
+}
+
+export function setPrimaryAnchor(db, anchorId) {
+  const row = db.prepare('SELECT entity_id FROM visual_anchors WHERE id = ?').get(anchorId)
+  if (!row) return false
+  const apply = db.transaction(() => {
+    db.prepare(
+      'UPDATE visual_anchors SET is_primary = 0 WHERE entity_id = ? AND is_primary = 1 AND id != ?',
+    ).run(row.entity_id, anchorId)
+    db.prepare('UPDATE visual_anchors SET is_primary = 1 WHERE id = ?').run(anchorId)
+  })
+  apply()
+  return true
+}
