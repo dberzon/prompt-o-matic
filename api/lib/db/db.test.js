@@ -9,14 +9,19 @@ import {
   validQwenImagePromptPack,
 } from '../characters/fixtures.js'
 import {
+  archiveEntity,
   createActorAudition,
   createActorCandidate,
   createBatchCandidate,
   createCharacter,
   createCharacterBatch,
+  createEntity,
   createGeneratedImageRecord,
   createPromptPack,
   deleteCharacter,
+  getEntity,
+  listEntities,
+  updateEntity,
   getActorAudition,
   getActorCandidate,
   getBatchCandidate,
@@ -354,6 +359,104 @@ describe('entity layer schema migrations', () => {
     ).toThrow(/UNIQUE/i)
     // Different entity may also have a primary
     db.prepare("INSERT INTO visual_anchors (id, entity_id, type, is_primary, created_at) VALUES ('v5', 'e2', 'reference_image', 1, ?)").run(now)
+    db.close()
+  })
+})
+
+
+describe('entity repository (createEntity / getEntity / listEntities / updateEntity / archiveEntity)', () => {
+  it('creates and retrieves an entity', () => {
+    const { db } = createTempDb()
+    const created = createEntity(db, { id: 'ent_001', type: 'character', name: 'Elena' })
+    expect(created.id).toBe('ent_001')
+    expect(created.type).toBe('character')
+    expect(created.name).toBe('Elena')
+    expect(created.archivedAt).toBeNull()
+    expect(created.createdAt).toBe(created.updatedAt)
+    const fetched = getEntity(db, 'ent_001')
+    expect(fetched).toEqual(created)
+    db.close()
+  })
+
+  it('createEntity assigns a UUID when id is omitted', () => {
+    const { db } = createTempDb()
+    const a = createEntity(db, { type: 'environment', name: 'Wharf' })
+    const b = createEntity(db, { type: 'environment', name: 'Wharf' })
+    expect(a.id).toBeTruthy()
+    expect(a.id).not.toBe(b.id)
+    db.close()
+  })
+
+  it('createEntity rejects invalid type', () => {
+    const { db } = createTempDb()
+    expect(() => createEntity(db, { type: 'spaceship', name: 'X' })).toThrow(/type must be one of/)
+    db.close()
+  })
+
+  it('createEntity requires a name', () => {
+    const { db } = createTempDb()
+    expect(() => createEntity(db, { type: 'character' })).toThrow(/name is required/)
+    db.close()
+  })
+
+  it('listEntities filters by type and excludes archived by default', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_c1', type: 'character', name: 'C1' })
+    createEntity(db, { id: 'e_c2', type: 'character', name: 'C2' })
+    createEntity(db, { id: 'e_env', type: 'environment', name: 'Forest' })
+    archiveEntity(db, 'e_c2')
+    const characters = listEntities(db, { type: 'character' }).map((e) => e.id).sort()
+    expect(characters).toEqual(['e_c1'])
+    const all = listEntities(db).map((e) => e.id).sort()
+    expect(all).toEqual(['e_c1', 'e_env'])
+    const withArchived = listEntities(db, { includeArchived: true }).map((e) => e.id).sort()
+    expect(withArchived).toEqual(['e_c1', 'e_c2', 'e_env'])
+    db.close()
+  })
+
+  it('updateEntity changes name and bumps updated_at', () => {
+    const { db } = createTempDb()
+    const created = createEntity(db, { id: 'ent_upd', type: 'prop', name: 'Lantern' })
+    // Force a measurable gap so updated_at changes
+    const updated = updateEntity(db, 'ent_upd', { name: 'Brass Lantern' })
+    expect(updated.name).toBe('Brass Lantern')
+    expect(updated.type).toBe('prop')
+    expect(updated.createdAt).toBe(created.createdAt)
+    db.close()
+  })
+
+  it('updateEntity returns null for unknown id', () => {
+    const { db } = createTempDb()
+    expect(updateEntity(db, 'does_not_exist', { name: 'X' })).toBeNull()
+    db.close()
+  })
+
+  it('updateEntity rejects invalid type', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'ent_bad', type: 'character', name: 'X' })
+    expect(() => updateEntity(db, 'ent_bad', { type: 'mecha' })).toThrow(/type must be one of/)
+    db.close()
+  })
+
+  it('archiveEntity sets archived_at and is idempotent', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'ent_arc', type: 'institution', name: 'Guild' })
+    expect(archiveEntity(db, 'ent_arc')).toBe(true)
+    const archived = getEntity(db, 'ent_arc')
+    expect(archived.archivedAt).toBeTruthy()
+    // Second archive returns false (already archived)
+    expect(archiveEntity(db, 'ent_arc')).toBe(false)
+    expect(archiveEntity(db, 'unknown_id')).toBe(false)
+    db.close()
+  })
+
+  it('archiveEntity preserves history (no DELETE)', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'ent_hist', type: 'character', name: 'Ghost' })
+    archiveEntity(db, 'ent_hist')
+    const fetched = getEntity(db, 'ent_hist')
+    expect(fetched).not.toBeNull()
+    expect(fetched.name).toBe('Ghost')
     db.close()
   })
 })

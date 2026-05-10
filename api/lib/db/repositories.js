@@ -1082,3 +1082,86 @@ export function upsertWorkspaceProfile(db, { id, label, stateJson }) {
 export function deleteWorkspaceProfile(db, id) {
   return db.prepare('DELETE FROM workspace_profiles WHERE id = ?').run(id).changes > 0
 }
+
+
+const ENTITY_TYPES = new Set(['character', 'environment', 'prop', 'institution'])
+
+function mapEntityRow(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    type: row.type,
+    name: row.name,
+    archivedAt: row.archived_at ?? null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+export function createEntity(db, { id, type, name, createdAt } = {}) {
+  if (!type || !ENTITY_TYPES.has(type)) {
+    throw new Error(`createEntity: type must be one of ${[...ENTITY_TYPES].join(', ')}`)
+  }
+  if (!name || typeof name !== 'string') {
+    throw new Error('createEntity: name is required')
+  }
+  const entityId = id || randomUUID()
+  const now = createdAt || nowIso()
+  db.prepare(`
+    INSERT INTO entities (id, type, name, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(entityId, type, name, now, now)
+  return getEntity(db, entityId)
+}
+
+export function getEntity(db, id) {
+  const row = db.prepare('SELECT * FROM entities WHERE id = ?').get(id)
+  return mapEntityRow(row)
+}
+
+export function listEntities(db, { type, includeArchived = false } = {}) {
+  const conditions = []
+  const params = []
+  if (type) {
+    conditions.push('type = ?')
+    params.push(type)
+  }
+  if (!includeArchived) {
+    conditions.push('archived_at IS NULL')
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  const rows = db.prepare(`SELECT * FROM entities ${where} ORDER BY created_at DESC`).all(...params)
+  return rows.map(mapEntityRow)
+}
+
+export function updateEntity(db, id, patch = {}) {
+  const existing = getEntity(db, id)
+  if (!existing) return null
+  const next = {
+    type: patch.type !== undefined ? patch.type : existing.type,
+    name: patch.name !== undefined ? patch.name : existing.name,
+  }
+  if (!ENTITY_TYPES.has(next.type)) {
+    throw new Error(`updateEntity: type must be one of ${[...ENTITY_TYPES].join(', ')}`)
+  }
+  if (!next.name || typeof next.name !== 'string') {
+    throw new Error('updateEntity: name is required')
+  }
+  const updatedAt = nowIso()
+  db.prepare('UPDATE entities SET type = ?, name = ?, updated_at = ? WHERE id = ?').run(
+    next.type,
+    next.name,
+    updatedAt,
+    id,
+  )
+  return getEntity(db, id)
+}
+
+export function archiveEntity(db, id) {
+  const result = db.prepare('UPDATE entities SET archived_at = ?, updated_at = ? WHERE id = ? AND archived_at IS NULL').run(
+    nowIso(),
+    nowIso(),
+    id,
+  )
+  return result.changes > 0
+}
