@@ -1284,3 +1284,86 @@ export function setPrimaryAnchor(db, anchorId) {
   apply()
   return true
 }
+
+
+function mapRelationshipRow(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    fromId: row.from_id,
+    toId: row.to_id,
+    type: row.type,
+    provenance: row.provenance,
+    confidence: row.confidence,
+    attributes: row.attributes ? JSON.parse(row.attributes) : null,
+  }
+}
+
+export function createRelationship(db, { id, fromId, toId, type, provenance, confidence, attributes } = {}) {
+  if (!fromId) throw new Error('createRelationship: fromId is required')
+  if (!toId) throw new Error('createRelationship: toId is required')
+  if (!type) throw new Error('createRelationship: type is required')
+  if (!provenance) throw new Error('createRelationship: provenance is required')
+  if (!ATTRIBUTE_PROVENANCES.has(provenance)) {
+    throw new Error(`createRelationship: provenance must be one of ${[...ATTRIBUTE_PROVENANCES].join(', ')}`)
+  }
+  const relId = id || randomUUID()
+  db.prepare(`
+    INSERT INTO entity_relationships (id, from_id, to_id, type, provenance, confidence, attributes)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(relId, fromId, toId, type, provenance, confidence ?? null, attributes ? JSON.stringify(attributes) : null)
+  return mapRelationshipRow(db.prepare('SELECT * FROM entity_relationships WHERE id = ?').get(relId))
+}
+
+export function listRelationships(db, { fromId, toId, type, typePrefix } = {}) {
+  const conditions = []
+  const params = []
+  if (fromId) {
+    conditions.push('from_id = ?')
+    params.push(fromId)
+  }
+  if (toId) {
+    conditions.push('to_id = ?')
+    params.push(toId)
+  }
+  if (type) {
+    conditions.push('type = ?')
+    params.push(type)
+  }
+  if (typePrefix) {
+    // Convert glob-style 'family.*' → SQL LIKE 'family.%'
+    const pattern = typePrefix.replace(/\*/g, '%')
+    conditions.push('type LIKE ?')
+    params.push(pattern)
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  const rows = db.prepare(`SELECT * FROM entity_relationships ${where}`).all(...params)
+  return rows.map(mapRelationshipRow)
+}
+
+export function updateRelationship(db, id, patch = {}) {
+  const existing = mapRelationshipRow(db.prepare('SELECT * FROM entity_relationships WHERE id = ?').get(id))
+  if (!existing) return null
+  const next = {
+    type: patch.type !== undefined ? patch.type : existing.type,
+    provenance: patch.provenance !== undefined ? patch.provenance : existing.provenance,
+    confidence: patch.confidence !== undefined ? patch.confidence : existing.confidence,
+    attributes: patch.attributes !== undefined ? patch.attributes : existing.attributes,
+  }
+  if (!next.type) throw new Error('updateRelationship: type is required')
+  if (!ATTRIBUTE_PROVENANCES.has(next.provenance)) {
+    throw new Error(`updateRelationship: provenance must be one of ${[...ATTRIBUTE_PROVENANCES].join(', ')}`)
+  }
+  db.prepare(`
+    UPDATE entity_relationships
+    SET type = ?, provenance = ?, confidence = ?, attributes = ?
+    WHERE id = ?
+  `).run(
+    next.type,
+    next.provenance,
+    next.confidence ?? null,
+    next.attributes ? JSON.stringify(next.attributes) : null,
+    id,
+  )
+  return mapRelationshipRow(db.prepare('SELECT * FROM entity_relationships WHERE id = ?').get(id))
+}

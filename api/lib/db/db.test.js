@@ -19,12 +19,15 @@ import {
   createGeneratedImageRecord,
   createPromptPack,
   deleteCharacter,
+  createRelationship,
   createVisualAnchor,
   getEntity,
   listEntities,
+  listRelationships,
   listVisualAnchors,
   setPrimaryAnchor,
   updateEntity,
+  updateRelationship,
   writeAttribute,
   getActorAudition,
   getActorCandidate,
@@ -667,6 +670,97 @@ describe('visual anchor repository (createVisualAnchor / listVisualAnchors / set
     const ay = createVisualAnchor(db, { entityId: 'e_y', type: 'reference_image', isPrimary: true })
     expect(ax.isPrimary).toBe(true)
     expect(ay.isPrimary).toBe(true)
+    db.close()
+  })
+})
+
+describe('relationship repository (createRelationship / listRelationships / updateRelationship)', () => {
+  it('creates a relationship and round-trips attributes JSON', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_r1', type: 'character', name: 'Mom' })
+    createEntity(db, { id: 'e_r2', type: 'character', name: 'Kid' })
+    const rel = createRelationship(db, {
+      fromId: 'e_r1',
+      toId: 'e_r2',
+      type: 'family.parent_of',
+      provenance: 'canon',
+      confidence: 1,
+      attributes: { since: '1990' },
+    })
+    expect(rel.id).toBeTruthy()
+    expect(rel.fromId).toBe('e_r1')
+    expect(rel.toId).toBe('e_r2')
+    expect(rel.type).toBe('family.parent_of')
+    expect(rel.attributes).toEqual({ since: '1990' })
+    db.close()
+  })
+
+  it('rejects missing required fields', () => {
+    const { db } = createTempDb()
+    expect(() => createRelationship(db, { toId: 'e2', type: 't', provenance: 'canon' })).toThrow(/fromId is required/)
+    expect(() => createRelationship(db, { fromId: 'e1', type: 't', provenance: 'canon' })).toThrow(/toId is required/)
+    expect(() => createRelationship(db, { fromId: 'e1', toId: 'e2', provenance: 'canon' })).toThrow(/type is required/)
+    expect(() => createRelationship(db, { fromId: 'e1', toId: 'e2', type: 't' })).toThrow(/provenance is required/)
+    expect(() => createRelationship(db, { fromId: 'e1', toId: 'e2', type: 't', provenance: 'guess' })).toThrow(
+      /provenance must be one of/,
+    )
+    db.close()
+  })
+
+  it('listRelationships filters by fromId, toId, type, and typePrefix glob', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'a', type: 'character', name: 'A' })
+    createEntity(db, { id: 'b', type: 'character', name: 'B' })
+    createEntity(db, { id: 'c', type: 'character', name: 'C' })
+    createRelationship(db, { id: 'r1', fromId: 'a', toId: 'b', type: 'family.parent_of', provenance: 'canon' })
+    createRelationship(db, { id: 'r2', fromId: 'a', toId: 'c', type: 'family.sibling_of', provenance: 'canon' })
+    createRelationship(db, { id: 'r3', fromId: 'b', toId: 'c', type: 'work.colleague_of', provenance: 'inferred' })
+
+    expect(listRelationships(db, { fromId: 'a' }).map((r) => r.id).sort()).toEqual(['r1', 'r2'])
+    expect(listRelationships(db, { toId: 'c' }).map((r) => r.id).sort()).toEqual(['r2', 'r3'])
+    expect(listRelationships(db, { type: 'work.colleague_of' }).map((r) => r.id)).toEqual(['r3'])
+    expect(listRelationships(db, { typePrefix: 'family.*' }).map((r) => r.id).sort()).toEqual(['r1', 'r2'])
+    expect(listRelationships(db, { fromId: 'a', typePrefix: 'family.*' }).map((r) => r.id).sort()).toEqual(['r1', 'r2'])
+    db.close()
+  })
+
+  it('updateRelationship patches mutable fields', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'u_a', type: 'character', name: 'A' })
+    createEntity(db, { id: 'u_b', type: 'character', name: 'B' })
+    const rel = createRelationship(db, {
+      fromId: 'u_a',
+      toId: 'u_b',
+      type: 'work.colleague_of',
+      provenance: 'inferred',
+      confidence: 0.4,
+    })
+    const updated = updateRelationship(db, rel.id, {
+      provenance: 'canon',
+      confidence: 1,
+      attributes: { verified: true },
+    })
+    expect(updated.provenance).toBe('canon')
+    expect(updated.confidence).toBe(1)
+    expect(updated.attributes).toEqual({ verified: true })
+    expect(updated.type).toBe('work.colleague_of')
+    expect(updated.fromId).toBe('u_a')
+    expect(updated.toId).toBe('u_b')
+    db.close()
+  })
+
+  it('updateRelationship returns null for unknown id', () => {
+    const { db } = createTempDb()
+    expect(updateRelationship(db, 'nope', { provenance: 'canon' })).toBeNull()
+    db.close()
+  })
+
+  it('updateRelationship rejects invalid provenance', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'ur_a', type: 'character', name: 'A' })
+    createEntity(db, { id: 'ur_b', type: 'character', name: 'B' })
+    const rel = createRelationship(db, { fromId: 'ur_a', toId: 'ur_b', type: 't', provenance: 'canon' })
+    expect(() => updateRelationship(db, rel.id, { provenance: 'guess' })).toThrow(/provenance must be one of/)
     db.close()
   })
 })
