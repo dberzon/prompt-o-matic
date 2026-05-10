@@ -1180,6 +1180,7 @@ function mapAttributeRow(row) {
     confidence: row.confidence,
     sourceStage: row.source_stage,
     supersededBy: row.superseded_by,
+    dismissedAt: row.dismissed_at ?? null,
     createdAt: row.created_at,
   }
 }
@@ -1217,6 +1218,60 @@ export function writeAttribute(db, { entityId, key, value, provenance, confidenc
   apply()
 
   return selectAttributeById(db, id)
+}
+
+
+export function getAttribute(db, id) {
+  return selectAttributeById(db, id)
+}
+
+export function listAttributes(db, { entityId, key, provenance, includeDismissed = false, includeSuperseded = false } = {}) {
+  const conditions = []
+  const params = []
+  if (entityId) {
+    conditions.push('entity_id = ?')
+    params.push(entityId)
+  }
+  if (key) {
+    conditions.push('key = ?')
+    params.push(key)
+  }
+  if (provenance) {
+    conditions.push('provenance = ?')
+    params.push(provenance)
+  }
+  if (!includeDismissed) {
+    conditions.push('dismissed_at IS NULL')
+  }
+  if (!includeSuperseded) {
+    conditions.push('superseded_by IS NULL')
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  const rows = db.prepare(`SELECT * FROM entity_attributes ${where} ORDER BY created_at DESC`).all(...params)
+  return rows.map(mapAttributeRow)
+}
+
+export function promoteToCanon(db, originalId, { value } = {}) {
+  const original = selectAttributeById(db, originalId)
+  if (!original) {
+    throw new Error(`promoteToCanon: attribute ${originalId} not found`)
+  }
+  return writeAttribute(db, {
+    entityId: original.entityId,
+    key: original.key,
+    value: value !== undefined ? value : original.value,
+    provenance: 'canon',
+    confidence: 1,
+    sourceStage: original.sourceStage,
+    supersedes: originalId,
+  })
+}
+
+export function dismissSuggested(db, id) {
+  const result = db.prepare(
+    'UPDATE entity_attributes SET dismissed_at = ? WHERE id = ? AND dismissed_at IS NULL',
+  ).run(nowIso(), id)
+  return result.changes > 0
 }
 
 

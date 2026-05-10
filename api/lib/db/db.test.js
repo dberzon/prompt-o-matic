@@ -21,10 +21,14 @@ import {
   deleteCharacter,
   createRelationship,
   createVisualAnchor,
+  dismissSuggested,
+  getAttribute,
   getEntity,
+  listAttributes,
   listEntities,
   listRelationships,
   listVisualAnchors,
+  promoteToCanon,
   setPrimaryAnchor,
   updateEntity,
   updateRelationship,
@@ -761,6 +765,104 @@ describe('relationship repository (createRelationship / listRelationships / upda
     createEntity(db, { id: 'ur_b', type: 'character', name: 'B' })
     const rel = createRelationship(db, { fromId: 'ur_a', toId: 'ur_b', type: 't', provenance: 'canon' })
     expect(() => updateRelationship(db, rel.id, { provenance: 'guess' })).toThrow(/provenance must be one of/)
+    db.close()
+  })
+})
+
+describe('attribute queries (getAttribute / listAttributes / promoteToCanon / dismissSuggested)', () => {
+  it('getAttribute returns single attribute by id', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_g', type: 'character', name: 'X' })
+    const a = writeAttribute(db, { entityId: 'e_g', key: 'eyes', value: 'green', provenance: 'canon' })
+    const fetched = getAttribute(db, a.id)
+    expect(fetched.id).toBe(a.id)
+    expect(fetched.value).toBe('green')
+    expect(getAttribute(db, 'unknown')).toBeNull()
+    db.close()
+  })
+
+  it('listAttributes excludes dismissed and superseded by default', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_l', type: 'character', name: 'X' })
+    const v1 = writeAttribute(db, { entityId: 'e_l', key: 'eyes', value: 'blue', provenance: 'inferred' })
+    writeAttribute(db, { entityId: 'e_l', key: 'eyes', value: 'green', provenance: 'canon', supersedes: v1.id })
+    const dismissed = writeAttribute(db, { entityId: 'e_l', key: 'hair', value: 'long', provenance: 'suggested' })
+    dismissSuggested(db, dismissed.id)
+
+    const active = listAttributes(db, { entityId: 'e_l' })
+    expect(active.map((a) => a.key).sort()).toEqual(['eyes'])
+    expect(active[0].value).toBe('green')
+    expect(active[0].provenance).toBe('canon')
+
+    const all = listAttributes(db, { entityId: 'e_l', includeDismissed: true, includeSuperseded: true })
+    expect(all).toHaveLength(3)
+    db.close()
+  })
+
+  it('listAttributes filters by key and provenance', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_lf', type: 'character', name: 'X' })
+    writeAttribute(db, { entityId: 'e_lf', key: 'eyes', value: 'green', provenance: 'canon' })
+    writeAttribute(db, { entityId: 'e_lf', key: 'hair', value: 'red', provenance: 'inferred' })
+    writeAttribute(db, { entityId: 'e_lf', key: 'mood', value: 'sad', provenance: 'suggested' })
+    expect(listAttributes(db, { entityId: 'e_lf', provenance: 'canon' }).map((a) => a.key)).toEqual(['eyes'])
+    expect(listAttributes(db, { entityId: 'e_lf', key: 'hair' }).map((a) => a.key)).toEqual(['hair'])
+    db.close()
+  })
+
+  it('promoteToCanon writes canon row that supersedes the original', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_p', type: 'character', name: 'X' })
+    const inferred = writeAttribute(db, {
+      entityId: 'e_p',
+      key: 'eyes',
+      value: 'blue',
+      provenance: 'inferred',
+      confidence: 0.5,
+    })
+    const promoted = promoteToCanon(db, inferred.id)
+    expect(promoted.provenance).toBe('canon')
+    expect(promoted.confidence).toBe(1)
+    expect(promoted.value).toBe('blue')
+    expect(promoted.entityId).toBe('e_p')
+    const originalReloaded = getAttribute(db, inferred.id)
+    expect(originalReloaded.supersededBy).toBe(promoted.id)
+    db.close()
+  })
+
+  it('promoteToCanon allows overriding the value (edit-promotes-to-canon)', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_pe', type: 'character', name: 'X' })
+    const inferred = writeAttribute(db, {
+      entityId: 'e_pe',
+      key: 'eyes',
+      value: 'blue',
+      provenance: 'inferred',
+    })
+    const promoted = promoteToCanon(db, inferred.id, { value: 'green' })
+    expect(promoted.provenance).toBe('canon')
+    expect(promoted.value).toBe('green')
+    const originalReloaded = getAttribute(db, inferred.id)
+    expect(originalReloaded.supersededBy).toBe(promoted.id)
+    expect(originalReloaded.value).toBe('blue')
+    db.close()
+  })
+
+  it('promoteToCanon throws if original not found', () => {
+    const { db } = createTempDb()
+    expect(() => promoteToCanon(db, 'nope')).toThrow(/attribute nope not found/)
+    db.close()
+  })
+
+  it('dismissSuggested sets dismissed_at and is idempotent', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_d', type: 'character', name: 'X' })
+    const a = writeAttribute(db, { entityId: 'e_d', key: 'mood', value: 'sad', provenance: 'suggested' })
+    expect(dismissSuggested(db, a.id)).toBe(true)
+    const reloaded = getAttribute(db, a.id)
+    expect(reloaded.dismissedAt).toBeTruthy()
+    expect(dismissSuggested(db, a.id)).toBe(false)
+    expect(dismissSuggested(db, 'nonexistent')).toBe(false)
     db.close()
   })
 })

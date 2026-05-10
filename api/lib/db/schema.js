@@ -193,6 +193,7 @@ export const MIGRATIONS = [
   'CREATE INDEX IF NOT EXISTS idx_entity_attributes_entity_id ON entity_attributes(entity_id)',
   'CREATE INDEX IF NOT EXISTS idx_entity_attributes_entity_key ON entity_attributes(entity_id, key)',
   'CREATE INDEX IF NOT EXISTS idx_entity_attributes_provenance ON entity_attributes(provenance)',
+  'ALTER TABLE entity_attributes ADD COLUMN dismissed_at TEXT',
   `CREATE TABLE IF NOT EXISTS entity_relationships (
     id TEXT PRIMARY KEY,
     from_id TEXT NOT NULL,
