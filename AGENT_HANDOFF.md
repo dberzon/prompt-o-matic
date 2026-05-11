@@ -11,7 +11,7 @@ Qwen Prompt Builder (QPB) is a local-first creative tool for constructing, manag
 
 ---
 
-## Four Tabs and Their Dependency Relationships
+## Five Tabs and Their Dependency Relationships
 
 **Tab 1 — Prompt Builder** (`activeTab='builder'`)
 Constructs and refines a single text-to-image prompt from freetext scene input, director style chips (61 directors), scenario templates, and an optional LLM polish pass. Actor Bank characters are available in two ways: (1) character slots can be linked to a named Actor Bank character — the linked character's description replaces the anonymous demographic descriptor in director scenario templates; (2) `@slug` tokens in scene text expand to the character's full `optimizedDescription` from the Actor Bank database (merged with Character Builder localStorage entries).
@@ -27,6 +27,9 @@ Also hosts the Active Character section for renaming, archiving, compiling promp
 
 **Tab 4 — Actor Bank** (`activeTab='actorBank'`)
 Full character management interface for the `characters` table. Grid view with filters (search, gender, age) and sort options (recent renders / recently created / A–Z). Per-character detail view provides: inline rename, archive/restore, image keep/discard curation, portfolio re-queue when `portfolio_failed`, and an "Open in Casting Room" button that switches tabs and sets the active character in one click.
+
+**Tab 5 — Continuity** (`activeTab='continuity'`)
+Entity-centric worldbuilding: select or create entities, run the S1–S6 extrapolation pipeline, review inferred attributes, manage primary reference anchors, resolve Stage 6 conflicts, and run the MVP Done gate (five-scene continuity QA with blind reviewer scoring). UI: `EntityContinuityPanel`, `EntityEditor`, `EntityExtrapolationPanel`, `AttributeReviewPanel`, `EntityConflictPanel`, `EntityContinuityQaPanel`, `VisualAnchorPicker`.
 
 **Dependency chain:**
 - Character Builder → Casting Room Path A (bank entries consumed by audition)
@@ -64,7 +67,7 @@ All routes are registered in `vite.config.js` as Vite middleware. Prefix: `/api/
 | Casting / Audition (Path A) | `POST /api/audition/generate` | None |
 | Batch pipeline (Path B) | `POST /api/characters-generate-batch`, `GET /api/character-batches`, `GET /api/character-batch`, `GET /api/character-batch-candidates`, `POST /api/character-batch-candidate-approve/reject/reconsider/save/mutate`, `POST /api/character-batch-refill`, `POST /api/batch-candidate-preview`, `POST /api/batch-candidate-preview-image` | `ENABLE_CHARACTER_BATCH_API` |
 | Prompt packs | `POST /api/prompt-pack-compile-character`, `POST /api/prompt-pack-compile-batch`, `GET /api/prompt-packs`, `POST /api/promptpack/from-entity/:id` | `ENABLE_PROMPT_PACK_API` |
-| Entities (worldbuilding layer) | `GET/POST/PUT/DELETE /api/entities` and `/api/entities/:id`; `POST /api/entities/lift-from-bank-entry`; `GET /api/entities/:id/attributes`; `GET/POST/PUT/DELETE /api/entities/:id/relationships`; `GET/POST/DELETE /api/entities/:id/anchors`, `POST /api/entities/:id/anchors/:anchorId/set-primary`; `POST /api/entities/:id/attributes/:attrId/promote|dismiss|edit`; `POST /api/entities/:id/conflicts/:cid/resolve|dismiss`; `POST /api/extrapolate/character/:id`, `POST /api/extrapolate/stage/:id/:n`, `POST /api/entities/:id/extrapolate/stage/:n` (stage 5 = reference portrait queue); `POST /api/entities/:id/continuity-qa/generate`; `GET /api/entities/:id/continuity-qa/scoring-sheet`; `POST /api/entities/:id/continuity-qa/scores` | None (local-studio) |
+| Entities (worldbuilding layer) | `GET/POST/PUT/DELETE /api/entities` and `/api/entities/:id`; `POST /api/entities/lift-from-bank-entry`; `GET /api/entities/:id/attributes`; `GET/POST/PUT/DELETE /api/entities/:id/relationships`; `GET/POST/DELETE /api/entities/:id/anchors`, `POST /api/entities/:id/anchors/:anchorId/set-primary`; `POST /api/entities/:id/attributes/:attrId/promote|dismiss|edit`; `POST /api/entities/:id/conflicts/:cid/resolve|dismiss`; `POST /api/extrapolate/character/:id`, `POST /api/extrapolate/stage/:id/:n`, `POST /api/entities/:id/extrapolate/stage/:n` (stage 5 = reference portrait queue); `GET /api/entities/:id/mvp-done-gate`; `POST /api/entities/:id/continuity-qa/generate`; `GET /api/entities/:id/continuity-qa/scoring-sheet`; `POST /api/entities/:id/continuity-qa/scores` | None (local-studio) |
 | Portfolio | `POST /api/character-portfolio-plan`, `POST /api/character-portfolio-queue`, `POST /api/actor-more-takes` | `ENABLE_PROMPT_PACK_API` + `ENABLE_COMFY_API` |
 | ComfyUI integration | `GET /api/comfy-status`, `GET /api/comfy-workflows`, `POST /api/comfy-validate-workflow`, `POST /api/comfy-queue-prompt-pack`, `POST /api/comfy-queue-character`, `GET /api/comfy-job-status`, `POST /api/comfy-jobs-status`, `GET/POST/PATCH /api/comfy-jobs`, `POST /api/comfy-ingest-outputs`, `POST /api/comfy-ingest-many` | `ENABLE_COMFY_API` |
 | Generated images | `GET /api/generated-images`, `POST /api/generated-image-approve`, `POST /api/generated-image-reject`, `GET /api/generated-image-view` | `ENABLE_GENERATED_IMAGES_API` |
@@ -135,8 +138,21 @@ Soft-archive is separate: `archived_at` column (ISO timestamp if archived, NULL 
 | `api/entity-relationships.js` | Entity-scoped relationship CRUD |
 | `api/entity-anchors.js` | Visual anchor CRUD + set-primary (multipart upload for `reference_image`) |
 | `api/entity-attribute-actions.js` | Attribute promote / dismiss / edit actions |
+| `api/entity-conflict-actions.js` | S6 conflict resolve / dismiss |
+| `api/entity-mvp-done-gate.js` | MVP Done gate readiness checklist |
+| `api/entity-continuity-qa-generate.js` | Five-scene continuity QA queue |
+| `api/entity-continuity-qa-scoring.js` | Blind-seed scoring sheet + acceptance decision |
+| `api/entity-extrapolate.js` | Extrapolation pipeline + per-stage routes |
+| `api/entity-extrapolate-stage5.js` | Stage 5 reference portrait queue |
 | `api/promptpack-from-entity.js` | Entity prompt-pack compile route handler |
+| `api/lib/extrapolation/orchestrator.js` | S1–S6 orchestrator, stage cache, model routing |
+| `api/lib/continuity/mvpDoneGate.js` | Readiness checks + continuity QA orchestration |
+| `api/lib/comfy/ipadapterFeasibility.js` | IPAdapter feasibility decision for Qwen-Image |
 | `api/lib/prompts/entityAttributeProfile.js` | Maps entity attributes into prompt-compiler profile shape |
+| `src/components/EntityContinuityPanel.jsx` | Continuity tab shell |
+| `src/components/EntityEditor.jsx` | Entity sections, extrapolation, review, conflicts |
+| `src/components/EntityContinuityQaPanel.jsx` | MVP Done gate UI |
+| `src/components/EntityConflictPanel.jsx` | Stage 6 conflict resolution UI |
 | `src/components/CastingPipelinePanel.jsx` | Entire Casting Room — Path A + B + Active Character + render system; accepts `jumpToCharacterId`/`onJumpConsumed` props for cross-tab navigation |
 | `src/components/ActorBank/ActorBankView.jsx` | Actor Bank tab root; archived toggle; passes `onOpenInCastingRoom` to ActorDetail |
 | `src/components/ActorBank/ActorCard.jsx` | Character card with lifecycle badge, image count, archived state |
@@ -191,10 +207,10 @@ Chroma is auto-spawned by `vite.config.js` on dev server start when `AUTO_START_
 
 ---
 
-## Session Handoff (2026-05-11, late evening)
+## Session Handoff (2026-05-11, evening)
 
-**Shipped in git (`49f7d54` → `11c8163`):** one-shot Chroma reindex script (`scripts/reindex-characters-entity-type.mjs`); canon attribute panel + inline edit in `EntityEditor`; extrapolation orchestrator with stage cache/model routing and S1–S6 prompts/parsers (Ruslan fixture in `api/lib/extrapolation/`); `/api/extrapolate/*` routes; IPAdapter feasibility decision module; S4 `provenance=derived` relationship attrs; S6 conflict resolve/dismiss API; continuity QA generation (`POST /api/entities/:id/continuity-qa/generate`, `scripts/run-continuity-qa-generations.mjs`); blind-seed scoring + acceptance decision (`GET/POST /api/entities/:id/continuity-qa/scoring-sheet|scores`).
+**MVP acceptance complete:** Ruslan Section 13 happy path (`api/ruslanMvpAcceptance.test.js`); MVP Done gate readiness + five-scene QA + blind scoring (`api/ruslanMvpDoneGate.test.js`, `GET /api/entities/:id/mvp-done-gate`, Continuity tab `EntityContinuityQaPanel`). Extrapolation pipeline epics closed (`rsm9`, stages S1–S6). S6 conflict UI shipped (`EntityConflictPanel`).
 
-**Still open (start with `bd ready`):** MVP acceptance epic `qwen-prompt-builder-aaun` — Ruslan end-to-end verification `784v`, then `enui` “Done =” gate. Migration epic `y9mw` blocked on docs `xppx`. Extrapolation stage epics (`rsm9`, `sw6m`, `jcad`, `ifkp`, `frk7`, `rk29`, `j1re`) remain open for epic-level close even though core stage code landed. P1 follow-ups: S6 conflict UI `611h`, anchor gallery `zpcf`, audit trail `ibfa`.
+**Still open (start with `bd ready`):** P1 polish — anchor gallery `zpcf`, audit trail `ibfa`, CLIP embedding cache `7h8h`, user-upload override `tjao`, S2–S5 parallelization `0yie`. Migration epic `y9mw` may remain for legacy `characters` → `entities` lift workflows. P2 deferred items unblocked after MVP gate.
 
-**Dev checks:** Stop `npm run dev`, run `npm rebuild better-sqlite3`, then full `npm test` (Vitest ABI must match dev Node). Targeted session suites on Node 24: `npx vitest run api/lib/continuity api/lib/extrapolation api/entity-conflict-actions.test.js api/entity-continuity-qa-scoring.test.js`. Confirm `GET /api/chroma-health` when vector features matter.
+**Dev checks:** Stop `npm run dev`, run `npm rebuild better-sqlite3` for the Node major that runs dev, then `npm test`. On Windows, dev often uses system Node v24 while the IDE shell may default to another major — align before running Vitest. Targeted suites: `npx vitest run api/lib/continuity api/lib/extrapolation api/ruslanMvpAcceptance.test.js api/ruslanMvpDoneGate.test.js`. Confirm `GET /api/chroma-health` when vector features matter.

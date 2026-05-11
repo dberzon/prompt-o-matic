@@ -6,7 +6,7 @@ For full technical detail, see `APPLICATION_REFERENCE.md`.
 
 ---
 
-## Four Tabs
+## Five Tabs
 
 | Tab | Job |
 |---|---|
@@ -14,6 +14,7 @@ For full technical detail, see `APPLICATION_REFERENCE.md`.
 | **Character Builder** | Author named character descriptions (bank entries) stored in SQLite and mirrored to localStorage. These feed Path A in the Casting Room. |
 | **Casting Room** | Two paths: Path A (audition from bank entry, LLM generates profiles, ComfyUI renders) and Path B (batch generation with vector similarity screening). Shared Active Character section for portfolio management and image gallery. |
 | **Actor Bank** | Full character management interface for the `characters` table. Grid with search/filter. Detail view: inline rename, archive/restore, image curation, portfolio re-queue, prompt descriptor edit/generate. Characters can be imported into Prompt Builder slots. |
+| **Continuity** | Worldbuilding entity editor: extrapolation pipeline, attribute review, primary reference anchors, Stage 6 conflict resolution, and MVP Done gate (five-scene continuity QA with blind reviewer scoring). |
 
 ---
 
@@ -51,7 +52,25 @@ Chroma stores character embeddings. Used for batch deduplication and Save-to-Cas
 Queues prompt packs to ComfyUI, polls job status, ingests output images into `generated_images` table. SSE endpoint (`GET /api/render-events`) broadcasts render-update events at 2-second polling interval. Frontend subscribes via `EventSource` and falls back to 20-second polling. Job state persisted in `comfy_jobs` SQLite table — survives page reloads.
 
 ### Entity layer (`api/entities.js`, `api/entity-*`, `api/lib/db/repositories.js`)
-Additive worldbuilding persistence alongside legacy `characters`: `entities`, provenance-tracked `entity_attributes`, `entity_relationships`, and `visual_anchors`. REST handlers under `/api/entities/*` support CRUD, relationship management, anchor upload, attribute promote/dismiss/edit, and S6 conflict resolve/dismiss. Prompt packs compile from entity canon + inferred/derived attributes via `POST /api/promptpack/from-entity/:id` (relationship-derived attrs use `relation.<type>:<other_slug>` keys and scope gating). Extrapolation runs through `POST /api/extrapolate/character/:id` and per-stage `POST /api/extrapolate/stage/:id/:n` (stage 5 reference portrait uses `POST /api/entities/:id/extrapolate/stage/5`). Continuity QA: generate five harness scenes (`POST /api/entities/:id/continuity-qa/generate`), score blind to seed (`GET/POST /api/entities/:id/continuity-qa/scoring-sheet|scores`). Attribute writes outside tests must go through `writeAttribute`; `api/lib/db/entityAttributesProvenanceGuard.test.js` blocks direct `INSERT INTO entity_attributes` elsewhere.
+Additive worldbuilding persistence alongside legacy `characters`: `entities`, provenance-tracked `entity_attributes`, `entity_relationships`, and `visual_anchors`. REST handlers under `/api/entities/*` support CRUD, relationship management, anchor upload, attribute promote/dismiss/edit, and S6 conflict resolve/dismiss. Prompt packs compile from entity canon + inferred/derived attributes via `POST /api/promptpack/from-entity/:id` (relationship-derived attrs use `relation.<type>:<other_slug>` keys and scope gating). Attribute writes outside tests must go through `writeAttribute`; `api/lib/db/entityAttributesProvenanceGuard.test.js` blocks direct `INSERT INTO entity_attributes` elsewhere.
+
+### Extrapolation pipeline (`api/lib/extrapolation/`)
+Six staged LLM passes turn sparse notes into entities, canon/inferred attributes, environments, visual descriptors, and conflict markers. Orchestrator: `api/lib/extrapolation/orchestrator.js` with per-stage cache (`stageCache.js`) and model routing (`modelRouting.js`). Entry points: `POST /api/extrapolate/character/:id` (full pipeline) and `POST /api/extrapolate/stage/:id/:n` or `POST /api/entities/:id/extrapolate/stage/:n`. Stage 5 reference portrait queue: `POST /api/entities/:id/extrapolate/stage/5`. Ruslan worked example fixture: `api/lib/extrapolation/fixtures/ruslanWorkedExample.js`.
+
+| Stage | Role |
+|---|---|
+| S1 | Entity extraction → canon attributes + related entities |
+| S2 | Historical/cultural enrichment (default low confidence) |
+| S3 | Psychological inference (`behavior.*`, `speech.*`, `fear.*`) |
+| S4 | Environmental projection + `provenance=derived` relationship attrs |
+| S5 | Visual descriptor + primary reference anchor generation |
+| S6 | Cross-stage conflict detection → suggested conflict markers |
+
+### Continuity QA and MVP Done gate (`api/lib/continuity/`)
+Section 4 acceptance: one character plus environment context, five scene generations, reviewer scores ≥4/5 on face/body/wardrobe (blind to seed). Readiness: `GET /api/entities/:id/mvp-done-gate`. Queue scenes: `POST /api/entities/:id/continuity-qa/generate` (requires readiness). Scoring: `GET/POST /api/entities/:id/continuity-qa/scoring-sheet|scores`. CLI: `scripts/run-continuity-qa-generations.mjs`. Automated harness: `api/ruslanMvpAcceptance.test.js`, `api/ruslanMvpDoneGate.test.js`.
+
+### IPAdapter / continuity strategy (`api/lib/comfy/ipadapterFeasibility.js`)
+Qwen-Image DiT templates do not ship a validated IPAdapter node chain. MVP decision: continue reference-image conditioning via workflow mapping hooks (`buildComfyPromptPayload` injects primary `reference_image` anchor when present). Per-character LoRA remains a follow-up if continuity QA scores miss threshold.
 
 ---
 

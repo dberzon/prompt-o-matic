@@ -52,18 +52,37 @@ bd close <id>         # Complete work
 
 ## Build & Test
 
-_Add your build and test commands here_
+```bash
+npm install
+npm run dev          # Vite + API middleware; auto-starts Chroma unless AUTO_START_CHROMA=false
+npm test             # Vitest; exclude .claude/worktrees via package.json script
+npm run build        # Production frontend bundle
+```
+
+On Windows, `npm run dev` typically uses system Node (often v24). Rebuild native modules when the Node major changes:
 
 ```bash
-# Example:
-# npm install
-# npm test
+npm rebuild better-sqlite3
+```
+
+Run tests with the same Node major as dev when `better-sqlite3` ABI errors appear. Targeted worldbuilding suites:
+
+```bash
+npx vitest run api/lib/continuity api/lib/extrapolation api/ruslanMvpAcceptance.test.js api/ruslanMvpDoneGate.test.js
 ```
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+Single-process local app: React 18 UI and ~55 `/api/*` routes are Vite dev middleware (`vite.config.js`), not a separate backend. SQLite (`better-sqlite3`) is canonical; Chroma is optional for batch similarity; ComfyUI renders images; LLM polish and extrapolation use Ollama, LM Studio, or Claude.
+
+Legacy casting flow uses `characters` and prompt packs. The additive **entity layer** (`entities`, provenance-tracked `entity_attributes`, relationships, `visual_anchors`) powers the **Continuity** tab: six-stage extrapolation, reference anchors, conflict review, and MVP Done gate (five-scene continuity QA). See `PROJECT_CONTEXT.md` and `AGENT_HANDOFF.md` for tab map and API domains.
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+- **Issue tracking:** `bd` only (`bd ready`, `bd update --claim`, `bd close`). Run `bd prime` after context loss. Session handoff ends with `git push`.
+- **Entity attributes:** Always `writeAttribute` from `api/lib/db/repositories.js`; never raw `INSERT INTO entity_attributes` outside tests (`entityAttributesProvenanceGuard.test.js`).
+- **Provenance:** `canon`, `inferred`, `suggested`, `temporary`, `derived` — every attribute write must set provenance and source stage when applicable.
+- **Extrapolation:** Stage logic in `api/lib/extrapolation/` (orchestrator, parsers, prompts). Stage cache must use an isolated `cacheDir` in tests to avoid stale disk hits.
+- **Continuity:** Primary `reference_image` anchor per entity; `buildComfyPromptPayload` injects anchor bytes when mapping allows. IPAdapter on Qwen-Image DiT is spec-only (`ipadapterFeasibility.js`); MVP uses reference-image conditioning.
+- **API handlers:** Thin route files under `api/`; domain logic in `api/lib/`; register new routes in `vite.config.js`.
+- **Frontend API clients:** `src/lib/api/*.js` wrapping `apiGet` / `apiPost` from `src/lib/api/http.js`.
