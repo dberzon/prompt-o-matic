@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getEntity } from '../lib/api/entities.js'
 import AttributeReviewPanel from './AttributeReviewPanel.jsx'
+import EntityConflictPanel from './EntityConflictPanel.jsx'
 import CanonAttributesPanel from './CanonAttributesPanel.jsx'
 import EntityExtrapolationPanel from './EntityExtrapolationPanel.jsx'
 import VisualAnchorPicker from './VisualAnchorPicker.jsx'
@@ -103,6 +104,7 @@ export default function EntityEditor({ entityId, onEntityChange }) {
 
       <EntityExtrapolationPanel entityId={entityId} />
       <AttributeReviewPanel entityId={entityId} />
+      <EntityConflictPanel entityId={entityId} />
     </div>
   )
 }
