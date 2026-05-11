@@ -1,13 +1,25 @@
 import { parseJsonFromLlmText } from '../characters/jsonUtils.js'
-import { getEntity, listAttributes, listRelationships, writeAttribute } from '../db/repositories.js'
+import { getEntity, listAttributes, listRelationships } from '../db/repositories.js'
+import { applyS1Parser } from './parsers/s1Parser.js'
 import { applyS2Parser } from './parsers/s2Parser.js'
+import { applyS3Parser } from './parsers/s3Parser.js'
 import { applyS4Parser } from './parsers/s4Parser.js'
+import { applyS5Parser } from './parsers/s5Parser.js'
+import { applyS6Parser } from './parsers/s6Parser.js'
+import { buildS1EntityExtractionPrompt } from './prompts/s1EntityExtraction.js'
 import { buildS2HistoricalEnrichmentPrompt } from './prompts/s2HistoricalEnrichment.js'
+import { buildS3PsychologicalInferencePrompt } from './prompts/s3PsychologicalInference.js'
 import { buildS4EnvironmentalProjectionPrompt } from './prompts/s4EnvironmentalProjection.js'
+import { buildS5VisualDescriptorPrompt } from './prompts/s5VisualDescriptor.js'
+import { buildS6ConflictDetectionPrompt } from './prompts/s6ConflictDetection.js'
 import { buildCanonSnapshot } from './stageCache.js'
 
 function activeCanonAttributes(db, entityId) {
   return listAttributes(db, { entityId, provenance: 'canon' })
+}
+
+function activeAttributes(db, entityId) {
+  return listAttributes(db, { entityId })
 }
 
 async function runJsonStage({ ctx, system, buildUser, apply }) {
@@ -24,6 +36,7 @@ async function runJsonStage({ ctx, system, buildUser, apply }) {
   return {
     writes: Array.isArray(applied) ? applied : applied.writes,
     suggestions: Array.isArray(applied?.suggestions) ? applied.suggestions : [],
+    conflicts: Array.isArray(applied?.conflicts) ? applied.conflicts : [],
     raw,
   }
 }
@@ -35,21 +48,21 @@ export const extrapolationStages = [
     async run(ctx) {
       const entity = getEntity(ctx.db, ctx.entityId)
       const canonAttributes = activeCanonAttributes(ctx.db, ctx.entityId)
-      const description = canonAttributes.find((item) => item.key === 'description')?.value
+      const sourceText = canonAttributes.find((item) => item.key === 'description')?.value
         || entity?.name
         || ''
-      const writes = []
-      if (description && !canonAttributes.some((item) => item.key === 'description')) {
-        writes.push(writeAttribute(ctx.db, {
-          entityId: ctx.entityId,
-          key: 'description',
-          value: description,
-          provenance: 'canon',
-          confidence: 1,
-          sourceStage: 1,
-        }))
+      const rawText = await ctx.llm({
+        system: 'Return strict JSON only.',
+        user: buildS1EntityExtractionPrompt({ entity, sourceText }),
+        providerPayload: { engine: 'auto', responseFormat: 'json', model: ctx.modelId },
+      })
+      const raw = parseJsonFromLlmText(rawText)
+      const applied = applyS1Parser(ctx.db, ctx.entityId, raw)
+      return {
+        writes: applied.writes,
+        suggestions: applied.suggestions,
+        raw,
       }
-      return { writes, suggestions: [], raw: { description } }
     },
   },
   {
@@ -68,26 +81,12 @@ export const extrapolationStages = [
     id: 3,
     name: 'Psychology enrichment',
     async run(ctx) {
-      const entity = getEntity(ctx.db, ctx.entityId)
-      const rawText = await ctx.llm({
-        system: 'Return strict JSON only: { "attributes": [ { "key": "psychology.*", "value": "string", "confidence": 0.0-1.0 } ] }',
-        user: `Infer psychology attributes for ${entity?.name || ctx.entityId}.`,
-        providerPayload: { engine: 'auto', responseFormat: 'json', model: ctx.modelId },
+      return runJsonStage({
+        ctx,
+        system: 'Return strict JSON only.',
+        buildUser: ({ entity, canonAttributes, prior }) => buildS3PsychologicalInferencePrompt({ entity, canonAttributes, prior }),
+        apply: applyS3Parser,
       })
-      const raw = parseJsonFromLlmText(rawText)
-      const writes = []
-      for (const item of raw?.attributes || []) {
-        if (!item?.key) continue
-        writes.push(writeAttribute(ctx.db, {
-          entityId: ctx.entityId,
-          key: item.key,
-          value: item.value,
-          provenance: 'inferred',
-          confidence: typeof item.confidence === 'number' ? item.confidence : 0.7,
-          sourceStage: 3,
-        }))
-      }
-      return { writes, suggestions: [], raw }
     },
   },
   {
@@ -117,44 +116,47 @@ export const extrapolationStages = [
     name: 'Visual descriptor',
     async run(ctx) {
       const entity = getEntity(ctx.db, ctx.entityId)
-      const attributes = listAttributes(ctx.db, { entityId: ctx.entityId })
+      const attributes = activeAttributes(ctx.db, ctx.entityId)
       const rawText = await ctx.llm({
-        system: 'Return strict JSON only: { "visualDescriptor": "string" }',
-        user: `Write a concise frontal portrait visual.descriptor for ${entity?.name || ctx.entityId} using:\n${attributes.map((item) => `${item.key}: ${item.value}`).join('\n')}`,
+        system: 'Return strict JSON only.',
+        user: buildS5VisualDescriptorPrompt({
+          entity,
+          attributes,
+          prior: ctx.prior,
+        }),
         providerPayload: { engine: 'auto', responseFormat: 'json', model: ctx.modelId },
       })
       const raw = parseJsonFromLlmText(rawText)
-      const descriptor = raw?.visualDescriptor || raw?.['visual.descriptor'] || ''
-      const writes = descriptor
-        ? [writeAttribute(ctx.db, {
-          entityId: ctx.entityId,
-          key: 'visual.descriptor',
-          value: descriptor,
-          provenance: 'inferred',
-          confidence: 0.85,
-          sourceStage: 5,
-        })]
-        : []
-      return { writes, suggestions: [], raw }
+      return {
+        writes: applyS5Parser(ctx.db, ctx.entityId, raw),
+        suggestions: [],
+        raw,
+      }
     },
   },
   {
     id: 6,
     name: 'Conflict detection',
     async run(ctx) {
-      const attributes = listAttributes(ctx.db, { entityId: ctx.entityId })
-      const byKey = new Map()
-      const conflicts = []
-      for (const item of attributes) {
-        if (!item?.key || item.dismissedAt || item.supersededBy) continue
-        const prior = byKey.get(item.key)
-        if (prior && prior.value !== item.value && prior.provenance !== item.provenance) {
-          conflicts.push({ key: item.key, existing: prior, incoming: item })
-        } else {
-          byKey.set(item.key, item)
-        }
+      const entity = getEntity(ctx.db, ctx.entityId)
+      const attributes = activeAttributes(ctx.db, ctx.entityId)
+      const rawText = await ctx.llm({
+        system: 'Return strict JSON only.',
+        user: buildS6ConflictDetectionPrompt({
+          entity,
+          attributes,
+          prior: ctx.prior,
+        }),
+        providerPayload: { engine: 'auto', responseFormat: 'json', model: ctx.modelId },
+      })
+      const raw = parseJsonFromLlmText(rawText)
+      const applied = applyS6Parser(ctx.db, ctx.entityId, raw)
+      return {
+        writes: applied.writes,
+        suggestions: [],
+        conflicts: applied.conflicts,
+        raw,
       }
-      return { writes: [], suggestions: [], conflicts, raw: { conflicts } }
     },
   },
 ]

@@ -2,13 +2,15 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { RUSLAN_S1_FIXTURE } from './fixtures/ruslanWorkedExample.js'
+import { applyS1Parser } from './parsers/s1Parser.js'
 import { applyS2Parser } from './parsers/s2Parser.js'
 import { applyS4Parser } from './parsers/s4Parser.js'
 import { buildS2HistoricalEnrichmentPrompt } from './prompts/s2HistoricalEnrichment.js'
 import { buildS4EnvironmentalProjectionPrompt } from './prompts/s4EnvironmentalProjection.js'
 import { runExtrapolationPipeline, runExtrapolationStage } from './orchestrator.js'
 import { StageCache } from './stageCache.js'
-import { createEntity, writeAttribute } from '../db/repositories.js'
+import { createEntity, getEntity, listAttributes, listEntities, writeAttribute } from '../db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../db/sqlite.js'
 
 const tempDirs = []
@@ -39,6 +41,22 @@ afterEach(() => {
 })
 
 describe('extrapolation prompts and parsers', () => {
+  it('parses Ruslan S1 fixture into expected entities and canon attrs', () => {
+    const db = ensureDb(createTempDbPath())
+    createEntity(db, { id: 'ruslan_levashov', type: 'character', name: 'Ruslan Levashov' })
+    const applied = applyS1Parser(db, 'ruslan_levashov', RUSLAN_S1_FIXTURE)
+    expect(applied.suggestions).toHaveLength(6)
+    expect(applied.writes.filter((item) => item.entityId === 'ruslan_levashov').length).toBeGreaterThanOrEqual(12)
+    const characters = listEntities(db, { type: 'character' })
+    const environments = listEntities(db, { type: 'environment' })
+    const institutions = listEntities(db, { type: 'institution' })
+    expect(characters.length).toBeGreaterThanOrEqual(4)
+    expect(environments.length).toBeGreaterThanOrEqual(2)
+    expect(institutions.length).toBeGreaterThanOrEqual(1)
+    expect(getEntity(db, 'rita_vlasova')?.name).toBe('Rita Vlasova')
+    expect(listAttributes(db, { entityId: 'ruslan_levashov', provenance: 'canon' }).length).toBeGreaterThanOrEqual(12)
+  })
+
   it('builds S2 prompt from era canon attrs', () => {
     const prompt = buildS2HistoricalEnrichmentPrompt({
       entity: { id: 'ent_1', name: 'Ruslan', type: 'character' },
