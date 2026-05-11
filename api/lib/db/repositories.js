@@ -1340,6 +1340,11 @@ export function setPrimaryAnchor(db, anchorId) {
   return true
 }
 
+export function deleteVisualAnchor(db, id) {
+  const result = db.prepare('DELETE FROM visual_anchors WHERE id = ?').run(id)
+  return result.changes > 0
+}
+
 
 function mapRelationshipRow(row) {
   if (!row) return null
