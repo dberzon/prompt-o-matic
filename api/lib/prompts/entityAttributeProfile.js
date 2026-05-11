@@ -10,6 +10,23 @@ const ATTRIBUTE_KEY_ALIASES = {
   'visual.descriptor': 'visualDescriptor',
 }
 
+const FACIAL_ATTRIBUTE_KEYS = new Set([
+  'faceShape',
+  'eyes',
+  'eyebrows',
+  'nose',
+  'lips',
+  'jawline',
+  'cheekbones',
+  'skinTone',
+  'skinTexture',
+  'hairColor',
+  'hairLength',
+  'hairTexture',
+  'hairstyle',
+  'distinctiveFeatures',
+])
+
 const PROFILE_FIELDS = new Set([
   'age',
   'genderPresentation',
@@ -120,6 +137,34 @@ export function selectAttributesForPromptPack(attributes) {
   return byKey
 }
 
+export function selectAttributesForReferencePortrait(attributes) {
+  const selected = selectAttributesForPromptPack(attributes)
+  const visualDescriptor = selected.get('visual.descriptor')
+  const facialByKey = new Map()
+
+  for (const attribute of attributes) {
+    if (!PROMPT_PACK_PROVENANCES.has(attribute.provenance)) continue
+    const field = resolveAttributeField(attribute.key)
+    if (!FACIAL_ATTRIBUTE_KEYS.has(field)) continue
+    const existing = facialByKey.get(attribute.key)
+    if (!existing) {
+      facialByKey.set(attribute.key, attribute)
+      continue
+    }
+    const nextRank = PROVENANCE_RANK[attribute.provenance] ?? 99
+    const existingRank = PROVENANCE_RANK[existing.provenance] ?? 99
+    if (nextRank < existingRank) {
+      facialByKey.set(attribute.key, attribute)
+    }
+  }
+
+  const attributeByKey = new Map(facialByKey)
+  if (visualDescriptor) {
+    attributeByKey.set('visual.descriptor', visualDescriptor)
+  }
+  return attributeByKey
+}
+
 export function entityAttributesToProfile(entity, attributeByKey) {
   const profile = {
     id: entity.id,
@@ -141,5 +186,13 @@ export function entityAttributesToProfile(entity, attributeByKey) {
     profile,
     visualDescriptor: profile.visualDescriptor,
     extraContext,
+  }
+}
+
+export function entityAttributesToReferencePortraitProfile(entity, attributeByKey) {
+  const { profile, visualDescriptor } = entityAttributesToProfile(entity, attributeByKey)
+  return {
+    profile,
+    visualDescriptor,
   }
 }

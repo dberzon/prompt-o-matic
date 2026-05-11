@@ -1,7 +1,12 @@
 import { z } from 'zod'
 import { parseCharacterProfile, parseQwenImagePromptPack } from '../characters/schemas.js'
 import { createPromptPack, getCharacter, getEntity, listAttributes, listBatchCandidates, listPromptPacks } from '../db/repositories.js'
-import { entityAttributesToProfile, selectAttributesForPromptPack } from './entityAttributeProfile.js'
+import {
+  entityAttributesToReferencePortraitProfile,
+  entityAttributesToProfile,
+  selectAttributesForPromptPack,
+  selectAttributesForReferencePortrait,
+} from './entityAttributeProfile.js'
 import { buildNegativePrompt } from './negativePromptLibrary.js'
 
 const ViewEnum = z.enum([
@@ -53,6 +58,18 @@ const CompileEntityOptionsSchema = z.object({
 const CompileEntitySchema = z.object({
   views: z.array(ViewEnum).min(1).default(['front_portrait']),
   options: CompileEntityOptionsSchema,
+}).strict()
+
+const CompileReferencePortraitOptionsSchema = z.object({
+  persist: z.boolean().optional(),
+  aspectRatio: z.enum(['2:3', '3:4', '16:9', '1:1']).default('2:3'),
+  styleProfile: z.string().trim().min(1).default('identity reference portrait'),
+  includeNegativePrompt: z.boolean().default(true),
+  comfyWorkflowId: z.string().trim().min(1).optional(),
+}).default({})
+
+const CompileReferencePortraitSchema = z.object({
+  options: CompileReferencePortraitOptionsSchema,
 }).strict()
 
 function viewRules(view) {
@@ -124,6 +141,25 @@ function viewRules(view) {
   return rules[view] || rules.other
 }
 
+function buildReferencePortraitPositivePrompt(profile, visualDescriptor, styleProfile) {
+  const rules = viewRules('front_portrait')
+  const parts = [
+    styleProfile,
+    `character identity: ${profile.name || profile.id}`,
+    `facial structure: ${profile.faceShape}, ${profile.eyes}, ${profile.eyebrows}, ${profile.nose}, ${profile.lips}, ${profile.jawline}`,
+    `skin and hair: ${profile.skinTone}${profile.skinTexture ? `, ${profile.skinTexture}` : ''}, ${profile.hairColor}, ${profile.hairLength}, ${profile.hairTexture}, ${profile.hairstyle}`,
+    `distinctive features: ${(profile.distinctiveFeatures || []).join(', ')}`,
+    `visual descriptor: ${visualDescriptor}`,
+    `camera: ${rules.camera}, lens: ${rules.lens}, framing: ${rules.framing}`,
+    'lighting: soft even key light, neutral fill, minimal shadow contrast',
+    'pose: face-front neutral still posture, shoulders squared to camera',
+    'expression: calm neutral expression, relaxed jaw, direct gaze',
+    'background: plain neutral backdrop, matte studio wall, non-distracting',
+    'photorealistic, shot on film, analog photography, imperfect natural surfaces, not cgi, not illustrated',
+  ]
+  return parts.join(', ')
+}
+
 function buildPositivePrompt(character, view, styleProfile, { visualDescriptor, extraContext = [] } = {}) {
   const r = viewRules(view)
   const parts = [
@@ -176,6 +212,37 @@ function buildPackForView({ character, view, options, entityPromptContext }) {
     expression: rules.expression,
     aspectRatio: resolvedOptions.aspectRatio,
     consistencyTags: [character.id, view, 'qwen-image-2512', 'identity-lock'],
+    seedHint: undefined,
+    comfyWorkflowId: resolvedOptions.comfyWorkflowId,
+    createdAt: new Date().toISOString(),
+  }
+  return parseQwenImagePromptPack(pack)
+}
+
+function buildReferencePortraitPack({ profile, visualDescriptor, options }) {
+  const rules = viewRules('front_portrait')
+  const resolvedOptions = {
+    aspectRatio: options?.aspectRatio || '2:3',
+    styleProfile: options?.styleProfile || 'identity reference portrait',
+    includeNegativePrompt: options?.includeNegativePrompt !== false,
+    comfyWorkflowId: options?.comfyWorkflowId,
+  }
+  const pack = {
+    characterId: profile.id,
+    projectId: profile.projectId,
+    positivePrompt: buildReferencePortraitPositivePrompt(profile, visualDescriptor, resolvedOptions.styleProfile),
+    negativePrompt: buildNegativePrompt({ include: resolvedOptions.includeNegativePrompt, view: 'front_portrait' }),
+    camera: rules.camera,
+    lens: rules.lens,
+    framing: rules.framing,
+    lighting: 'soft even key light, neutral fill, minimal shadow contrast',
+    colorPalette: profile.qwenPromptSeed || 'natural muted cinematic palette',
+    background: 'plain neutral backdrop, matte studio wall, non-distracting',
+    wardrobe: profile.wardrobeBase,
+    pose: 'face-front neutral still posture, shoulders squared to camera',
+    expression: 'calm neutral expression, relaxed jaw, direct gaze',
+    aspectRatio: resolvedOptions.aspectRatio,
+    consistencyTags: [profile.id, 'front_portrait', 'reference-portrait', 'identity-anchor', 'qwen-image-2512'],
     seedHint: undefined,
     comfyWorkflowId: resolvedOptions.comfyWorkflowId,
     createdAt: new Date().toISOString(),
@@ -305,5 +372,38 @@ export function compileEntityPromptPacks({ db, entityId, input = {} }) {
     entityType: entity.type,
     persisted: persist,
     packs: persist ? persisted : packs,
+  }
+}
+
+export function compileReferencePortraitPromptPack({ db, entityId, input = {} }) {
+  const parsed = CompileReferencePortraitSchema.parse(input)
+  const entity = getEntity(db, entityId)
+  if (!entity) {
+    const err = new Error('Entity not found')
+    err.status = 404
+    throw err
+  }
+  const attributes = listAttributes(db, { entityId })
+  const attributeByKey = selectAttributesForReferencePortrait(attributes)
+  const { profile, visualDescriptor } = entityAttributesToReferencePortraitProfile(entity, attributeByKey)
+  if (!visualDescriptor) {
+    const err = new Error('Missing visual.descriptor attribute')
+    err.status = 422
+    throw err
+  }
+  const persist = typeof parsed.options.persist === 'boolean' ? parsed.options.persist : true
+  const pack = buildReferencePortraitPack({
+    profile,
+    visualDescriptor,
+    options: parsed.options,
+  })
+  const persistedPack = persist ? createPromptPack(db, pack) : pack
+  return {
+    ok: true,
+    entityId: entity.id,
+    entityType: entity.type,
+    view: 'front_portrait',
+    persisted: persist,
+    pack: persistedPack,
   }
 }

@@ -16,6 +16,7 @@ import {
   compileBatchPromptPacks,
   compileCharacterPromptPacks,
   compileEntityPromptPacks,
+  compileReferencePortraitPromptPack,
   listPromptPacksForCharacter,
 } from './qwenPromptCompiler.js'
 
@@ -181,6 +182,49 @@ describe('qwen prompt compiler', () => {
       entityId: 'ent_missing',
       input: { views: ['front_portrait'], options: { persist: false } },
     })).toThrow('Entity not found')
+    db.close()
+  })
+
+  it('compiles a reference portrait pack from visual.descriptor and facial attrs', () => {
+    const db = createTempDb()
+    createEntity(db, { id: 'ent_ref_1', type: 'character', name: 'Ruslan' })
+    writeAttribute(db, { entityId: 'ent_ref_1', key: 'eyes', value: 'small piggy eyes', provenance: 'canon' })
+    writeAttribute(db, { entityId: 'ent_ref_1', key: 'eyes', value: 'blue eyes', provenance: 'inferred' })
+    writeAttribute(db, { entityId: 'ent_ref_1', key: 'wardrobe', value: 'worn student jacket', provenance: 'inferred' })
+    writeAttribute(db, {
+      entityId: 'ent_ref_1',
+      key: 'visual.descriptor',
+      value: 'frontal portrait, neutral expression, plain backdrop',
+      provenance: 'inferred',
+    })
+
+    const result = compileReferencePortraitPromptPack({
+      db,
+      entityId: 'ent_ref_1',
+      input: { options: { persist: false } },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.view).toBe('front_portrait')
+    expect(result.pack.positivePrompt).toContain('small piggy eyes')
+    expect(result.pack.positivePrompt).not.toContain('blue eyes')
+    expect(result.pack.positivePrompt).not.toContain('worn student jacket')
+    expect(result.pack.positivePrompt).toContain('visual descriptor: frontal portrait, neutral expression, plain backdrop')
+    expect(result.pack.positivePrompt).toContain('plain neutral backdrop')
+    expect(result.pack.consistencyTags).toContain('reference-portrait')
+    db.close()
+  })
+
+  it('fails when visual.descriptor is missing for reference portrait compile', () => {
+    const db = createTempDb()
+    createEntity(db, { id: 'ent_ref_2', type: 'character', name: 'Ruslan' })
+    writeAttribute(db, { entityId: 'ent_ref_2', key: 'eyes', value: 'green eyes', provenance: 'canon' })
+
+    expect(() => compileReferencePortraitPromptPack({
+      db,
+      entityId: 'ent_ref_2',
+      input: { options: { persist: false } },
+    })).toThrow('Missing visual.descriptor attribute')
     db.close()
   })
 })

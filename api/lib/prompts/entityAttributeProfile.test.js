@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { entityAttributesToProfile, selectAttributesForPromptPack } from './entityAttributeProfile.js'
+import {
+  entityAttributesToProfile,
+  selectAttributesForPromptPack,
+  selectAttributesForReferencePortrait,
+} from './entityAttributeProfile.js'
 
 describe('entity attribute profile', () => {
   it('selects canon over inferred for the same key', () => {
@@ -17,6 +21,19 @@ describe('entity attribute profile', () => {
       { key: 'ally', value: 'Rita', provenance: 'derived' },
     ])
     expect([...selected.keys()]).toEqual(['eyes'])
+  })
+
+  it('keeps visual.descriptor and facial attrs for reference portrait selection', () => {
+    const selected = selectAttributesForReferencePortrait([
+      { key: 'eyes', value: 'green', provenance: 'canon' },
+      { key: 'eyes', value: 'blue', provenance: 'inferred' },
+      { key: 'wardrobe', value: 'worn wool coat', provenance: 'inferred' },
+      { key: 'visual.descriptor', value: 'frontal portrait, neutral expression', provenance: 'inferred' },
+      { key: 'mood', value: 'sad', provenance: 'suggested' },
+    ])
+    expect([...selected.keys()].sort()).toEqual(['eyes', 'visual.descriptor'])
+    expect(selected.get('eyes').value).toBe('green')
+    expect(selected.get('visual.descriptor').value).toBe('frontal portrait, neutral expression')
   })
 
   it('maps known keys and visual.descriptor into the profile', () => {
