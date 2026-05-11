@@ -345,6 +345,7 @@ All routes are registered as Vite dev-server middleware in `vite.config.js`. The
 | `COMFY_BASE_URL` / `COMFYUI_BASE_URL` | ComfyUI base URL | `http://127.0.0.1:8188` | All image rendering |
 | `CHROMA_URL` | Chroma vector DB URL | `http://127.0.0.1:8000` | Vector similarity |
 | `CHROMA_DATA_PATH` | Chroma data directory for auto-spawn | `./chroma_data` | Chroma auto-start |
+| `CHROMA_BIN` | Explicit Chroma CLI executable for dev auto-start (Windows x64: Python `chroma.exe`) | *(resolved via `where chroma`, excluding `node_modules`)* | Chroma auto-start on Windows |
 | `AUTO_START_CHROMA` | Set to `false` to skip Chroma auto-spawn on dev server start | `true` | CI / Docker / production |
 | `CHROMA_COLLECTION_CHARACTERS` | Chroma collection name | `characters` | Vector storage |
 | `EMBEDDED_TIMEOUT_MS` | Timeout for embedded sidecar LLM | `180000` (3 min) | Embedded polish |
@@ -644,6 +645,51 @@ GET  /api/prompt-packs?characterId=<id>
 Purpose: List prompt packs for a character.
 Response: { items: promptPack[] }
 Auth/gating: ENABLE_PROMPT_PACK_API required
+```
+
+```
+POST  /api/promptpack/from-entity/:id
+Purpose: Compile prompt pack(s) from an entity's active canon + inferred attributes.
+Request body: { views: string[] (optional), options: { persist, aspectRatio, styleProfile, includeNegativePrompt, comfyWorkflowId } }
+Response: { ok: true, entityId, entityType, persisted, packs: promptPack[] }
+Auth/gating: ENABLE_PROMPT_PACK_API required (same as compile-character)
+```
+
+---
+
+### Entities (worldbuilding layer)
+
+```
+GET/POST/PUT/DELETE  /api/entities
+GET/PUT/DELETE       /api/entities/:id
+Purpose: Entity CRUD. DELETE soft-archives via archived_at.
+Response: { ok: true, item | items, total }
+Auth/gating: local-studio (no ENABLE_* flag)
+```
+
+```
+GET/POST/PUT/DELETE  /api/entities/:entityId/relationships
+GET/PUT/DELETE       /api/entities/:entityId/relationships/:relationshipId
+Purpose: Relationships scoped to an entity (POST sets fromId from path).
+Auth/gating: local-studio
+```
+
+```
+GET/POST/DELETE      /api/entities/:entityId/anchors
+GET/DELETE           /api/entities/:entityId/anchors/:anchorId
+POST                 /api/entities/:entityId/anchors/:anchorId/set-primary
+Purpose: Visual anchor gallery; POST accepts JSON or multipart file for reference_image.
+Auth/gating: local-studio
+```
+
+```
+POST  /api/entities/:entityId/attributes/:attrId/promote
+POST  /api/entities/:entityId/attributes/:attrId/edit
+POST  /api/entities/:entityId/attributes/:attrId/dismiss
+Purpose: Attribute review actions (promote/edit via promoteToCanon; dismiss via dismissSuggested).
+Request body (edit): { value }
+Response: { ok: true, item: attribute }
+Auth/gating: local-studio
 ```
 
 ---
@@ -1649,7 +1695,7 @@ These same thresholds are used at Save to Cast time (`saveCandidateAsCharacter` 
 
 **C3 / Save to Cast re-check:** Confirmed implemented. `saveCandidateAsCharacter` in `batchReview.js` runs `findSimilarCharacters()` before saving if vector store is available and `force=false`.
 
-**Chroma auto-spawn:** `vite.config.js` spawns a `chroma run --path ./chroma_data` process on dev server start if Chroma is not already running on port 8000. Checks both `/api/v2/heartbeat` and `/api/v1/heartbeat`. On Windows, runs via `cmd /c chroma run ...`. Process is killed on dev server exit.
+**Chroma auto-spawn:** `vite.config.js` spawns `chroma run --path ./chroma_data` on dev server start when `AUTO_START_CHROMA` is not `false` and Chroma is not already on port 8000. Heartbeat checks `/api/v2/heartbeat` and `/api/v1/heartbeat`. On Windows x64, resolves a non-`node_modules` `chroma` binary (typically Python `chroma.exe`); set `CHROMA_BIN` to override. The npm `chromadb` CLI shim does not support Windows x64. `ChromaClient` is configured with `host` / `port` / `ssl` (not deprecated `path`).
 
 **`/api/vector-*` routes:**
 - `/api/vector-status` — health and stats

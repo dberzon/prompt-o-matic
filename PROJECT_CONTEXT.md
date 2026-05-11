@@ -26,7 +26,7 @@ For full technical detail, see `APPLICATION_REFERENCE.md`.
 | Chroma | `localhost:8000` | Similarity checks skip silently (batch dedup bypassed) |
 | Anthropic Claude API | cloud | Cloud polish fails; local providers unaffected |
 
-Chroma is auto-spawned by `vite.config.js` on dev start. All other services must be started manually.
+Chroma is auto-spawned by `vite.config.js` on dev start unless `AUTO_START_CHROMA=false`. On Windows x64, auto-start uses a Python `chroma.exe` (or `CHROMA_BIN`), not the npm `chromadb` CLI. All other services must be started manually.
 
 ---
 
@@ -50,11 +50,14 @@ Chroma stores character embeddings. Used for batch deduplication and Save-to-Cas
 ### ComfyUI Integration (`api/lib/comfy/comfyService.js`)
 Queues prompt packs to ComfyUI, polls job status, ingests output images into `generated_images` table. SSE endpoint (`GET /api/render-events`) broadcasts render-update events at 2-second polling interval. Frontend subscribes via `EventSource` and falls back to 20-second polling. Job state persisted in `comfy_jobs` SQLite table — survives page reloads.
 
+### Entity layer (`api/entities.js`, `api/entity-*`, `api/lib/db/repositories.js`)
+Additive worldbuilding persistence alongside legacy `characters`: `entities`, provenance-tracked `entity_attributes`, `entity_relationships`, and `visual_anchors`. REST handlers under `/api/entities/*` support CRUD, relationship management, anchor upload, and attribute promote/dismiss/edit. Prompt packs can be compiled from entity canon + inferred attributes via `POST /api/promptpack/from-entity/:id`. Attribute writes outside tests must go through `writeAttribute`; `api/lib/db/entityAttributesProvenanceGuard.test.js` blocks direct `INSERT INTO entity_attributes` elsewhere.
+
 ---
 
 ## Data Layer
 
-**SQLite** (`better-sqlite3`, `api/lib/db/`) is the canonical data store. 10 tables:
+**SQLite** (`better-sqlite3`, `api/lib/db/`) is the canonical data store. 14 tables:
 
 | Table | What it holds |
 |---|---|
@@ -69,6 +72,10 @@ Queues prompt packs to ComfyUI, polls job status, ingests output images into `ge
 | `saved_prompts` | Named prompt snapshots (migrated from localStorage) |
 | `workspace_profiles` | Named workspace state snapshots (migrated from localStorage) |
 | `comfy_jobs` (migration 6) | Persistent ComfyUI job tracking |
+| `entities` | Worldbuilding entities with type and archive state |
+| `entity_attributes` | Provenance-tracked attributes per entity |
+| `entity_relationships` | Typed relationships between entities |
+| `visual_anchors` | Continuity anchors (reference images, seeds, etc.) |
 
 **localStorage** is used for: custom presets, custom directors, AI engine preference, local-only flag, prompt history (max 12), Character Builder entries (mirrored from SQLite), and a few transient UI preferences. Saved prompts and workspace profiles were migrated to SQLite in P5.
 
@@ -87,4 +94,4 @@ Five `ENABLE_*` flags gate API domains: `ENABLE_CHARACTER_BATCH_API`, `ENABLE_PR
 
 ## Architecture: No Separate Server
 
-All API routes are Vite dev-server middleware plugins registered in `vite.config.js`. There is no Express or Fastify server. The frontend and all ~47 API routes run from a single `npm run dev` process.
+All API routes are Vite dev-server middleware plugins registered in `vite.config.js`. There is no Express or Fastify server. The frontend and all ~55 API routes run from a single `npm run dev` process. Rebuild `better-sqlite3` when the Node major used for `npm run dev` changes.

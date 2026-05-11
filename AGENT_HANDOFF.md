@@ -53,7 +53,7 @@ Full character management interface for the `characters` table. Grid view with f
 
 ---
 
-## API Surface (10 Domains, 50+ Routes)
+## API Surface (11 Domains, 55+ Routes)
 
 All routes are registered in `vite.config.js` as Vite middleware. Prefix: `/api/`.
 
@@ -63,7 +63,8 @@ All routes are registered in `vite.config.js` as Vite middleware. Prefix: `/api/
 | Characters (CRUD + lifecycle + descriptors) | `GET/DELETE /api/characters`, `POST /api/character-lifecycle`, `POST /api/character-rename`, `POST /api/character-archive`, `POST /api/character-restore`, `GET /api/characters/slugs`, `POST /api/character-prompt-descriptor`, `POST /api/characters-backfill-descriptors` | `ENABLE_CHARACTER_BATCH_API` for list/delete; descriptor endpoints always available |
 | Casting / Audition (Path A) | `POST /api/audition/generate` | None |
 | Batch pipeline (Path B) | `POST /api/characters-generate-batch`, `GET /api/character-batches`, `GET /api/character-batch`, `GET /api/character-batch-candidates`, `POST /api/character-batch-candidate-approve/reject/reconsider/save/mutate`, `POST /api/character-batch-refill`, `POST /api/batch-candidate-preview`, `POST /api/batch-candidate-preview-image` | `ENABLE_CHARACTER_BATCH_API` |
-| Prompt packs | `POST /api/prompt-pack-compile-character`, `POST /api/prompt-pack-compile-batch`, `GET /api/prompt-packs` | `ENABLE_PROMPT_PACK_API` |
+| Prompt packs | `POST /api/prompt-pack-compile-character`, `POST /api/prompt-pack-compile-batch`, `GET /api/prompt-packs`, `POST /api/promptpack/from-entity/:id` | `ENABLE_PROMPT_PACK_API` |
+| Entities (worldbuilding layer) | `GET/POST/PUT/DELETE /api/entities` and `/api/entities/:id`; `GET/POST/PUT/DELETE /api/entities/:id/relationships`; `GET/POST/DELETE /api/entities/:id/anchors`, `POST /api/entities/:id/anchors/:anchorId/set-primary`; `POST /api/entities/:id/attributes/:attrId/promote|dismiss|edit` | None (local-studio) |
 | Portfolio | `POST /api/character-portfolio-plan`, `POST /api/character-portfolio-queue`, `POST /api/actor-more-takes` | `ENABLE_PROMPT_PACK_API` + `ENABLE_COMFY_API` |
 | ComfyUI integration | `GET /api/comfy-status`, `GET /api/comfy-workflows`, `POST /api/comfy-validate-workflow`, `POST /api/comfy-queue-prompt-pack`, `POST /api/comfy-queue-character`, `GET /api/comfy-job-status`, `POST /api/comfy-jobs-status`, `GET/POST/PATCH /api/comfy-jobs`, `POST /api/comfy-ingest-outputs`, `POST /api/comfy-ingest-many` | `ENABLE_COMFY_API` |
 | Generated images | `GET /api/generated-images`, `POST /api/generated-image-approve`, `POST /api/generated-image-reject`, `GET /api/generated-image-view` | `ENABLE_GENERATED_IMAGES_API` |
@@ -78,7 +79,7 @@ All routes are registered in `vite.config.js` as Vite middleware. Prefix: `/api/
 
 ---
 
-## Database Tables (10 Tables)
+## Database Tables (14 Tables)
 
 Schema defined in `api/lib/db/schema.js`. All query functions in `api/lib/db/repositories.js`.
 
@@ -95,6 +96,10 @@ Schema defined in `api/lib/db/schema.js`. All query functions in `api/lib/db/rep
 | `saved_prompts` | Named prompt snapshots from the Prompt Builder (migrated from localStorage). |
 | `workspace_profiles` | Named workspace state snapshots for the Prompt Builder (migrated from localStorage). |
 | `comfy_jobs` (migration 6) | Persistent ComfyUI job tracking — survives page reloads. Keyed by `prompt_id` (UNIQUE). |
+| `entities` | Worldbuilding entities (`character`, `environment`, `prop`, `institution`) with soft-archive via `archived_at`. |
+| `entity_attributes` | Provenance-tracked attributes (`canon`, `inferred`, `suggested`, `temporary`, `derived`); writes go through `writeAttribute` only. |
+| `entity_relationships` | Directed relationships between entities with typed `type` and provenance. |
+| `visual_anchors` | Reference images, seeds, and other continuity anchors per entity; one primary anchor per entity. |
 
 ---
 
@@ -125,7 +130,13 @@ Soft-archive is separate: `archived_at` column (ISO timestamp if archived, NULL 
 | `api/lib/polishCore.js` | System prompt, provider resolution, `runPolish`, `healthCheck` |
 | `vite.config.js` | All 47+ API route handlers registered as Vite middleware; Chroma auto-spawn; SSE watcher |
 | `api/lib/db/schema.js` | All CREATE TABLE SQL + MIGRATIONS array |
-| `api/lib/db/repositories.js` | All DB query functions; `listCharacters` and `getCharacter` both SELECT `archived_at` alongside `payload_json` and merge it into the returned object |
+| `api/lib/db/repositories.js` | All DB query functions; entity CRUD, `writeAttribute`, relationship and visual-anchor repos; `listCharacters` and `getCharacter` both SELECT `archived_at` alongside `payload_json` and merge it into the returned object |
+| `api/entities.js` | Entity CRUD route handler |
+| `api/entity-relationships.js` | Entity-scoped relationship CRUD |
+| `api/entity-anchors.js` | Visual anchor CRUD + set-primary (multipart upload for `reference_image`) |
+| `api/entity-attribute-actions.js` | Attribute promote / dismiss / edit actions |
+| `api/promptpack-from-entity.js` | Entity prompt-pack compile route handler |
+| `api/lib/prompts/entityAttributeProfile.js` | Maps entity attributes into prompt-compiler profile shape |
 | `src/components/CastingPipelinePanel.jsx` | Entire Casting Room — Path A + B + Active Character + render system; accepts `jumpToCharacterId`/`onJumpConsumed` props for cross-tab navigation |
 | `src/components/ActorBank/ActorBankView.jsx` | Actor Bank tab root; archived toggle; passes `onOpenInCastingRoom` to ActorDetail |
 | `src/components/ActorBank/ActorCard.jsx` | Character card with lifecycle badge, image count, archived state |
@@ -176,4 +187,16 @@ The following were previously listed as gaps and are now complete:
 | Chroma | `localhost:8000` | Similarity checks skip silently; batch dedup bypassed gracefully |
 | Anthropic Claude API | cloud | Cloud polish fails with 4xx if key absent; local providers remain functional |
 
-Chroma is auto-spawned by `vite.config.js` on dev server start (`chroma run --path ./chroma_data`). On Windows, this runs via `cmd /c chroma run ...`.
+Chroma is auto-spawned by `vite.config.js` on dev server start when `AUTO_START_CHROMA` is not `false`. On Windows x64, auto-start resolves a non-`node_modules` `chroma` executable (typically Python `chroma.exe` from `pip install chromadb`); override with `CHROMA_BIN`. The npm `chromadb` CLI shim does not support Windows x64. `better-sqlite3` must be rebuilt for the same Node major that runs `npm run dev` (`npm rebuild better-sqlite3`).
+
+---
+
+## Session Handoff (2026-05-11)
+
+**Closed in beads this session (high level):** entity-layer epic `qwen-prompt-builder-oq8v` (schema, repos, provenance guard, `/api/entities/*` REST, entity prompt-pack compile `qwen-prompt-builder-47ff`), plus Chroma Windows auto-start fix (`9829068`).
+
+**Still open under integration:** `qwen-prompt-builder-c209` (children `95ma` scope-gated derived attrs, `zd7c` Comfy queue with primary anchor). No `in_progress` issues.
+
+**Ready next (bd):** frontend entity editor shell `l5ip`, attribute review `4tas` / `00px`, anchor gallery `zpcf`, Chroma entity metadata `ff4a` / `ajp4`, visual continuity `1ux2` / `fujw`.
+
+**Dev checks:** `npm test`; restart `npm run dev` after Node or native-module changes; confirm `GET /api/chroma-health` when vector features matter.
