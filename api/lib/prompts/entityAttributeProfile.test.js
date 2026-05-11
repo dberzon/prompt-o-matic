@@ -1,0 +1,39 @@
+import { describe, expect, it } from 'vitest'
+import { entityAttributesToProfile, selectAttributesForPromptPack } from './entityAttributeProfile.js'
+
+describe('entity attribute profile', () => {
+  it('selects canon over inferred for the same key', () => {
+    const selected = selectAttributesForPromptPack([
+      { key: 'eyes', value: 'blue', provenance: 'inferred' },
+      { key: 'eyes', value: 'green', provenance: 'canon' },
+    ])
+    expect(selected.get('eyes').value).toBe('green')
+  })
+
+  it('ignores suggested and derived attributes', () => {
+    const selected = selectAttributesForPromptPack([
+      { key: 'eyes', value: 'green', provenance: 'canon' },
+      { key: 'mood', value: 'sad', provenance: 'suggested' },
+      { key: 'ally', value: 'Rita', provenance: 'derived' },
+    ])
+    expect([...selected.keys()]).toEqual(['eyes'])
+  })
+
+  it('maps known keys and visual.descriptor into the profile', () => {
+    const selected = selectAttributesForPromptPack([
+      { key: 'eyes', value: 'hazel almond eyes', provenance: 'canon' },
+      { key: 'wardrobe', value: 'worn wool coat', provenance: 'inferred' },
+      { key: 'visual.descriptor', value: 'frontal portrait, neutral expression', provenance: 'inferred' },
+      { key: 'speech.register', value: 'quiet and clipped', provenance: 'inferred' },
+    ])
+    const { profile, visualDescriptor, extraContext } = entityAttributesToProfile(
+      { id: 'ent_001', type: 'character', name: 'Ruslan' },
+      selected,
+    )
+    expect(profile.name).toBe('Ruslan')
+    expect(profile.eyes).toBe('hazel almond eyes')
+    expect(profile.wardrobeBase).toBe('worn wool coat')
+    expect(visualDescriptor).toBe('frontal portrait, neutral expression')
+    expect(extraContext).toEqual(['speech.register: quiet and clipped'])
+  })
+})

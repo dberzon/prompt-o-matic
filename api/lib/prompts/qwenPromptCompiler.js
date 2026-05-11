@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { parseCharacterProfile, parseQwenImagePromptPack } from '../characters/schemas.js'
-import { createPromptPack, getCharacter, listBatchCandidates, listPromptPacks } from '../db/repositories.js'
+import { createPromptPack, getCharacter, getEntity, listAttributes, listBatchCandidates, listPromptPacks } from '../db/repositories.js'
+import { entityAttributesToProfile, selectAttributesForPromptPack } from './entityAttributeProfile.js'
 import { buildNegativePrompt } from './negativePromptLibrary.js'
 
 const ViewEnum = z.enum([
@@ -39,6 +40,19 @@ const CompileBatchSchema = z.object({
     includeNegativePrompt: z.boolean().default(true),
     comfyWorkflowId: z.string().trim().min(1).optional(),
   }).default({}),
+}).strict()
+
+const CompileEntityOptionsSchema = z.object({
+  persist: z.boolean().optional(),
+  aspectRatio: z.enum(['2:3', '3:4', '16:9', '1:1']).default('2:3'),
+  styleProfile: z.string().trim().min(1).default('cinematic casting portrait'),
+  includeNegativePrompt: z.boolean().default(true),
+  comfyWorkflowId: z.string().trim().min(1).optional(),
+}).default({})
+
+const CompileEntitySchema = z.object({
+  views: z.array(ViewEnum).min(1).default(['front_portrait']),
+  options: CompileEntityOptionsSchema,
 }).strict()
 
 function viewRules(view) {
@@ -110,26 +124,35 @@ function viewRules(view) {
   return rules[view] || rules.other
 }
 
-function buildPositivePrompt(character, view, styleProfile) {
+function buildPositivePrompt(character, view, styleProfile, { visualDescriptor, extraContext = [] } = {}) {
   const r = viewRules(view)
-  return [
+  const parts = [
     `${styleProfile}`,
     `character identity: ${character.name || character.id}, age ${character.age}, ${character.genderPresentation || 'unspecified gender presentation'}`,
     `facial structure: ${character.faceShape}, ${character.eyes}, ${character.eyebrows}, ${character.nose}, ${character.lips}, ${character.jawline}`,
     `skin and hair: ${character.skinTone}${character.skinTexture ? `, ${character.skinTexture}` : ''}, ${character.hairColor}, ${character.hairLength}, ${character.hairTexture}, ${character.hairstyle}`,
     `body and posture: ${character.bodyType}, ${character.heightImpression}, ${character.posture}`,
     `wardrobe: ${character.wardrobeBase}`,
-    `distinctive features: ${character.distinctiveFeatures.join(', ')}`,
+    `distinctive features: ${(character.distinctiveFeatures || []).join(', ')}`,
+  ]
+  if (visualDescriptor) {
+    parts.push(`visual descriptor: ${visualDescriptor}`)
+  }
+  if (extraContext.length > 0) {
+    parts.push(`additional context: ${extraContext.join('; ')}`)
+  }
+  parts.push(
     `camera: ${r.camera}, lens: ${r.lens}, framing: ${r.framing}`,
     `lighting: ${r.lighting}`,
     `pose: ${r.pose}, expression: ${r.expression}`,
     `background: ${r.background}`,
     `personality energy: ${character.personalityEnergy}, archetype: ${character.cinematicArchetype}`,
     'photorealistic, shot on film, analog photography, imperfect natural surfaces, not cgi, not illustrated',
-  ].join(', ')
+  )
+  return parts.join(', ')
 }
 
-function buildPackForView({ character, view, options }) {
+function buildPackForView({ character, view, options, entityPromptContext }) {
   const rules = viewRules(view)
   const resolvedOptions = {
     aspectRatio: options?.aspectRatio || '2:3',
@@ -140,7 +163,7 @@ function buildPackForView({ character, view, options }) {
   const pack = {
     characterId: character.id,
     projectId: character.projectId,
-    positivePrompt: buildPositivePrompt(character, view, resolvedOptions.styleProfile),
+    positivePrompt: buildPositivePrompt(character, view, resolvedOptions.styleProfile, entityPromptContext),
     negativePrompt: buildNegativePrompt({ include: resolvedOptions.includeNegativePrompt, view }),
     camera: rules.camera,
     lens: rules.lens,
@@ -242,5 +265,45 @@ export function listPromptPacksForCharacter({ db, characterId }) {
     ok: true,
     characterId,
     items: listPromptPacks(db, { characterId }),
+  }
+}
+
+export function compileEntityPromptPacks({ db, entityId, input = {} }) {
+  const parsed = CompileEntitySchema.parse(input)
+  const entity = getEntity(db, entityId)
+  if (!entity) {
+    const err = new Error('Entity not found')
+    err.status = 404
+    throw err
+  }
+  const attributes = listAttributes(db, { entityId })
+  const attributeByKey = selectAttributesForPromptPack(attributes)
+  const { profile, visualDescriptor, extraContext } = entityAttributesToProfile(entity, attributeByKey)
+  const entityPromptContext = {
+    visualDescriptor,
+    extraContext,
+  }
+  const persist = typeof parsed.options.persist === 'boolean' ? parsed.options.persist : true
+
+  const packs = parsed.views.map((view) => buildPackForView({
+    character: profile,
+    view,
+    options: parsed.options,
+    entityPromptContext,
+  }))
+
+  const persisted = []
+  if (persist) {
+    for (const pack of packs) {
+      persisted.push(createPromptPack(db, pack))
+    }
+  }
+
+  return {
+    ok: true,
+    entityId: entity.id,
+    entityType: entity.type,
+    persisted: persist,
+    packs: persist ? persisted : packs,
   }
 }

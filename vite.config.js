@@ -24,6 +24,7 @@ import { assertPromptPackOperationAllowed } from './api/lib/prompts/access.js'
 import {
   compileBatchPromptPacks,
   compileCharacterPromptPacks,
+  compileEntityPromptPacks,
   listPromptPacksForCharacter,
 } from './api/lib/prompts/qwenPromptCompiler.js'
 import { generateCharacterPortfolioPlan, queueCharacterPortfolio } from './api/lib/portfolio/characterPortfolio.js'
@@ -1229,6 +1230,35 @@ function apiDevPlugin(env) {
         } finally {
           runtime?.close?.()
         }
+      })
+
+      server.middlewares.use((req, res, next) => {
+        const url = new URL(req.url || '', 'http://localhost')
+        const match = url.pathname.match(/^\/api\/promptpack\/from-entity\/([^/]+)\/?$/)
+        if (!match) {
+          next()
+          return
+        }
+        if (req.method !== 'POST') {
+          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
+          return
+        }
+        const entityId = decodeURIComponent(match[1])
+        void (async () => {
+          let runtime = null
+          try {
+            assertPromptPackOperationAllowed('compile-character', env)
+            const body = await readJsonBody(req)
+            runtime = createVectorRuntime({ env })
+            const result = compileEntityPromptPacks({ db: runtime.db, entityId, input: body || {} })
+            sendJsonMiddleware(res, 200, result)
+          } catch (err) {
+            const normalized = normalizeHandlerError(err)
+            sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'PROMPT_PACK_FROM_ENTITY_ERROR' })
+          } finally {
+            runtime?.close?.()
+          }
+        })()
       })
 
       server.middlewares.use('/api/prompt-packs', async (req, res) => {

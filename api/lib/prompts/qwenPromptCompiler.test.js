@@ -2,12 +2,20 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createCharacter, createBatchCandidate, createCharacterBatch, listPromptPacks } from '../db/repositories.js'
+import {
+  createCharacter,
+  createBatchCandidate,
+  createCharacterBatch,
+  createEntity,
+  listPromptPacks,
+  writeAttribute,
+} from '../db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../db/sqlite.js'
 import { validCharacterProfile } from '../characters/fixtures.js'
 import {
   compileBatchPromptPacks,
   compileCharacterPromptPacks,
+  compileEntityPromptPacks,
   listPromptPacksForCharacter,
 } from './qwenPromptCompiler.js'
 
@@ -138,6 +146,41 @@ describe('qwen prompt compiler', () => {
       db,
       input: { character: { id: 'bad' }, views: ['front_portrait'] },
     })).toThrow()
+    db.close()
+  })
+
+  it('compiles prompt packs from canon and inferred entity attributes', () => {
+    const db = createTempDb()
+    createEntity(db, { id: 'ent_prompt_1', type: 'character', name: 'Ruslan' })
+    writeAttribute(db, { entityId: 'ent_prompt_1', key: 'eyes', value: 'small piggy eyes', provenance: 'canon' })
+    writeAttribute(db, { entityId: 'ent_prompt_1', key: 'wardrobe', value: 'worn student jacket', provenance: 'inferred' })
+    writeAttribute(db, { entityId: 'ent_prompt_1', key: 'visual.descriptor', value: 'frontal portrait, neutral expression', provenance: 'inferred' })
+    writeAttribute(db, { entityId: 'ent_prompt_1', key: 'mood', value: 'wistful', provenance: 'suggested' })
+
+    const result = compileEntityPromptPacks({
+      db,
+      entityId: 'ent_prompt_1',
+      input: { views: ['front_portrait'], options: { persist: false } },
+    })
+
+    expect(result.ok).toBe(true)
+    expect(result.entityId).toBe('ent_prompt_1')
+    expect(result.packs).toHaveLength(1)
+    expect(result.packs[0].characterId).toBe('ent_prompt_1')
+    expect(result.packs[0].positivePrompt).toContain('small piggy eyes')
+    expect(result.packs[0].positivePrompt).toContain('worn student jacket')
+    expect(result.packs[0].positivePrompt).toContain('visual descriptor: frontal portrait, neutral expression')
+    expect(result.packs[0].positivePrompt).not.toContain('wistful')
+    db.close()
+  })
+
+  it('returns 404 when entity is missing', () => {
+    const db = createTempDb()
+    expect(() => compileEntityPromptPacks({
+      db,
+      entityId: 'ent_missing',
+      input: { views: ['front_portrait'], options: { persist: false } },
+    })).toThrow('Entity not found')
     db.close()
   })
 })
