@@ -110,6 +110,7 @@ import entityConflictActionsHandler from './api/entity-conflict-actions.js'
 import entityAttributesHandler from './api/entity-attributes.js'
 import entityLiftFromBankHandler from './api/entity-lift-from-bank.js'
 import entityContinuityQaGenerateHandler from './api/entity-continuity-qa-generate.js'
+import entityContinuityQaScoringHandler from './api/entity-continuity-qa-scoring.js'
 import entityExtrapolateHandler from './api/entity-extrapolate.js'
 import entityExtrapolateStage5Handler from './api/entity-extrapolate-stage5.js'
 
@@ -1009,6 +1010,15 @@ function apiDevPlugin(env) {
           return
         }
         void entityContinuityQaGenerateHandler(req, res)
+      })
+
+      server.middlewares.use((req, res, next) => {
+        const url = new URL(req.url || '', 'http://localhost')
+        if (!/^\/api\/entities\/[^/]+\/continuity-qa\/(scoring-sheet|scores)\/?$/.test(url.pathname)) {
+          next()
+          return
+        }
+        void entityContinuityQaScoringHandler(req, res)
       })
 
       server.middlewares.use((req, res, next) => {
