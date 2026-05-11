@@ -1,0 +1,109 @@
+.wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+.actions {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.generateBtn,
+.primaryBtn {
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 4px 10px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text);
+}
+
+.generateBtn {
+  color: var(--accent);
+}
+
+.generateBtn:disabled,
+.primaryBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.status,
+.error,
+.empty {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.error {
+  color: var(--color-danger, #c44);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+}
+
+.cardPrimary {
+  border-color: var(--accent);
+}
+
+.thumb {
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  display: block;
+  background: var(--surface);
+}
+
+.meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+.type {
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.primaryBtnActive {
+  color: var(--accent);
+}

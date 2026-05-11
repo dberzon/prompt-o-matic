@@ -24,6 +24,7 @@ import EmbeddedSetup from './components/EmbeddedSetup.jsx'
 import CharacterBuilder from './components/CharacterBuilder.jsx'
 import CastingPipelinePanel from './components/CastingPipelinePanel.jsx'
 import ActorBankView from './components/ActorBank/ActorBankView.jsx'
+import EntityContinuityPanel from './components/EntityContinuityPanel.jsx'
 import MobilePromptBar from './components/MobilePromptBar.jsx'
 import styles from './App.module.css'
 
@@ -944,6 +945,12 @@ export default function App() {
         >
           Actor Bank
         </button>
+        <button
+          className={`${styles.tabBtn} ${activeTab === 'continuity' ? styles.tabBtnActive : ''}`}
+          onClick={() => setActiveTab('continuity')}
+        >
+          Continuity
+        </button>
       </div>
 
       {activeTab === 'builder' ? <div className={styles.layout}>
@@ -1127,9 +1134,13 @@ export default function App() {
             onJumpConsumed={() => setCastingRoomJumpId(null)}
           />
         </div>
-      ) : (
+      ) : activeTab === 'actorBank' ? (
         <div className={styles.characterTab}>
           <ActorBankView onOpenInCastingRoom={handleOpenInCastingRoom} />
+        </div>
+      ) : (
+        <div className={styles.characterTab}>
+          <EntityContinuityPanel />
         </div>
       )}
       <EmbeddedSetup
