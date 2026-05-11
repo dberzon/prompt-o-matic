@@ -105,6 +105,7 @@ import {
 import entitiesHandler from './api/entities.js'
 import entityRelationshipsHandler from './api/entity-relationships.js'
 import entityAnchorsHandler from './api/entity-anchors.js'
+import entityAttributeActionsHandler from './api/entity-attribute-actions.js'
 
 // ── Chroma auto-spawn ─────────────────────────────────────────────────────────
 let chromaProcess = null
@@ -935,6 +936,15 @@ function apiDevPlugin(env) {
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_BATCH_REFILL_ERROR' })
         }
+      })
+
+      server.middlewares.use((req, res, next) => {
+        const url = new URL(req.url || '', 'http://localhost')
+        if (!/^\/api\/entities\/[^/]+\/attributes\/[^/]+\/(promote|dismiss|edit)\/?$/.test(url.pathname)) {
+          next()
+          return
+        }
+        void entityAttributeActionsHandler(req, res)
       })
 
       server.middlewares.use((req, res, next) => {
