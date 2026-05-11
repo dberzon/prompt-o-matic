@@ -1,6 +1,6 @@
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import { spawn } from 'child_process'
+import { spawn, spawnSync } from 'child_process'
 import path from 'path'
 import { healthCheck, runPolish } from './api/lib/polishCore.js'
 import { resolveProviderSelection, runWithResolvedProvider } from './api/lib/polishCore.js'
@@ -120,30 +120,52 @@ async function isChromaRunning(url = 'http://127.0.0.1:8000') {
   return false
 }
 
+function stripNodeModulesFromPathEnv(env) {
+  for (const key of ['PATH', 'Path', 'path']) {
+    if (!env[key]) continue
+    env[key] = env[key].split(path.delimiter)
+      .filter((entry) => !/node_modules/i.test(entry))
+      .join(path.delimiter)
+  }
+}
+
+function resolveChromaLaunch(chromaDataPath) {
+  const args = ['run', '--path', chromaDataPath]
+  const override = String(process.env.CHROMA_BIN || '').trim()
+  if (override) return { cmd: override, args }
+
+  if (process.platform === 'win32') {
+    const where = spawnSync('where.exe', ['chroma'], { encoding: 'utf8', windowsHide: true })
+    const candidates = (where.stdout || '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+    const external = candidates.find((candidate) => !/node_modules/i.test(candidate))
+    if (external) return { cmd: external, args }
+    console.log(
+      '\x1b[33m[chroma]\x1b[0m No Windows-compatible chroma CLI found. Install Python chromadb (`pip install chromadb`) or set CHROMA_BIN to chroma.exe. Skipping auto-start.',
+    )
+    return null
+  }
+
+  return { cmd: 'chroma', args }
+}
+
 async function startChromaServer(chromaDataPath = './chroma_data') {
   const already = await isChromaRunning()
   if (already) {
     console.log('\x1b[36m[chroma]\x1b[0m Already running on :8000')
     return
   }
-  console.log('\x1b[36m[chroma]\x1b[0m Starting… (chroma run --path', chromaDataPath + ')')
-  // Strip node_modules/.bin from PATH so the system Python `chroma` is found
-  // instead of the chromadb npm package's CLI (which doesn't support Windows x64).
+  const launch = resolveChromaLaunch(chromaDataPath)
+  if (!launch) return
+  console.log('\x1b[36m[chroma]\x1b[0m Starting… (' + [launch.cmd, ...launch.args].join(' ') + ')')
   const spawnEnv = { ...process.env }
-  if (spawnEnv.PATH) {
-    spawnEnv.PATH = spawnEnv.PATH.split(path.delimiter)
-      .filter((p) => !p.includes('node_modules'))
-      .join(path.delimiter)
-  }
-  // Avoid shell:true (triggers Node deprecation warning when args are passed).
-  // On Windows, run via cmd /c; on Unix, use sh -c.
-  const isWin = process.platform === 'win32'
-  const [cmd, args] = isWin
-    ? ['cmd', ['/c', 'chroma', 'run', '--path', chromaDataPath]]
-    : ['sh', ['-c', `chroma run --path ${chromaDataPath}`]]
-  chromaProcess = spawn(cmd, args, {
+  stripNodeModulesFromPathEnv(spawnEnv)
+  chromaProcess = spawn(launch.cmd, launch.args, {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: spawnEnv,
+    windowsHide: true,
   })
   chromaProcess.stdout.on('data', (d) => {
     for (const line of d.toString().trim().split('\n')) {

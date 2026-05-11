@@ -28,10 +28,22 @@ function normalizeMatches(queryResult) {
   })
 }
 
+function createChromaClient(chromaUrl) {
+  const parsed = new URL(chromaUrl)
+  const port = parsed.port
+    ? Number(parsed.port)
+    : (parsed.protocol === 'https:' ? 443 : 80)
+  return new ChromaClient({
+    host: parsed.hostname,
+    port,
+    ssl: parsed.protocol === 'https:',
+  })
+}
+
 export function createChromaVectorStore({ env = process.env } = {}) {
   const chromaUrl = env.CHROMA_URL || DEFAULT_CHROMA_URL
   const collectionName = env.CHROMA_COLLECTION_CHARACTERS || DEFAULT_CHARACTER_COLLECTION
-  const client = new ChromaClient({ path: chromaUrl })
+  const client = createChromaClient(chromaUrl)
   let collectionPromise = null
 
   async function getCollection() {
