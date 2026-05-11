@@ -102,6 +102,7 @@ import {
   readJsonBody,
   sendJsonMiddleware,
 } from './api/lib/http.js'
+import entitiesHandler from './api/entities.js'
 
 // ── Chroma auto-spawn ─────────────────────────────────────────────────────────
 let chromaProcess = null
@@ -932,6 +933,15 @@ function apiDevPlugin(env) {
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_BATCH_REFILL_ERROR' })
         }
+      })
+
+      server.middlewares.use((req, res, next) => {
+        const url = new URL(req.url || '', 'http://localhost')
+        if (!url.pathname.startsWith('/api/entities')) {
+          next()
+          return
+        }
+        void entitiesHandler(req, res)
       })
 
       server.middlewares.use('/api/character-bank', async (req, res) => {
