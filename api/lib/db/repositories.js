@@ -1422,3 +1422,8 @@ export function updateRelationship(db, id, patch = {}) {
   )
   return mapRelationshipRow(db.prepare('SELECT * FROM entity_relationships WHERE id = ?').get(id))
 }
+
+export function deleteRelationship(db, id) {
+  const result = db.prepare('DELETE FROM entity_relationships WHERE id = ?').run(id)
+  return result.changes > 0
+}
