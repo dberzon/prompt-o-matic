@@ -63,12 +63,13 @@ export function createChromaVectorStore({ env = process.env } = {}) {
     })
   }
 
-  async function queryByEmbedding({ embedding, limit = 5 }) {
+  async function queryByEmbedding({ embedding, limit = 5, entityType } = {}) {
     const collection = await getCollection()
     const result = await collection.query({
       queryEmbeddings: [embedding],
       nResults: limit,
       include: ['metadatas', 'distances', 'documents'],
+      ...(entityType ? { where: { entityType } } : {}),
     })
     return normalizeMatches(result)
   }

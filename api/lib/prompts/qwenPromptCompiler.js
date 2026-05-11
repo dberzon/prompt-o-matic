@@ -57,6 +57,7 @@ const CompileEntityOptionsSchema = z.object({
 
 const CompileEntitySchema = z.object({
   views: z.array(ViewEnum).min(1).default(['front_portrait']),
+  scopeEntityIds: z.array(z.string().trim().min(1)).default([]),
   options: CompileEntityOptionsSchema,
 }).strict()
 
@@ -344,7 +345,9 @@ export function compileEntityPromptPacks({ db, entityId, input = {} }) {
     throw err
   }
   const attributes = listAttributes(db, { entityId })
-  const attributeByKey = selectAttributesForPromptPack(attributes)
+  const attributeByKey = selectAttributesForPromptPack(attributes, {
+    scopeEntityIds: parsed.scopeEntityIds,
+  })
   const { profile, visualDescriptor, extraContext } = entityAttributesToProfile(entity, attributeByKey)
   const entityPromptContext = {
     visualDescriptor,

@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react'
 import { listEntities } from '../lib/api/entities.js'
-import VisualAnchorPicker from './VisualAnchorPicker.jsx'
+import EntityEditor from './EntityEditor.jsx'
 import styles from './EntityContinuityPanel.module.css'
 
-export default function EntityContinuityPanel() {
+export default function EntityContinuityPanel({ initialEntityId = '' }) {
   const [entities, setEntities] = useState([])
-  const [selectedEntityId, setSelectedEntityId] = useState('')
+  const [selectedEntityId, setSelectedEntityId] = useState(initialEntityId)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (initialEntityId) {
+      setSelectedEntityId(initialEntityId)
+    }
+  }, [initialEntityId])
 
   useEffect(() => {
     let cancelled = false
@@ -57,7 +63,7 @@ export default function EntityContinuityPanel() {
         </label>
       </div>
       {error ? <p className={styles.error}>{error}</p> : null}
-      <VisualAnchorPicker entityId={selectedEntityId} />
+      <EntityEditor entityId={selectedEntityId} onEntityChange={setSelectedEntityId} />
     </div>
   )
 }

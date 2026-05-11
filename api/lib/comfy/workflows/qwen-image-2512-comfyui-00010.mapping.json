@@ -9,6 +9,8 @@
     "batchSize": { "nodeId": "58", "inputKey": "batch_size" }
   },
   "optionalFields": {
-    "modelName": { "nodeId": "75", "inputKey": "unet_name" }
+    "modelName": { "nodeId": "75", "inputKey": "unet_name" },
+    "ipadapterImage": { "nodeId": "199", "inputKey": "image" },
+    "ipadapterStrength": { "nodeId": "198", "inputKey": "weight" }
   }
 }

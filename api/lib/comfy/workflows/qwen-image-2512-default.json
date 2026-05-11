@@ -53,5 +53,17 @@
       "height": "__HEIGHT__",
       "batch_size": 1
     }
+  },
+  "99": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "__IPADAPTER_IMAGE__"
+    }
+  },
+  "98": {
+    "class_type": "IPAdapterApply",
+    "inputs": {
+      "weight": 0.6
+    }
   }
 }

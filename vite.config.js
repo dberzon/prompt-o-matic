@@ -106,6 +106,8 @@ import entitiesHandler from './api/entities.js'
 import entityRelationshipsHandler from './api/entity-relationships.js'
 import entityAnchorsHandler from './api/entity-anchors.js'
 import entityAttributeActionsHandler from './api/entity-attribute-actions.js'
+import entityAttributesHandler from './api/entity-attributes.js'
+import entityLiftFromBankHandler from './api/entity-lift-from-bank.js'
 import entityExtrapolateStage5Handler from './api/entity-extrapolate-stage5.js'
 
 // ── Chroma auto-spawn ─────────────────────────────────────────────────────────
@@ -959,6 +961,24 @@ function apiDevPlugin(env) {
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_BATCH_REFILL_ERROR' })
         }
+      })
+
+      server.middlewares.use((req, res, next) => {
+        const url = new URL(req.url || '', 'http://localhost')
+        if (url.pathname !== '/api/entities/lift-from-bank-entry') {
+          next()
+          return
+        }
+        void entityLiftFromBankHandler(req, res)
+      })
+
+      server.middlewares.use((req, res, next) => {
+        const url = new URL(req.url || '', 'http://localhost')
+        if (!/^\/api\/entities\/[^/]+\/attributes\/?$/.test(url.pathname)) {
+          next()
+          return
+        }
+        void entityAttributesHandler(req, res)
       })
 
       server.middlewares.use((req, res, next) => {

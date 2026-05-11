@@ -201,11 +201,17 @@ function summarizeApplyDiff(before, after, source) {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('builder')
+  const [continuityEntityId, setContinuityEntityId] = useState('')
   const [castingRoomJumpId, setCastingRoomJumpId] = useState(null)
 
   const handleOpenInCastingRoom = useCallback((characterId) => {
     setActiveTab('pipeline')
     setCastingRoomJumpId(characterId)
+  }, [])
+
+  const handleOpenEntityEditor = useCallback((entityId) => {
+    setContinuityEntityId(entityId)
+    setActiveTab('continuity')
   }, [])
   const [scene, setScene] = useState('')
   const [selectedDir, setSelectedDir] = useState(null)
@@ -1125,6 +1131,7 @@ export default function App() {
             aiEngine={aiEngine}
             localOnly={localOnly}
             embeddedStatus={embeddedStatus}
+            onOpenEntityEditor={handleOpenEntityEditor}
           />
         </div>
       ) : activeTab === 'pipeline' ? (
@@ -1140,7 +1147,7 @@ export default function App() {
         </div>
       ) : (
         <div className={styles.characterTab}>
-          <EntityContinuityPanel />
+          <EntityContinuityPanel initialEntityId={continuityEntityId} />
         </div>
       )}
       <EmbeddedSetup

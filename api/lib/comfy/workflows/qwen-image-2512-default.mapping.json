@@ -9,6 +9,8 @@
     "batchSize": { "nodeId": "5", "inputKey": "batch_size" }
   },
   "optionalFields": {
-    "modelName": { "nodeId": "4", "inputKey": "ckpt_name" }
+    "modelName": { "nodeId": "4", "inputKey": "ckpt_name" },
+    "ipadapterImage": { "nodeId": "99", "inputKey": "image" },
+    "ipadapterStrength": { "nodeId": "98", "inputKey": "weight" }
   }
 }

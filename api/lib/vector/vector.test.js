@@ -4,11 +4,11 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { characterToEmbeddingText } from '../characters/characterToEmbeddingText.js'
 import { validCharacterProfile } from '../characters/fixtures.js'
-import { createCharacter, getCharacter } from '../db/repositories.js'
+import { createCharacter, createEntity, getCharacter } from '../db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../db/sqlite.js'
 import { createMockEmbeddingProvider } from '../embeddings/mockEmbeddingProvider.js'
 import { createMockVectorStore } from './mockVectorStore.js'
-import { findSimilarCharacters, indexCharacter } from './characterIndexing.js'
+import { findSimilarCharacters, findSimilarEntities, indexCharacter, indexEntity } from './characterIndexing.js'
 
 const tempDirs = []
 
@@ -139,5 +139,36 @@ describe('vector foundation', () => {
     expect(results[0]).toHaveProperty('characterId')
     expect(results[0]).toHaveProperty('distance')
     expect(results[0]).toHaveProperty('score')
+  })
+
+  it('entity indexing stores entity_type metadata and filters by type', async () => {
+    const db = createTempDb()
+    createEntity(db, { id: 'env_1', type: 'environment', name: 'Beer hall' })
+    createEntity(db, { id: 'char_1', type: 'character', name: 'Ruslan' })
+    const vectorStore = createMockVectorStore()
+    const embeddingProvider = createMockEmbeddingProvider()
+
+    await indexEntity({
+      db,
+      vectorStore,
+      embeddingProvider,
+      entityId: 'env_1',
+    })
+    await indexEntity({
+      db,
+      vectorStore,
+      embeddingProvider,
+      entityId: 'char_1',
+    })
+
+    const matches = await findSimilarEntities({
+      vectorStore,
+      embeddingProvider,
+      entityOrText: 'character identity',
+      entityType: 'character',
+      limit: 5,
+    })
+    expect(matches.every((match) => match.entityType === 'character')).toBe(true)
+    db.close()
   })
 })

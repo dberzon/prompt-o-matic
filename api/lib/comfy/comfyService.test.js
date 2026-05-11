@@ -2,7 +2,13 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createCharacter, createPromptPack, getGeneratedImageRecord } from '../db/repositories.js'
+import {
+  createCharacter,
+  createEntity,
+  createPromptPack,
+  createVisualAnchor,
+  getGeneratedImageRecord,
+} from '../db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../db/sqlite.js'
 import { validCharacterProfile, validQwenImagePromptPack } from '../characters/fixtures.js'
 import { createComfyService, buildComfyPromptPayload, dimensionsFromAspectRatio } from './comfyService.js'
@@ -47,6 +53,27 @@ describe('comfy service', () => {
   it('aspect ratio maps correctly', () => {
     expect(dimensionsFromAspectRatio('2:3')).toEqual({ width: 832, height: 1248 })
     expect(dimensionsFromAspectRatio('16:9')).toEqual({ width: 1344, height: 768 })
+  })
+
+  it('injects primary reference anchor into workflow when available', () => {
+    const db = createTempDb()
+    createEntity(db, { id: 'ent_anchor', type: 'character', name: 'Ruslan' })
+    createVisualAnchor(db, {
+      id: 'anchor_primary',
+      entityId: 'ent_anchor',
+      type: 'reference_image',
+      payload: 'reference-anchor.png',
+      isPrimary: true,
+    })
+    const payload = buildComfyPromptPayload({
+      promptPack: { ...validQwenImagePromptPack, characterId: 'ent_anchor' },
+      workflowId: 'qwen-image-2512-default',
+      db,
+      entityId: 'ent_anchor',
+      ipadapterStrength: 0.72,
+    })
+    expect(payload.prompt['99'].inputs.image).toBe('reference-anchor.png')
+    expect(payload.prompt['98'].inputs.weight).toBe(0.72)
   })
 
   it('queue prompt-pack builds payload and calls endpoint', async () => {

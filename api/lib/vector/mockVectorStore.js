@@ -21,8 +21,13 @@ export function createMockVectorStore() {
       byId.set(id, { id, embedding, document, metadata })
     },
 
-    async queryByEmbedding({ embedding, limit = 5 }) {
+    async queryByEmbedding({ embedding, limit = 5, entityType } = {}) {
       return Array.from(byId.values())
+        .filter((item) => {
+          if (!entityType) return true
+          if (item.metadata?.entityType === entityType) return true
+          return entityType === 'character' && Boolean(item.metadata?.characterId)
+        })
         .map((item) => {
           const distance = cosineDistance(embedding, item.embedding)
           return {

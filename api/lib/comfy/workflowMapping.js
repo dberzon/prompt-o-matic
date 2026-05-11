@@ -188,6 +188,8 @@ export function injectPromptPackIntoWorkflow({
   height,
   modelName,
   batchSize = 1,
+  ipadapterImage,
+  ipadapterStrength,
 }) {
   const validation = validateWorkflowMapping({ workflow, mapping })
   if (!validation.ok) {
@@ -206,6 +208,12 @@ export function injectPromptPackIntoWorkflow({
   }
   if (modelName && mapping.optionalFields?.modelName) {
     setMappedInput(workflow, mapping.optionalFields.modelName, modelName)
+  }
+  if (ipadapterImage && mapping.optionalFields?.ipadapterImage) {
+    setMappedInput(workflow, mapping.optionalFields.ipadapterImage, ipadapterImage)
+  }
+  if (ipadapterStrength !== undefined && mapping.optionalFields?.ipadapterStrength) {
+    setMappedInput(workflow, mapping.optionalFields.ipadapterStrength, ipadapterStrength)
   }
   return workflow
 }

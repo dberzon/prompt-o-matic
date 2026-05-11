@@ -201,5 +201,23 @@
     "_meta": {
       "title": "EmptySD3LatentImage"
     }
+  },
+  "199": {
+    "inputs": {
+      "image": "__IPADAPTER_IMAGE__"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "IPAdapter reference image"
+    }
+  },
+  "198": {
+    "inputs": {
+      "weight": 0.6
+    },
+    "class_type": "IPAdapterApply",
+    "_meta": {
+      "title": "IPAdapter strength"
+    }
   }
 }

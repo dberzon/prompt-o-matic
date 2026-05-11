@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useCharacterOptimize } from '../hooks/useCharacterOptimize.js'
 import { listBankEntries, createBankEntry, updateBankEntry, deleteBankEntry } from '../lib/api/characterBank.js'
+import { liftEntityFromBankEntry } from '../lib/api/entities.js'
 import { toSnakeSlug, withUniqueSuffix } from '../utils/slugify.js'
 import styles from './CharacterBuilder.module.css'
 
@@ -19,6 +20,7 @@ export default function CharacterBuilder({
   aiEngine,
   localOnly,
   embeddedStatus,
+  onOpenEntityEditor,
 }) {
   const [name, setName] = useState('')
   const [slugDraft, setSlugDraft] = useState('')
@@ -246,6 +248,24 @@ export default function CharacterBuilder({
     }
   }
 
+  const openAsEntity = async (entry) => {
+    try {
+      const result = await liftEntityFromBankEntry({
+        slug: entry.slug,
+        name: entry.name,
+        description: entry.rawDescription || entry.description || '',
+        optimizedDescription: entry.optimizedDescription || '',
+      })
+      const entityId = result?.entity?.id
+      if (!entityId) throw new Error('Entity lift failed')
+      onOpenEntityEditor?.(entityId)
+    } catch (err) {
+      setFlash(err?.message || 'Failed to open entity editor')
+      setFlashIsError(true)
+      setTimeout(() => setFlash(''), 2000)
+    }
+  }
+
   const copyToken = async (entry) => {
     try {
       await navigator.clipboard.writeText(`@${entry.slug}`)
@@ -334,6 +354,7 @@ export default function CharacterBuilder({
                 <p>{entry.optimizedDescription || entry.rawDescription}</p>
                 <div className={styles.row}>
                   <button className={styles.btnGhost} onClick={() => loadCharacter(entry)}>Edit</button>
+                  <button className={styles.btnGhost} onClick={() => openAsEntity(entry)}>Open as entity</button>
                   <button className={styles.btnGhost} onClick={() => removeCharacter(entry)}>Delete</button>
                   <button
                     className={styles.btnGhost}

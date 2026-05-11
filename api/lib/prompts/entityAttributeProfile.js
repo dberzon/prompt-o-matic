@@ -1,8 +1,10 @@
-const PROMPT_PACK_PROVENANCES = new Set(['canon', 'inferred'])
+const PROMPT_PACK_PROVENANCES = new Set(['canon', 'inferred', 'derived'])
+const DERIVED_RELATION_PREFIX = 'relation.'
 
 const PROVENANCE_RANK = {
   canon: 0,
   inferred: 1,
+  derived: 2,
 }
 
 const ATTRIBUTE_KEY_ALIASES = {
@@ -119,10 +121,30 @@ function applyAttributeValue(profile, field, value) {
   }
 }
 
-export function selectAttributesForPromptPack(attributes) {
+function parseDerivedRelationKey(key) {
+  if (!key || !key.startsWith(DERIVED_RELATION_PREFIX)) return null
+  const rest = key.slice(DERIVED_RELATION_PREFIX.length)
+  const colon = rest.indexOf(':')
+  if (colon < 0) return null
+  return {
+    relationType: rest.slice(0, colon),
+    otherEntityId: rest.slice(colon + 1),
+  }
+}
+
+function derivedAttributeInScope(attribute, scopeEntityIds = []) {
+  if (attribute.provenance !== 'derived') return true
+  const relation = parseDerivedRelationKey(attribute.key)
+  if (!relation) return false
+  const scope = new Set(scopeEntityIds)
+  return scope.has(relation.otherEntityId)
+}
+
+export function selectAttributesForPromptPack(attributes, { scopeEntityIds = [] } = {}) {
   const byKey = new Map()
   for (const attribute of attributes) {
     if (!PROMPT_PACK_PROVENANCES.has(attribute.provenance)) continue
+    if (!derivedAttributeInScope(attribute, scopeEntityIds)) continue
     const existing = byKey.get(attribute.key)
     if (!existing) {
       byKey.set(attribute.key, attribute)

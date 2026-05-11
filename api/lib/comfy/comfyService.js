@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import { createGeneratedImageRecord, getCharacter, getPromptPack, listPromptPacks } from '../db/repositories.js'
+import {
+  createGeneratedImageRecord,
+  getCharacter,
+  getPromptPack,
+  listPromptPacks,
+  listVisualAnchors,
+} from '../db/repositories.js'
 import { parseGeneratedImageRecord } from '../characters/schemas.js'
 import {
   injectPromptPackIntoWorkflow,
@@ -32,7 +38,24 @@ export function dimensionsFromAspectRatio(aspectRatio = '2:3') {
   return map[aspectRatio] || map['2:3']
 }
 
-export function buildComfyPromptPayload({ promptPack, seed, workflowId, dimensions, allowWorkflowFallback }) {
+function resolvePrimaryReferenceAnchorPayload(db, entityId) {
+  if (!db || !entityId) return null
+  const anchors = listVisualAnchors(db, { entityId, type: 'reference_image' })
+  const primary = anchors.find((anchor) => anchor.isPrimary) || anchors[0]
+  if (!primary?.payload) return null
+  return primary.payload
+}
+
+export function buildComfyPromptPayload({
+  promptPack,
+  seed,
+  workflowId,
+  dimensions,
+  allowWorkflowFallback,
+  db,
+  entityId,
+  ipadapterStrength,
+}) {
   const seedValue = Number.isInteger(seed) ? seed : (Number.isInteger(promptPack.seedHint) ? promptPack.seedHint : Math.floor(Math.random() * 1000000000))
   const dims = dimensions || dimensionsFromAspectRatio(promptPack.aspectRatio)
   const workflowRequest = workflowId || promptPack.comfyWorkflowId || process.env.COMFYUI_DEFAULT_WORKFLOW_ID || null
@@ -50,6 +73,8 @@ export function buildComfyPromptPayload({ promptPack, seed, workflowId, dimensio
     err.details = validation
     throw err
   }
+  const resolvedEntityId = entityId || promptPack.characterId || null
+  const ipadapterImage = db ? resolvePrimaryReferenceAnchorPayload(db, resolvedEntityId) : null
   const injectedWorkflow = injectPromptPackIntoWorkflow({
     workflow,
     mapping,
@@ -59,6 +84,8 @@ export function buildComfyPromptPayload({ promptPack, seed, workflowId, dimensio
     height: dims.height,
     modelName: undefined,
     batchSize: 1,
+    ipadapterImage,
+    ipadapterStrength,
   })
 
   return {
@@ -126,13 +153,27 @@ export function createComfyService({ env = process.env, fetchImpl = fetch } = {}
     return data
   }
 
-  async function queuePromptPack({ promptPack, seed, workflowId, dimensions, dryRun = false, allowWorkflowFallback = false, front = false }) {
+  async function queuePromptPack({
+    promptPack,
+    seed,
+    workflowId,
+    dimensions,
+    dryRun = false,
+    allowWorkflowFallback = false,
+    front = false,
+    db,
+    entityId,
+    ipadapterStrength,
+  }) {
     const payload = buildComfyPromptPayload({
       promptPack,
       seed,
       workflowId,
       dimensions,
       allowWorkflowFallback,
+      db,
+      entityId,
+      ipadapterStrength,
     })
     if (dryRun) {
       return {
@@ -240,6 +281,8 @@ export function createComfyService({ env = process.env, fetchImpl = fetch } = {}
 
   async function queuePromptPackById({
     db, promptPackId, seed, workflowId, dimensions, dryRun = false, allowWorkflowFallback = false, front = false,
+    entityId,
+    ipadapterStrength,
   }) {
     const promptPack = getPromptPack(db, promptPackId)
     if (!promptPack) {
@@ -255,6 +298,9 @@ export function createComfyService({ env = process.env, fetchImpl = fetch } = {}
       dryRun,
       allowWorkflowFallback,
       front,
+      db,
+      entityId: entityId || promptPack.characterId,
+      ipadapterStrength,
     })
     return { promptPackId, ...queued }
   }
