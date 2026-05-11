@@ -191,12 +191,10 @@ Chroma is auto-spawned by `vite.config.js` on dev server start when `AUTO_START_
 
 ---
 
-## Session Handoff (2026-05-11)
+## Session Handoff (2026-05-11, evening)
 
-**Closed in beads this session (high level):** entity-layer epic `qwen-prompt-builder-oq8v` (schema, repos, provenance guard, `/api/entities/*` REST, entity prompt-pack compile `qwen-prompt-builder-47ff`), plus Chroma Windows auto-start fix (`9829068`).
+**Shipped in git (`4509bf7`):** entity indexing with `entity_type` metadata (`ff4a`, `ajp4`); `EntityEditor.jsx` shell and Continuity tab wiring (`l5ip`, `hibz`, `53i9`); attribute review panel with promote/edit/dismiss (`4tas`); bank-entry lift API (`POST /api/entities/lift-from-bank-entry`) and `GET /api/entities/:id/attributes`; scoped relationship-derived attrs on entity compile (`95ma`); Comfy IPAdapter optional mapping + primary-anchor injection (`fujw`, `b72i`, `u4pd`, `l09s`, `zd7c`); continuity QA harness (`6ng7`, `82ox`).
 
-**Still open under integration:** `qwen-prompt-builder-c209` (children `95ma` scope-gated derived attrs, `zd7c` Comfy queue with primary anchor). No `in_progress` issues.
+**Still open (start with `bd ready`):** MVP acceptance epic `qwen-prompt-builder-aaun` (Ruslan end-to-end + Section 4 “Done =” gate). Frontend follow-ups: canon inline edit `00px`, anchor gallery `zpcf`. Integration: character reindex `64a1`. Extrapolation pipeline epic `2ynr` / stages S1–S6 (orchestrator `hcvx`, templates `h9i6`–`c7oy`; full `/extrapolate/*` API `6acw` still stubbed in UI for stages 1–4 and 6). Visual continuity: IPAdapter spike `bziq`, decision `xggm`. Relationship-derived attrs upstream `9ld5`.
 
-**Ready next (bd):** frontend entity editor shell `l5ip`, attribute review `4tas` / `00px`, anchor gallery `zpcf`, Chroma entity metadata `ff4a` / `ajp4`, visual continuity `1ux2` / `fujw`.
-
-**Dev checks:** `npm test`; restart `npm run dev` after Node or native-module changes; confirm `GET /api/chroma-health` when vector features matter.
+**Dev checks:** Stop `npm run dev`, run `npm rebuild better-sqlite3`, then `npm test` (Vitest uses a different Node ABI than the dev server while it is running). Restart dev after native-module or Node changes. Confirm `GET /api/chroma-health` when vector features matter. Targeted non-SQLite tests: `npx vitest run api/lib/prompts/entityAttributeProfile.test.js api/lib/continuity/continuityQaHarness.test.js`.
