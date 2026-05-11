@@ -106,6 +106,7 @@ import entitiesHandler from './api/entities.js'
 import entityRelationshipsHandler from './api/entity-relationships.js'
 import entityAnchorsHandler from './api/entity-anchors.js'
 import entityAttributeActionsHandler from './api/entity-attribute-actions.js'
+import entityConflictActionsHandler from './api/entity-conflict-actions.js'
 import entityAttributesHandler from './api/entity-attributes.js'
 import entityLiftFromBankHandler from './api/entity-lift-from-bank.js'
 import entityContinuityQaGenerateHandler from './api/entity-continuity-qa-generate.js'
@@ -990,6 +991,15 @@ function apiDevPlugin(env) {
           return
         }
         void entityAttributeActionsHandler(req, res)
+      })
+
+      server.middlewares.use((req, res, next) => {
+        const url = new URL(req.url || '', 'http://localhost')
+        if (!/^\/api\/entities\/[^/]+\/conflicts\/[^/]+\/(resolve|dismiss)\/?$/.test(url.pathname)) {
+          next()
+          return
+        }
+        void entityConflictActionsHandler(req, res)
       })
 
       server.middlewares.use((req, res, next) => {

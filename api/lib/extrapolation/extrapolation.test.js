@@ -84,9 +84,15 @@ describe('extrapolation prompts and parsers', () => {
     const { writes, suggestions } = applyS4Parser(db, 'ent_s4', {
       environments: [{ name: 'Beer hall', summary: 'Friday hangout' }],
       attributes: [{ key: 'routine.friday', value: 'spends Fridays at beer hall with friends' }],
+      relationshipAttributes: [{
+        type: 'romantic.crush',
+        otherSlug: 'rita_vlasova',
+        value: 'in love with Rita Vlasova',
+      }],
     })
     expect(suggestions).toHaveLength(1)
     expect(writes.some((item) => item.key === 'routine.friday')).toBe(true)
+    expect(writes.some((item) => item.key === 'relation.romantic.crush:rita_vlasova' && item.provenance === 'derived')).toBe(true)
     const prompt = buildS4EnvironmentalProjectionPrompt({
       entity: { id: 'ent_s4', name: 'Ruslan', type: 'character' },
       canonAttributes: [],

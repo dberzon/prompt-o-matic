@@ -46,5 +46,22 @@ export function applyS4Parser(db, entityId, parsed) {
     }))
   }
 
+  const relationshipAttributes = Array.isArray(parsed?.relationshipAttributes)
+    ? parsed.relationshipAttributes
+    : []
+  for (const item of relationshipAttributes) {
+    if (!item?.type || !item?.otherSlug || item?.value === undefined) continue
+    const otherSlug = slugify(item.otherSlug)
+    if (!otherSlug) continue
+    writes.push(writeAttribute(db, {
+      entityId,
+      key: `relation.${item.type}:${otherSlug}`,
+      value: item.value,
+      provenance: 'derived',
+      confidence: typeof item.confidence === 'number' ? item.confidence : 0.8,
+      sourceStage: 4,
+    }))
+  }
+
   return { writes, suggestions }
 }

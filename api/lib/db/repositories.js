@@ -1274,6 +1274,16 @@ export function dismissSuggested(db, id) {
   return result.changes > 0
 }
 
+export function supersedeAttributeBy(db, attributeId, supersededByAttributeId) {
+  const result = db.prepare(
+    'UPDATE entity_attributes SET superseded_by = ? WHERE id = ? AND superseded_by IS NULL',
+  ).run(supersededByAttributeId, attributeId)
+  if (result.changes === 0) {
+    throw new Error(`supersedeAttributeBy: attribute ${attributeId} not found or already superseded`)
+  }
+  return selectAttributeById(db, attributeId)
+}
+
 
 const VISUAL_ANCHOR_TYPES = new Set(['reference_image', 'ipadapter_embedding', 'seed', 'prompt_anchor'])
 
