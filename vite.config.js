@@ -108,6 +108,7 @@ import entityAnchorsHandler from './api/entity-anchors.js'
 import entityAttributeActionsHandler from './api/entity-attribute-actions.js'
 import entityAttributesHandler from './api/entity-attributes.js'
 import entityLiftFromBankHandler from './api/entity-lift-from-bank.js'
+import entityExtrapolateHandler from './api/entity-extrapolate.js'
 import entityExtrapolateStage5Handler from './api/entity-extrapolate-stage5.js'
 
 // ── Chroma auto-spawn ─────────────────────────────────────────────────────────
@@ -988,6 +989,21 @@ function apiDevPlugin(env) {
           return
         }
         void entityAttributeActionsHandler(req, res)
+      })
+
+      server.middlewares.use((req, res, next) => {
+        const url = new URL(req.url || '', 'http://localhost')
+        const entityStage = url.pathname.match(/^\/api\/entities\/[^/]+\/extrapolate\/stage\/(\d+)\/?$/)
+        const isEntityStage = Boolean(entityStage)
+        const isEntityStageFive = entityStage?.[1] === '5'
+        const isExtrapolateRoute = /^\/api\/extrapolate\/character\/[^/]+\/?$/.test(url.pathname)
+          || /^\/api\/extrapolate\/stage\/[^/]+\/\d+\/?$/.test(url.pathname)
+          || (isEntityStage && !isEntityStageFive)
+        if (!isExtrapolateRoute) {
+          next()
+          return
+        }
+        void entityExtrapolateHandler(req, res)
       })
 
       server.middlewares.use((req, res, next) => {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getEntity } from '../lib/api/entities.js'
 import AttributeReviewPanel from './AttributeReviewPanel.jsx'
+import CanonAttributesPanel from './CanonAttributesPanel.jsx'
 import EntityExtrapolationPanel from './EntityExtrapolationPanel.jsx'
 import VisualAnchorPicker from './VisualAnchorPicker.jsx'
 import styles from './EntityEditor.module.css'
@@ -96,12 +97,7 @@ export default function EntityEditor({ entityId, onEntityChange }) {
         {activeSection === 'Continuity' ? (
           <VisualAnchorPicker entityId={entityId} />
         ) : (
-          <div className={styles.sectionPlaceholder}>
-            <span className={styles.sectionLabel}>{activeSection}</span>
-            <p className={styles.sectionHint}>
-              Canon edits for {activeSection.toLowerCase()} land here. Use the review panel below to approve inferred attributes.
-            </p>
-          </div>
+          <CanonAttributesPanel entityId={entityId} sectionPrefix={activeSection.toLowerCase()} />
         )}
       </section>
 
