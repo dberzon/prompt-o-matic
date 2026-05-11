@@ -108,6 +108,7 @@ import entityAnchorsHandler from './api/entity-anchors.js'
 import entityAttributeActionsHandler from './api/entity-attribute-actions.js'
 import entityAttributesHandler from './api/entity-attributes.js'
 import entityLiftFromBankHandler from './api/entity-lift-from-bank.js'
+import entityContinuityQaGenerateHandler from './api/entity-continuity-qa-generate.js'
 import entityExtrapolateHandler from './api/entity-extrapolate.js'
 import entityExtrapolateStage5Handler from './api/entity-extrapolate-stage5.js'
 
@@ -989,6 +990,15 @@ function apiDevPlugin(env) {
           return
         }
         void entityAttributeActionsHandler(req, res)
+      })
+
+      server.middlewares.use((req, res, next) => {
+        const url = new URL(req.url || '', 'http://localhost')
+        if (!/^\/api\/entities\/[^/]+\/continuity-qa\/generate\/?$/.test(url.pathname)) {
+          next()
+          return
+        }
+        void entityContinuityQaGenerateHandler(req, res)
       })
 
       server.middlewares.use((req, res, next) => {
