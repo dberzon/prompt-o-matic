@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { listEntities } from '../lib/api/entities.js'
+import EntityContinuityQaPanel from './EntityContinuityQaPanel.jsx'
 import EntityEditor from './EntityEditor.jsx'
 import styles from './EntityContinuityPanel.module.css'
 
@@ -39,6 +40,8 @@ export default function EntityContinuityPanel({ initialEntityId = '' }) {
     return () => { cancelled = true }
   }, [])
 
+  const selectedEntity = entities.find((entity) => entity.id === selectedEntityId) || null
+
   return (
     <div className={styles.wrap}>
       <div className={styles.header}>
@@ -63,6 +66,7 @@ export default function EntityContinuityPanel({ initialEntityId = '' }) {
         </label>
       </div>
       {error ? <p className={styles.error}>{error}</p> : null}
+      <EntityContinuityQaPanel entityId={selectedEntityId} entityType={selectedEntity?.type} />
       <EntityEditor entityId={selectedEntityId} onEntityChange={setSelectedEntityId} />
     </div>
   )

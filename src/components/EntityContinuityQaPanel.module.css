@@ -1,0 +1,125 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  background: var(--surface);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.actions button {
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.checklist {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checkItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.checkItemMet {
+  color: var(--text);
+}
+
+.checkMark {
+  width: 14px;
+  text-align: center;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.table th,
+.table td {
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.table th {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.scoreInput {
+  width: 56px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  padding: 4px 6px;
+}
+
+.status,
+.error,
+.result {
+  margin: 0;
+  font-size: 12px;
+}
+
+.status {
+  color: var(--text-2);
+}
+
+.error {
+  color: var(--color-danger, #c44);
+}
+
+.resultAccepted {
+  color: var(--color-success, #2a7);
+}
+
+.resultFailed {
+  color: var(--color-danger, #c44);
+}

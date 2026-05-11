@@ -111,6 +111,7 @@ import entityAttributesHandler from './api/entity-attributes.js'
 import entityLiftFromBankHandler from './api/entity-lift-from-bank.js'
 import entityContinuityQaGenerateHandler from './api/entity-continuity-qa-generate.js'
 import entityContinuityQaScoringHandler from './api/entity-continuity-qa-scoring.js'
+import entityMvpDoneGateHandler from './api/entity-mvp-done-gate.js'
 import entityExtrapolateHandler from './api/entity-extrapolate.js'
 import entityExtrapolateStage5Handler from './api/entity-extrapolate-stage5.js'
 
@@ -1019,6 +1020,15 @@ function apiDevPlugin(env) {
           return
         }
         void entityContinuityQaScoringHandler(req, res)
+      })
+
+      server.middlewares.use((req, res, next) => {
+        const url = new URL(req.url || '', 'http://localhost')
+        if (!/^\/api\/entities\/[^/]+\/mvp-done-gate\/?$/.test(url.pathname)) {
+          next()
+          return
+        }
+        void entityMvpDoneGateHandler(req, res)
       })
 
       server.middlewares.use((req, res, next) => {
