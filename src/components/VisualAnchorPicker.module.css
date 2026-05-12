@@ -34,6 +34,34 @@
   display: none;
 }
 
+.dropZone {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.dropZoneActive {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface-2));
+}
+
+.dropZoneDisabled {
+  opacity: 0.6;
+}
+
+.dropZoneText {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.browseBtn,
 .generateBtn,
 .primaryBtn {
   font-size: 11px;
@@ -45,11 +73,13 @@
   color: var(--text);
 }
 
+.browseBtn,
 .generateBtn {
   color: var(--accent);
 }
 
 .generateBtn:disabled,
+.browseBtn:disabled,
 .primaryBtn:disabled {
   opacity: 0.5;
   cursor: not-allowed;

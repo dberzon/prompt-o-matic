@@ -16,15 +16,22 @@ function anchorImageSrc(anchor) {
   return null
 }
 
+function pickImageFile(fileList) {
+  const files = Array.from(fileList ?? [])
+  return files.find((file) => file.type.startsWith('image/')) || files[0] || null
+}
+
 export default function VisualAnchorPicker({ entityId }) {
   const [anchors, setAnchors] = useState([])
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
   const [settingPrimaryId, setSettingPrimaryId] = useState('')
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const uploadInputRef = useRef(null)
+  const dragDepthRef = useRef(0)
 
   const loadAnchors = useCallback(async () => {
     if (!entityId) {
@@ -68,10 +75,13 @@ export default function VisualAnchorPicker({ entityId }) {
     }
   }
 
-  const handleUpload = async (event) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
+  const uploadReferenceFile = async (file) => {
     if (!entityId || !file || uploading) return
+    if (!file.type.startsWith('image/')) {
+      setError('Choose an image file')
+      setStatus('')
+      return
+    }
     setUploading(true)
     setError('')
     setStatus('Uploading reference image…')
@@ -85,6 +95,40 @@ export default function VisualAnchorPicker({ entityId }) {
     } finally {
       setUploading(false)
     }
+  }
+
+  const handleUpload = async (event) => {
+    const file = pickImageFile(event.target.files)
+    event.target.value = ''
+    await uploadReferenceFile(file)
+  }
+
+  const handleDragEnter = (event) => {
+    event.preventDefault()
+    if (uploading || loading || generating) return
+    dragDepthRef.current += 1
+    setDragActive(true)
+  }
+
+  const handleDragOver = (event) => {
+    event.preventDefault()
+    if (uploading || loading || generating) return
+    event.dataTransfer.dropEffect = 'copy'
+    setDragActive(true)
+  }
+
+  const handleDragLeave = (event) => {
+    event.preventDefault()
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1)
+    if (dragDepthRef.current === 0) setDragActive(false)
+  }
+
+  const handleDrop = async (event) => {
+    event.preventDefault()
+    dragDepthRef.current = 0
+    setDragActive(false)
+    if (uploading || loading || generating) return
+    await uploadReferenceFile(pickImageFile(event.dataTransfer?.files))
   }
 
   const handleSetPrimary = async (anchorId) => {
@@ -101,6 +145,8 @@ export default function VisualAnchorPicker({ entityId }) {
     }
   }
 
+  const uploadDisabled = uploading || loading || generating
+
   if (!entityId) {
     return (
       <div className={styles.wrap}>
@@ -114,22 +160,6 @@ export default function VisualAnchorPicker({ entityId }) {
       <div className={styles.header}>
         <span className={styles.title}>Visual anchors</span>
         <div className={styles.actions}>
-          <input
-            ref={uploadInputRef}
-            type="file"
-            accept="image/*"
-            className={styles.uploadInput}
-            data-testid="T_F_ANCHOR_UPLOAD"
-            onChange={handleUpload}
-          />
-          <button
-            type="button"
-            className={styles.generateBtn}
-            onClick={() => uploadInputRef.current?.click()}
-            disabled={uploading || loading || generating}
-          >
-            {uploading ? 'Uploading…' : 'Upload reference image'}
-          </button>
           <button
             type="button"
             className={styles.generateBtn}
@@ -139,6 +169,35 @@ export default function VisualAnchorPicker({ entityId }) {
             {generating ? 'Generating…' : 'Generate from S5 descriptor'}
           </button>
         </div>
+      </div>
+      <div
+        className={`${styles.dropZone} ${dragActive ? styles.dropZoneActive : ''} ${uploadDisabled ? styles.dropZoneDisabled : ''}`}
+        data-testid="T_C_REFGEN_UPLOAD"
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept="image/*"
+          className={styles.uploadInput}
+          data-testid="T_F_ANCHOR_UPLOAD"
+          onChange={handleUpload}
+          disabled={uploadDisabled}
+        />
+        <p className={styles.dropZoneText}>
+          {uploading ? 'Uploading reference image…' : 'Drop a reference image here, or browse.'}
+        </p>
+        <button
+          type="button"
+          className={styles.browseBtn}
+          onClick={() => uploadInputRef.current?.click()}
+          disabled={uploadDisabled}
+        >
+          Browse image
+        </button>
       </div>
       {status ? <p className={styles.status}>{status}</p> : null}
       {error ? <p className={styles.error}>{error}</p> : null}
