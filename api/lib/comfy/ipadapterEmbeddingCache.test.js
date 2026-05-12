@@ -144,7 +144,7 @@ describe('ipadapter embedding cache', () => {
     })
 
     expect(cached?.clipEmbedding).toHaveLength(768)
-    expect(cached?.comfyImage).toBeUndefined()
+    expect(cached?.comfyImage).toBeNull()
     expect(fetchImpl).not.toHaveBeenCalled()
 
     const resolvedBeforeUpload = resolveIpAdapterWorkflowImage(db, 'ent_skip_upload')
