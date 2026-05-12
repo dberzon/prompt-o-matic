@@ -3,6 +3,7 @@ import {
   generateReferenceImageFromStage5,
   listEntityAnchors,
   setPrimaryEntityAnchor,
+  uploadEntityReferenceAnchor,
   waitForPrimaryReferenceAnchor,
 } from './entityAnchors.js'
 
@@ -45,6 +46,21 @@ describe('entity anchor api', () => {
       '/api/entities/ent_1/extrapolate/stage/5',
       expect.objectContaining({ method: 'POST' }),
     )
+  })
+
+  it('posts multipart upload for a reference anchor', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ ok: true, item: { id: 'anchor_upload' } }),
+    })))
+    const file = new File(['png'], 'ref.png', { type: 'image/png' })
+    await uploadEntityReferenceAnchor('ent_1', file)
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/entities/ent_1/anchors',
+      expect.objectContaining({ method: 'POST' }),
+    )
+    const formData = fetch.mock.calls[0][1].body
+    expect(formData).toBeInstanceOf(FormData)
   })
 
   it('polls until a primary reference anchor appears', async () => {

@@ -6,8 +6,37 @@ function entityAnchorsPath(entityId, anchorId, suffix = '') {
   return `${base}/${encodeURIComponent(anchorId)}${suffix}`
 }
 
+async function postForm(path, formData) {
+  const response = await fetch(path, {
+    method: 'POST',
+    body: formData,
+  })
+  let data = {}
+  try {
+    data = await response.json()
+  } catch {
+    data = {}
+  }
+  if (!response.ok) {
+    const error = new Error(data?.error || `Request failed with status ${response.status}`)
+    error.status = response.status
+    error.code = data?.code || 'API_ERROR'
+    error.payload = data
+    throw error
+  }
+  return data
+}
+
 export function listEntityAnchors(entityId, { type } = {}) {
   return apiGet(entityAnchorsPath(entityId), type ? { type } : undefined)
+}
+
+export function uploadEntityReferenceAnchor(entityId, file, { isPrimary = true } = {}) {
+  const formData = new FormData()
+  formData.append('type', 'reference_image')
+  formData.append('file', file)
+  if (isPrimary) formData.append('isPrimary', 'true')
+  return postForm(entityAnchorsPath(entityId), formData)
 }
 
 export function setPrimaryEntityAnchor(entityId, anchorId) {

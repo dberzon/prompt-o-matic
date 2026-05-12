@@ -3,6 +3,7 @@ import {
   editEntityAttribute,
   listEntityAttributes,
 } from '../lib/api/entityAttributes.js'
+import AttributeHistoryPanel from './AttributeHistoryPanel.jsx'
 import styles from './CanonAttributesPanel.module.css'
 
 function formatValue(value) {
@@ -32,6 +33,7 @@ export default function CanonAttributesPanel({ entityId, sectionPrefix = null })
   const [editingId, setEditingId] = useState('')
   const [draftValue, setDraftValue] = useState('')
   const [pendingId, setPendingId] = useState('')
+  const [historyAttributeId, setHistoryAttributeId] = useState('')
 
   const loadAttributes = useCallback(async () => {
     if (!entityId) {
@@ -73,6 +75,7 @@ export default function CanonAttributesPanel({ entityId, sectionPrefix = null })
       await editEntityAttribute(entityId, attributeId, draftValue)
       setEditingId('')
       setDraftValue('')
+      setHistoryAttributeId('')
       await loadAttributes()
     } catch (err) {
       setError(err?.message || 'Canon edit failed')
@@ -139,18 +142,35 @@ export default function CanonAttributesPanel({ entityId, sectionPrefix = null })
                       </button>
                     </>
                   ) : (
-                    <button
-                      type="button"
-                      className={styles.actionBtn}
-                      onClick={() => {
-                        setEditingId(item.id)
-                        setDraftValue(formatValue(item.value))
-                      }}
-                    >
-                      Edit
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className={styles.actionBtn}
+                        onClick={() => {
+                          setEditingId(item.id)
+                          setDraftValue(formatValue(item.value))
+                          setHistoryAttributeId('')
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.actionBtnGhost}
+                        onClick={() => setHistoryAttributeId((current) => (current === item.id ? '' : item.id))}
+                      >
+                        {historyAttributeId === item.id ? 'Hide history' : 'History'}
+                      </button>
+                    </>
                   )}
                 </div>
+                {historyAttributeId === item.id ? (
+                  <AttributeHistoryPanel
+                    entityId={entityId}
+                    attributeId={item.id}
+                    attributeKey={item.key}
+                  />
+                ) : null}
               </div>
             ))}
           </div>

@@ -1225,6 +1225,40 @@ export function getAttribute(db, id) {
   return selectAttributeById(db, id)
 }
 
+export function listAttributeSupersedeChain(db, { entityId, attributeId }) {
+  const requested = selectAttributeById(db, attributeId)
+  if (!requested) return null
+  if (entityId && requested.entityId !== entityId) return null
+
+  let current = requested
+  const visited = new Set([current.id])
+  while (current?.supersededBy) {
+    const next = selectAttributeById(db, current.supersededBy)
+    if (!next || visited.has(next.id)) break
+    visited.add(next.id)
+    current = next
+  }
+
+  const items = listAttributes(db, {
+    entityId: requested.entityId,
+    key: requested.key,
+    includeDismissed: true,
+    includeSuperseded: true,
+  }).sort((left, right) => {
+    const leftTime = Date.parse(left.createdAt || '') || 0
+    const rightTime = Date.parse(right.createdAt || '') || 0
+    if (leftTime !== rightTime) return leftTime - rightTime
+    return String(left.id).localeCompare(String(right.id))
+  })
+
+  return {
+    entityId: requested.entityId,
+    key: requested.key,
+    currentAttributeId: current.id,
+    items,
+  }
+}
+
 export function listAttributes(db, { entityId, key, provenance, includeDismissed = false, includeSuperseded = false } = {}) {
   const conditions = []
   const params = []

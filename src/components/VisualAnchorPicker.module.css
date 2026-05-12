@@ -30,6 +30,10 @@
   flex-wrap: wrap;
 }
 
+.uploadInput {
+  display: none;
+}
+
 .generateBtn,
 .primaryBtn {
   font-size: 11px;

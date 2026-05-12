@@ -167,4 +167,50 @@ describe('extrapolation orchestrator', () => {
     expect(result.stages).toHaveLength(6)
     expect(result.stages.map((item) => item.stageId)).toEqual([1, 2, 3, 4, 5, 6])
   })
+
+  it('runs stages 2-5 in parallel when enabled', async () => {
+    const db = ensureDb(createTempDbPath())
+    createEntity(db, { id: 'ent_parallel', type: 'character', name: 'Ruslan' })
+    writeAttribute(db, {
+      entityId: 'ent_parallel',
+      key: 'description',
+      value: 'A student in 1990s Moscow.',
+      provenance: 'canon',
+      confidence: 1,
+      sourceStage: 1,
+    })
+
+    const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qpb-extrapolation-cache-'))
+    tempDirs.push(cacheDir)
+    const cache = new StageCache({ cacheDir })
+    const llm = async ({ user }) => {
+      if (user.includes('period-specific')) {
+        return JSON.stringify({ attributes: [{ key: 'culture.slang', value: 'bro', confidence: 0.5 }] })
+      }
+      if (user.includes('environments')) {
+        return JSON.stringify({
+          environments: [{ name: 'Communal apartment', summary: 'Shared kitchen' }],
+          attributes: [{ key: 'home.context', value: 'lives in communal apartment' }],
+        })
+      }
+      if (user.includes('psychology')) {
+        return JSON.stringify({ attributes: [{ key: 'psychology.temperament', value: 'wry', confidence: 0.7 }] })
+      }
+      if (user.includes('frontal portrait')) {
+        return JSON.stringify({ visualDescriptor: 'frontal portrait, neutral expression' })
+      }
+      return '{}'
+    }
+
+    const result = await runExtrapolationPipeline({
+      db,
+      entityId: 'ent_parallel',
+      llm,
+      cache,
+      parallelMiddleStages: true,
+    })
+    expect(result.cancelled).toBe(false)
+    expect(result.stages.map((item) => item.stageId)).toEqual([1, 2, 3, 4, 5, 6])
+    expect(result.prior[6]).toBeTruthy()
+  })
 })

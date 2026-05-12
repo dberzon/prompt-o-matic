@@ -4,6 +4,7 @@ import {
   readMultipartForm,
   sendJsonNode,
 } from './lib/http.js'
+import { validateReferenceImageBytes } from './lib/continuity/referenceImageBytes.js'
 import {
   createVisualAnchor,
   deleteVisualAnchor,
@@ -46,6 +47,18 @@ async function readCreateAnchorInput(req) {
     return readMultipartForm(req)
   }
   return readJsonBody(req)
+}
+
+function resolveCreateAnchorIsPrimary(input, { type, payload }) {
+  const explicit = input?.isPrimary !== undefined
+    || input?.fields?.isPrimary !== undefined
+  const requested = input?.isPrimary === true
+    || input?.isPrimary === 'true'
+    || input?.fields?.isPrimary === 'true'
+  if (type === 'reference_image' && !explicit && Buffer.isBuffer(payload)) {
+    return true
+  }
+  return requested
 }
 
 function resolveCreateAnchorPayload(input) {
@@ -95,14 +108,16 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const input = await readCreateAnchorInput(req)
       const type = input?.type || input?.fields?.type
-      const isPrimary = input?.isPrimary === true
-        || input?.isPrimary === 'true'
-        || input?.fields?.isPrimary === 'true'
+      const payload = resolveCreateAnchorPayload(input)
+      if (type === 'reference_image') {
+        validateReferenceImageBytes(payload)
+      }
+      const isPrimary = resolveCreateAnchorIsPrimary(input, { type, payload })
       const item = createVisualAnchor(db, {
         id: input?.id || input?.fields?.id,
         entityId,
         type,
-        payload: resolveCreateAnchorPayload(input),
+        payload,
         isPrimary,
       })
       return sendJsonNode(res, 200, { ok: true, item: serializeAnchor(item) })

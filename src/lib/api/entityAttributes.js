@@ -15,3 +15,7 @@ export function dismissEntityAttribute(entityId, attributeId) {
 export function editEntityAttribute(entityId, attributeId, value) {
   return apiPost(`/api/entities/${encodeURIComponent(entityId)}/attributes/${encodeURIComponent(attributeId)}/edit`, { value })
 }
+
+export function getEntityAttributeHistory(entityId, attributeId) {
+  return apiGet(`/api/entities/${encodeURIComponent(entityId)}/attributes/${encodeURIComponent(attributeId)}/history`)
+}

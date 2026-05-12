@@ -70,6 +70,7 @@ export default async function handler(req, res) {
       llm,
       cache,
       env: process.env,
+      parallelMiddleStages: body?.parallelMiddleStages,
     })
     return sendJsonNode(res, 200, { ok: true, entityId: route.entityId, ...result })
   } catch (error) {

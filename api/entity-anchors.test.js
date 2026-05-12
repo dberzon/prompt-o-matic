@@ -46,6 +46,8 @@ afterEach(() => {
   delete process.env.APP_MODE
 })
 
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00])
+
 describe('entity anchors routes', () => {
   it('creates, lists, sets primary, and deletes anchors for an entity', async () => {
     const dbPath = createTempDbPath()
@@ -61,7 +63,7 @@ describe('entity anchors routes', () => {
       body: {
         id: 'anchor_route_1',
         type: 'reference_image',
-        payload: Buffer.from('png-bytes'),
+        payload: PNG_BYTES,
         isPrimary: true,
       },
     }, createRes)
@@ -94,24 +96,37 @@ describe('entity anchors routes', () => {
     expect(listVisualAnchors(db, { entityId: 'ent_a' }).map((item) => item.id)).toEqual(['anchor_route_2'])
   })
 
-  it('accepts multipart uploads for reference_image anchors', async () => {
+  it('accepts multipart uploads for reference_image anchors and promotes uploaded image', async () => {
     const dbPath = createTempDbPath()
     process.env.SQLITE_DB_PATH = dbPath
     process.env.APP_MODE = 'local-studio'
     const db = ensureDb(dbPath)
     createEntity(db, { id: 'ent_a', type: 'character', name: 'Ruslan' })
 
+    await entityAnchorsHandler({
+      method: 'POST',
+      url: '/api/entities/ent_a/anchors',
+      body: {
+        id: 'anchor_existing',
+        type: 'reference_image',
+        payload: PNG_BYTES,
+        isPrimary: true,
+      },
+    }, mockRes())
+
     const boundary = '----anchor-test'
-    const rawBody = Buffer.from(
-      `--${boundary}\r\n`
-      + 'Content-Disposition: form-data; name="type"\r\n\r\n'
-      + 'reference_image\r\n'
-      + `--${boundary}\r\n`
-      + 'Content-Disposition: form-data; name="file"; filename="ref.png"\r\n'
-      + 'Content-Type: image/png\r\n\r\n'
-      + 'PNGDATA\r\n'
-      + `--${boundary}--\r\n`,
-    )
+    const rawBody = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\n`
+        + 'Content-Disposition: form-data; name="type"\r\n\r\n'
+        + 'reference_image\r\n'
+        + `--${boundary}\r\n`
+        + 'Content-Disposition: form-data; name="file"; filename="ref.png"\r\n'
+        + 'Content-Type: image/png\r\n\r\n',
+      ),
+      PNG_BYTES,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ])
 
     const createRes = mockRes()
     await entityAnchorsHandler({
@@ -122,6 +137,28 @@ describe('entity anchors routes', () => {
     }, createRes)
     expect(createRes.statusCode).toBe(200)
     expect(createRes.payload.item.type).toBe('reference_image')
-    expect(Buffer.from(createRes.payload.item.payload, 'base64').toString('utf8')).toBe('PNGDATA')
+    expect(createRes.payload.item.isPrimary).toBe(true)
+    expect(Buffer.from(createRes.payload.item.payload, 'base64')).toEqual(PNG_BYTES)
+    expect(listVisualAnchors(db, { entityId: 'ent_a' }).filter((item) => item.isPrimary)).toHaveLength(1)
+  })
+
+  it('rejects invalid reference image uploads', async () => {
+    const dbPath = createTempDbPath()
+    process.env.SQLITE_DB_PATH = dbPath
+    process.env.APP_MODE = 'local-studio'
+    const db = ensureDb(dbPath)
+    createEntity(db, { id: 'ent_a', type: 'character', name: 'Ruslan' })
+
+    const createRes = mockRes()
+    await entityAnchorsHandler({
+      method: 'POST',
+      url: '/api/entities/ent_a/anchors',
+      body: {
+        type: 'reference_image',
+        payload: Buffer.from('not-an-image'),
+      },
+    }, createRes)
+    expect(createRes.statusCode).toBe(400)
+    expect(createRes.payload.error).toMatch(/Unsupported or invalid image format/)
   })
 })

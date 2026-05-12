@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   generateReferenceImageFromStage5,
   listEntityAnchors,
   setPrimaryEntityAnchor,
+  uploadEntityReferenceAnchor,
   waitForPrimaryReferenceAnchor,
 } from '../lib/api/entityAnchors.js'
 import styles from './VisualAnchorPicker.module.css'
@@ -19,9 +20,11 @@ export default function VisualAnchorPicker({ entityId }) {
   const [anchors, setAnchors] = useState([])
   const [loading, setLoading] = useState(false)
   const [generating, setGenerating] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [settingPrimaryId, setSettingPrimaryId] = useState('')
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
+  const uploadInputRef = useRef(null)
 
   const loadAnchors = useCallback(async () => {
     if (!entityId) {
@@ -65,6 +68,25 @@ export default function VisualAnchorPicker({ entityId }) {
     }
   }
 
+  const handleUpload = async (event) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!entityId || !file || uploading) return
+    setUploading(true)
+    setError('')
+    setStatus('Uploading reference image…')
+    try {
+      await uploadEntityReferenceAnchor(entityId, file)
+      await loadAnchors()
+      setStatus('Primary reference anchor updated from upload.')
+    } catch (err) {
+      setError(err?.message || 'Reference upload failed')
+      setStatus('')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const handleSetPrimary = async (anchorId) => {
     if (!entityId || settingPrimaryId) return
     setSettingPrimaryId(anchorId)
@@ -92,11 +114,27 @@ export default function VisualAnchorPicker({ entityId }) {
       <div className={styles.header}>
         <span className={styles.title}>Visual anchors</span>
         <div className={styles.actions}>
+          <input
+            ref={uploadInputRef}
+            type="file"
+            accept="image/*"
+            className={styles.uploadInput}
+            data-testid="T_F_ANCHOR_UPLOAD"
+            onChange={handleUpload}
+          />
+          <button
+            type="button"
+            className={styles.generateBtn}
+            onClick={() => uploadInputRef.current?.click()}
+            disabled={uploading || loading || generating}
+          >
+            {uploading ? 'Uploading…' : 'Upload reference image'}
+          </button>
           <button
             type="button"
             className={styles.generateBtn}
             onClick={handleGenerate}
-            disabled={generating || loading}
+            disabled={generating || loading || uploading}
           >
             {generating ? 'Generating…' : 'Generate from S5 descriptor'}
           </button>
