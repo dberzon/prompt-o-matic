@@ -8,6 +8,15 @@ import {
 import styles from './AttributeReviewPanel.module.css'
 
 const REVIEW_PROVENANCES = new Set(['inferred', 'suggested', 'derived', 'temporary'])
+const HISTORICAL_FACT_CHECK_STAGE = 2
+const HISTORICAL_CONFIDENCE_CEILING = 0.6
+
+function needsHistoricalFactReview(item) {
+  if (!item || item.sourceStage !== HISTORICAL_FACT_CHECK_STAGE) return false
+  if (item.provenance !== 'inferred' && item.provenance !== 'suggested') return false
+  if (item.confidence === null || item.confidence === undefined) return true
+  return item.confidence <= HISTORICAL_CONFIDENCE_CEILING
+}
 
 function formatValue(value) {
   if (value === null || value === undefined) return ''
@@ -125,6 +134,9 @@ export default function AttributeReviewPanel({ entityId }) {
                   <span className={styles.provenance}>{item.provenance}</span>
                   {item.confidence !== null && item.confidence !== undefined ? (
                     <span className={styles.confidence}>{Math.round(item.confidence * 100)}%</span>
+                  ) : null}
+                  {needsHistoricalFactReview(item) ? (
+                    <span className={styles.historicalHint}>Verify historical detail</span>
                   ) : null}
                   {editingId === item.id ? (
                     <input

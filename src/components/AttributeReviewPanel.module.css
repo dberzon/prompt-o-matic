@@ -80,9 +80,14 @@
 }
 
 .provenance,
-.confidence {
+.confidence,
+.historicalHint {
   font-size: 11px;
   color: var(--text-3);
+}
+
+.historicalHint {
+  color: var(--color-warning, #a67c00);
 }
 
 .value {
