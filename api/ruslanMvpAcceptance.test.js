@@ -200,8 +200,9 @@ describe('Ruslan MVP acceptance (Section 13 worked example)', () => {
       entityId: ENTITY_ID,
       ipadapterStrength: 0.72,
     })
-    expect(Buffer.isBuffer(payload.prompt['99'].inputs.image)).toBe(true)
+    expect(typeof payload.prompt['99'].inputs.image).toBe('string')
     expect(payload.prompt['99'].inputs.image.length).toBeGreaterThan(0)
+    expect(listVisualAnchors(db, { entityId: ENTITY_ID, type: 'ipadapter_embedding' })).toHaveLength(1)
     expect(payload.prompt['98'].inputs.weight).toBe(0.72)
   })
 })

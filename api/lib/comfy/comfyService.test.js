@@ -76,6 +76,40 @@ describe('comfy service', () => {
     expect(payload.prompt['98'].inputs.weight).toBe(0.72)
   })
 
+  it('uses cached comfy filename instead of raw image bytes when an embedding anchor exists', async () => {
+    const db = createTempDb()
+    createEntity(db, { id: 'ent_cached', type: 'character', name: 'Ruslan' })
+    createVisualAnchor(db, {
+      id: 'anchor_ref',
+      entityId: 'ent_cached',
+      type: 'reference_image',
+      payload: Buffer.from('png-bytes'),
+      isPrimary: true,
+    })
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ name: 'cached-reference.png', subfolder: '', type: 'input' }),
+    }))
+    const svc = createComfyService({
+      fetchImpl,
+      env: { COMFYUI_BASE_URL: 'http://127.0.0.1:8188', COMFYUI_TIMEOUT_MS: '5000' },
+    })
+    await svc.queuePromptPack({
+      promptPack: { ...validQwenImagePromptPack, characterId: 'ent_cached' },
+      workflowId: 'qwen-image-2512-default',
+      db,
+      entityId: 'ent_cached',
+    })
+    const payload = buildComfyPromptPayload({
+      promptPack: { ...validQwenImagePromptPack, characterId: 'ent_cached' },
+      workflowId: 'qwen-image-2512-default',
+      db,
+      entityId: 'ent_cached',
+    })
+    expect(payload.prompt['99'].inputs.image).toBe('cached-reference.png')
+    expect(fetchImpl.mock.calls.some(([url]) => String(url).includes('/upload/image'))).toBe(true)
+  })
+
   it('queue prompt-pack builds payload and calls endpoint', async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: true,

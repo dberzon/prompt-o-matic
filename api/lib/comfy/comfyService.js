@@ -1,12 +1,10 @@
 import { randomUUID } from 'node:crypto'
-import {
-  createGeneratedImageRecord,
-  getCharacter,
-  getPromptPack,
-  listPromptPacks,
-  listVisualAnchors,
-} from '../db/repositories.js'
+import { createGeneratedImageRecord, getCharacter, getPromptPack, listPromptPacks } from '../db/repositories.js'
 import { parseGeneratedImageRecord } from '../characters/schemas.js'
+import {
+  ensureIpAdapterEmbeddingCache,
+  resolveIpAdapterWorkflowImage,
+} from './ipadapterEmbeddingCache.js'
 import {
   injectPromptPackIntoWorkflow,
   listAvailableWorkflows,
@@ -38,12 +36,12 @@ export function dimensionsFromAspectRatio(aspectRatio = '2:3') {
   return map[aspectRatio] || map['2:3']
 }
 
-function resolvePrimaryReferenceAnchorPayload(db, entityId) {
+function resolveIpAdapterImageInput(db, entityId) {
   if (!db || !entityId) return null
-  const anchors = listVisualAnchors(db, { entityId, type: 'reference_image' })
-  const primary = anchors.find((anchor) => anchor.isPrimary) || anchors[0]
-  if (!primary?.payload) return null
-  return primary.payload
+  const resolved = resolveIpAdapterWorkflowImage(db, entityId)
+  if (!resolved) return null
+  if (resolved.filename) return resolved.filename
+  return resolved.image ?? null
 }
 
 export function buildComfyPromptPayload({
@@ -74,7 +72,7 @@ export function buildComfyPromptPayload({
     throw err
   }
   const resolvedEntityId = entityId || promptPack.characterId || null
-  const ipadapterImage = db ? resolvePrimaryReferenceAnchorPayload(db, resolvedEntityId) : null
+  const ipadapterImage = db ? resolveIpAdapterImageInput(db, resolvedEntityId) : null
   const injectedWorkflow = injectPromptPackIntoWorkflow({
     workflow,
     mapping,
@@ -164,7 +162,18 @@ export function createComfyService({ env = process.env, fetchImpl = fetch } = {}
     db,
     entityId,
     ipadapterStrength,
+    skipIpAdapterUpload = false,
   }) {
+    const resolvedEntityId = entityId || promptPack.characterId || null
+    if (db && resolvedEntityId && !dryRun) {
+      await ensureIpAdapterEmbeddingCache({
+        db,
+        entityId: resolvedEntityId,
+        comfyService: { config: { baseUrl: comfyBaseUrl, timeoutMs } },
+        fetchImpl,
+        skipUpload: skipIpAdapterUpload === true,
+      })
+    }
     const payload = buildComfyPromptPayload({
       promptPack,
       seed,
@@ -172,7 +181,7 @@ export function createComfyService({ env = process.env, fetchImpl = fetch } = {}
       dimensions,
       allowWorkflowFallback,
       db,
-      entityId,
+      entityId: resolvedEntityId,
       ipadapterStrength,
     })
     if (dryRun) {

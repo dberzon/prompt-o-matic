@@ -1,4 +1,5 @@
 import { createVisualAnchor } from '../db/repositories.js'
+import { ensureIpAdapterEmbeddingCache } from '../comfy/ipadapterEmbeddingCache.js'
 import { compileReferencePortraitPromptPack } from '../prompts/qwenPromptCompiler.js'
 
 function classifyJobStatus(raw, promptId) {
@@ -142,6 +143,13 @@ export async function enqueueReferencePortraitRender({
     payload: imageBytes,
     isPrimary: true,
   })
+  const ipadapterEmbedding = await ensureIpAdapterEmbeddingCache({
+    db,
+    entityId: compiled.entityId,
+    comfyService,
+    fetchImpl,
+    skipUpload: true,
+  })
 
   return {
     ok: true,
@@ -151,6 +159,7 @@ export async function enqueueReferencePortraitRender({
     promptPackId: promptPack.id,
     promptId: queued.promptId,
     anchor,
+    ipadapterEmbedding,
     queue: {
       workflowId: queued.workflowId,
       requestedWorkflowId: queued.requestedWorkflowId,

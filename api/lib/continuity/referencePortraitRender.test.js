@@ -117,6 +117,10 @@ describe('reference portrait render', () => {
     const anchors = listVisualAnchors(db, { entityId, type: 'reference_image' })
     expect(anchors).toHaveLength(1)
     expect(anchors[0].isPrimary).toBe(true)
+
+    const embeddingAnchors = listVisualAnchors(db, { entityId, type: 'ipadapter_embedding' })
+    expect(embeddingAnchors).toHaveLength(1)
+    expect(result.ipadapterEmbedding?.clipEmbedding?.length).toBeGreaterThan(0)
   })
 
   it('demotes an existing primary anchor when a new render is persisted', async () => {
