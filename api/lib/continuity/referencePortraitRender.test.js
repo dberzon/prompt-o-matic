@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createComfyService } from '../comfy/comfyService.js'
+import { parseIpAdapterEmbeddingPayload } from '../comfy/ipadapterEmbeddingCache.js'
 import {
   createEntity,
   createVisualAnchor,
@@ -121,6 +122,7 @@ describe('reference portrait render', () => {
     const embeddingAnchors = listVisualAnchors(db, { entityId, type: 'ipadapter_embedding' })
     expect(embeddingAnchors).toHaveLength(1)
     expect(result.ipadapterEmbedding?.clipEmbedding?.length).toBeGreaterThan(0)
+    expect(parseIpAdapterEmbeddingPayload(embeddingAnchors[0].payload)?.comfyImage).toBeUndefined()
   })
 
   it('demotes an existing primary anchor when a new render is persisted', async () => {
