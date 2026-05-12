@@ -1,6 +1,6 @@
 # Project Instructions for AI Agents
 
-This file provides instructions and context for AI coding agents working on this project.
+This file provides instructions and context for AI coding agents working on this project. `.clinerules` mirrors this file for Cline; `.cursorrules` adds Cursor-specific MCP and workflow notes while staying aligned on build, architecture, and conventions.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
 ## Beads Issue Tracker
@@ -52,11 +52,16 @@ bd close <id>         # Complete work
 
 ## Build & Test
 
+ESM project (`"type": "module"`). Vite + React 18 + Vitest. Node 18+.
+
 ```bash
-npm install
-npm run dev          # Vite + API middleware; auto-starts Chroma unless AUTO_START_CHROMA=false
-npm test             # Vitest; exclude .claude/worktrees via package.json script
-npm run build        # Production frontend bundle
+npm install              # First time only
+npm run dev              # Vite dev server (frontend + API middleware on one port)
+npm run build            # Production build
+npm test                 # Vitest suite (excludes .claude/worktrees)
+npm test -- <pattern>    # Run a single test file
+npm run tauri:dev        # Tauri desktop dev
+npm run tauri:build      # Tauri desktop build (runs preflight:embedded first)
 ```
 
 On Windows, `npm run dev` typically uses system Node (often v24). Rebuild native modules when the Node major changes:
@@ -71,18 +76,101 @@ Run tests with the same Node major as dev when `better-sqlite3` ABI errors appea
 npx vitest run api/lib/continuity api/lib/extrapolation api/ruslanMvpAcceptance.test.js api/ruslanMvpDoneGate.test.js
 ```
 
+Tests sit next to the code: `foo.js` + `foo.test.js` in the same folder. Use Vitest (`describe`, `it`, `expect`, `vi.fn()`).
+
+External services the app expects (start manually unless noted):
+- ComfyUI on `localhost:8188` — image rendering
+- LM Studio at `LMSTUDIO_BASE_URL` or Ollama on `localhost:11434` — polish, embeddings, extrapolation
+- Chroma on `localhost:8000` — auto-spawned by `vite.config.js` on dev start unless `AUTO_START_CHROMA=false`
+- Anthropic Claude API — optional cloud polish when configured
+
+On Windows x64, Chroma auto-start uses a Python `chroma.exe` (or `CHROMA_BIN`), not the npm `chromadb` CLI.
+
+Env config lives in `.env.local` (gitignored). Key vars: `LLM_PROVIDER`, `LMSTUDIO_BASE_URL`, `LMSTUDIO_MODEL`, `APP_MODE`, `ENABLE_*` feature flags.
+
 ## Architecture Overview
 
-Single-process local app: React 18 UI and ~55 `/api/*` routes are Vite dev middleware (`vite.config.js`), not a separate backend. SQLite (`better-sqlite3`) is canonical; Chroma is optional for batch similarity; ComfyUI renders images; LLM polish and extrapolation use Ollama, LM Studio, or Claude.
+**Three-layer, single-process architecture. There is NO separate API server.** React 18 UI and ~55 `/api/*` routes are Vite dev-server middleware registered in `vite.config.js`. `npm run dev` runs everything.
 
-Legacy casting flow uses `characters` and prompt packs. The additive **entity layer** (`entities`, provenance-tracked `entity_attributes`, relationships, `visual_anchors`) powers the **Continuity** tab: six-stage extrapolation, reference anchors, conflict review, and MVP Done gate (five-scene continuity QA). See `PROJECT_CONTEXT.md` and `AGENT_HANDOFF.md` for tab map and API domains.
+```
+src/        React 18 frontend (Vite)
+  App.jsx               root state, tab switching
+  components/           UI (Prompt Builder, Character Builder, Casting Room, Actor Bank, Continuity)
+  hooks/                React hooks (usePolish, useCharacterOptimize, ...)
+  lib/api/              fetch wrappers per domain (http.js, comfy.js, characterBank.js, ...)
+  utils/                pure functions — assembler.js is the prompt-fragment assembler
+  data/                 static data (60+ directors, scenarios, chips, scene bank)
+
+api/        Vite middleware route handlers (one file = one route)
+  polish.js, comfy-*.js, character-*.js, entity-*.js, vector-*.js, ...
+  lib/                  shared domain logic (the third layer)
+    polishCore.js                LLM-provider resolution + polish prompt
+    llm/providers/               claudeProvider, lmStudioProvider, ollamaProvider, mockProvider
+    db/                          better-sqlite3, schema, repositories
+    characters/                  character entity logic, batch review, prompt descriptors
+    extrapolation/                 six-stage LLM pipeline (orchestrator, parsers, prompts, cache)
+    continuity/                  MVP Done gate, continuity QA generation/scoring
+    comfy/                       ComfyUI workflow mapping + queue management
+    vector/                      Chroma store + character/entity indexing
+    embeddings/                  embedding providers (Ollama / LM Studio / mock)
+    portfolio/, audition/, prompts/, generatedImages/    feature modules
+```
+
+**The polish flow (do NOT break this chain):**
+`App.jsx` → `utils/assembler.js` → `PromptOutput.jsx` → `hooks/usePolish.js` → `POST /api/polish` → `api/lib/polishCore.js` → provider (LM Studio / Claude / Ollama)
+
+**Provider resolution order in `polishCore.js`:** embedded sidecar → local (LM Studio or Ollama, controlled by `LLM_PROVIDER`) → Claude cloud. Engine selector in UI: `auto | local | cloud | embedded`.
+
+**Data layer:** SQLite (`better-sqlite3`) at `data/qpb-local.sqlite` is canonical. Legacy casting uses `characters`, prompt packs, and batches. The additive **entity layer** (`entities`, provenance-tracked `entity_attributes`, `entity_relationships`, `visual_anchors`) powers the **Continuity** tab: six-stage extrapolation, reference anchors, conflict review, and MVP Done gate (five-scene continuity QA). localStorage holds UI prefs + custom presets only.
+
+**Runtime modes (`APP_MODE`):** `local-studio` (full access, current mode) vs `cloud` (read-only, intended for Vercel polish-only deploy).
+
+**For deeper detail, prefer reading these files over guessing:**
+- `PROJECT_CONTEXT.md` — fuller subsystem map (five tabs, entity layer, extrapolation stages)
+- `AGENT_HANDOFF.md` — tab map and API domains for handoffs
+- `APPLICATION_REFERENCE.md` — full technical reference
+- `.cursorrules` — Cursor MCP servers and safe-zone / danger-zone breakdown
 
 ## Conventions & Patterns
 
+**Touch lightly.** This codebase rewards surgical edits; punish broad refactors. Match the patterns of the file you're in rather than introducing new ones.
+
+### File & module conventions
+- ESM imports/exports only (no CommonJS).
+- One API route per file in `api/`. Filename = route path (`api/polish.js` → `/api/polish`).
+- Shared domain logic goes in `api/lib/<domain>/`, never in route files.
+- Tests live next to source: `foo.js` + `foo.test.js`.
+- React components: one component per file, PascalCase filename, default export.
 - **Issue tracking:** `bd` only (`bd ready`, `bd update --claim`, `bd close`). Run `bd prime` after context loss. Session handoff ends with `git push`.
+- **Frontend API clients:** `src/lib/api/*.js` wrapping `apiGet` / `apiPost` from `src/lib/api/http.js`.
+
+### Entity layer & extrapolation
 - **Entity attributes:** Always `writeAttribute` from `api/lib/db/repositories.js`; never raw `INSERT INTO entity_attributes` outside tests (`entityAttributesProvenanceGuard.test.js`).
 - **Provenance:** `canon`, `inferred`, `suggested`, `temporary`, `derived` — every attribute write must set provenance and source stage when applicable.
 - **Extrapolation:** Stage logic in `api/lib/extrapolation/` (orchestrator, parsers, prompts). Stage cache must use an isolated `cacheDir` in tests to avoid stale disk hits.
 - **Continuity:** Primary `reference_image` anchor per entity; `buildComfyPromptPayload` injects anchor bytes when mapping allows. IPAdapter on Qwen-Image DiT is spec-only (`ipadapterFeasibility.js`); MVP uses reference-image conditioning.
 - **API handlers:** Thin route files under `api/`; domain logic in `api/lib/`; register new routes in `vite.config.js`.
-- **Frontend API clients:** `src/lib/api/*.js` wrapping `apiGet` / `apiPost` from `src/lib/api/http.js`.
+
+### Safe zones (changes here are usually fine)
+- `src/components/PromptOutput.jsx` (UI display)
+- `src/utils/assembler.js` (prompt assembly + ordering + dedupe)
+- Static data in `src/data/` (directors, chips, scenarios)
+- New API routes when adding a feature
+
+### Danger zones (explain reasoning + propose minimal change first)
+- `api/lib/polishCore.js` and provider resolution logic
+- `api/lib/llm/providers/*` (Claude, LM Studio, Ollama, mock)
+- `api/lib/db/schema.js` and repositories — schema migrations need care
+- `api/lib/comfy/comfyService.js` and the SSE/polling flow
+- The `/api/polish` request/response contract
+
+### LLM-integration rules
+- Don't change the polish system prompt without explaining why — it's tuned (see `polishCore.js` SYSTEM_PROMPT).
+- Don't reorder provider resolution in `polishCore.js` without thinking about local-only mode.
+- LM Studio provider auto-injects `/no_think` and `enable_thinking:false` for Qwen3 models — leave that alone unless you understand the trade-off.
+
+### When uncertain
+- Ask for clarification rather than guessing.
+- Trace data input → output before patching a bug.
+- Prefer diff-style proposals; explain what changed and why.
+- Don't introduce new frameworks, state libraries, or build tooling.

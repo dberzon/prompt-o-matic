@@ -1,5 +1,7 @@
 # Cursor Rules — Qwen Prompt Builder
 
+`CLAUDE.md` is the canonical agent guide for build, architecture, and conventions. This file adds Cursor-specific workflow notes and MCP usage. Keep shared sections aligned with `CLAUDE.md` and `.clinerules`.
+
 ## Issue Tracking — Beads (bd)
 
 This project uses **bd (beads)** for ALL task tracking. Do NOT use TODO comments, markdown TODO lists, or ad-hoc task notes.
@@ -37,19 +39,14 @@ NEVER stop before pushing. NEVER say "ready to push when you are" — push it.
 
 ## Build & Test
 
-ESM project (`"type": "module"`). Vite + React 18 + Vitest + Node 18+.
+See `CLAUDE.md` for the full command list, Windows `better-sqlite3` rebuild notes, worldbuilding Vitest targets, external services, and env vars.
 
 ```bash
-npm install              # First time only
-npm run dev              # Vite dev server (frontend + ~47 API middleware routes on one port)
-npm run build            # Production build
-npm test                 # Vitest run (excludes .claude/worktrees)
-npm test -- <pattern>    # Single file or pattern
-npm run tauri:dev        # Tauri desktop dev
-npm run tauri:build      # Tauri desktop build (runs preflight:embedded first)
+npm install
+npm run dev
+npm test
+npm run build
 ```
-
-Tests sit beside source: `foo.js` + `foo.test.js` in the same folder. Use Vitest (`describe`, `it`, `expect`, `vi.fn()`).
 
 ## MCP Servers Available
 
@@ -68,34 +65,16 @@ Configured in `.cursor/mcp.json`. Use them when relevant:
 
 ## Architecture Awareness
 
-This is a 3-layer system. **There is NO separate API server** — all ~47 API routes are Vite dev-server middleware registered in `vite.config.js`.
-
-```
-src/         React 18 frontend (Vite)
-  App.jsx              root state, tab switching
-  components/          UI (4 tabs: Prompt Builder, Character Builder, Casting Room, Actor Bank)
-  hooks/               React hooks (usePolish, useCharacterOptimize, ...)
-  lib/api/             fetch wrappers per domain
-  utils/assembler.js   prompt-fragment assembler (29 REWRITES + dedupe)
-  data/                static data (60+ directors, scenarios, chips)
-
-api/         Vite middleware route handlers (one file = one route)
-  lib/                 shared domain logic
-    polishCore.js      LLM provider resolution + polish prompt
-    llm/providers/     claudeProvider, lmStudioProvider, ollamaProvider, mockProvider
-    db/                better-sqlite3, schema, repositories
-    characters/        entity logic, batch review, prompt descriptors
-    comfy/             ComfyUI workflow mapping + queue
-    vector/            Chroma store + character indexing
-    embeddings/        embedding providers
-```
+Single-process Vite app: React 18 UI plus ~55 `/api/*` middleware routes in `vite.config.js` (no separate API server). Five tabs: Prompt Builder, Character Builder, Casting Room, Actor Bank, and Continuity (entity layer, extrapolation, anchors, MVP Done gate).
 
 **Polish flow (do NOT break):**
 `App.jsx` → `utils/assembler.js` → `PromptOutput.jsx` → `hooks/usePolish.js` → `POST /api/polish` → `api/lib/polishCore.js` → provider
 
 **Provider resolution in `polishCore.js`:** embedded sidecar → local (LM Studio or Ollama, controlled by `LLM_PROVIDER`) → Claude cloud.
 
-**Data layer:** SQLite at `data/qpb-local.sqlite` is canonical. localStorage holds UI prefs only.
+**Data layer:** SQLite at `data/qpb-local.sqlite` is canonical. Legacy casting uses `characters` and prompt packs; the entity layer (`entities`, `entity_attributes`, `entity_relationships`, `visual_anchors`) powers Continuity.
+
+For the full layer diagram, polish chain, runtime modes, and subsystem map, read `CLAUDE.md` and `PROJECT_CONTEXT.md`.
 
 ## Safe Zones (Preferred Areas for Changes)
 
@@ -115,6 +94,8 @@ If modifying these: explain reasoning first, propose minimal changes, highlight 
 - `api/lib/comfy/comfyService.js` and the SSE/polling flow
 - The `/api/polish` request/response contract
 - LLM provider integrations and async API flow
+
+Entity-layer writes must use `writeAttribute` from `api/lib/db/repositories.js` with provenance set; see `CLAUDE.md` for extrapolation and continuity conventions.
 
 ## Coding Approach
 
@@ -167,6 +148,7 @@ When fixing bugs:
 
 For deeper detail, read these directly rather than guessing:
 
+- `CLAUDE.md` — canonical agent guide (mirrored by `.clinerules`)
 - `PROJECT_CONTEXT.md` — subsystem map, runtime modes, key files
+- `AGENT_HANDOFF.md` — tab map and API domains
 - `APPLICATION_REFERENCE.md` — full technical reference
-- `CLAUDE.md` / `.clinerules` — same workflow rules in other-tool form (kept in sync with this file)
