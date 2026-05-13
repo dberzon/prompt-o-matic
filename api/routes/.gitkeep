@@ -1,0 +1,1 @@
+# Route modules live in subfolders as `*.route.js` (see api/vite-plugin/route-discovery.js).

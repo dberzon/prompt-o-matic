@@ -11,9 +11,10 @@ const DEFAULT_TOOLS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url))
 
 /**
  * @param {string} dir
+ * @param {boolean} skipFixturePaths When true, ignore `*.tool.js` under any `fixtures/` subtree (dev/test harness lives next to real tools).
  * @returns {string[]}
  */
-function listToolFilesRecursive(dir) {
+function listToolFilesRecursive(dir, skipFixturePaths) {
   /** @type {string[]} */
   const out = []
   if (!fs.existsSync(dir)) return out
@@ -32,6 +33,7 @@ function listToolFilesRecursive(dir) {
       if (ent.isDirectory()) {
         stack.push(full)
       } else if (ent.isFile() && ent.name.endsWith(TOOL_SUFFIX)) {
+        if (skipFixturePaths && full.includes(`${path.sep}fixtures${path.sep}`)) continue
         out.push(full)
       }
     }
@@ -55,7 +57,8 @@ function stemFromToolPath(filePath) {
  */
 export async function discoverTools({ cwd = process.cwd(), dir = DEFAULT_TOOLS_DIR } = {}) {
   const root = path.isAbsolute(dir) ? dir : path.resolve(cwd, dir)
-  const files = listToolFilesRecursive(root)
+  const skipFixturePaths = path.resolve(root) === path.resolve(DEFAULT_TOOLS_DIR)
+  const files = listToolFilesRecursive(root, skipFixturePaths)
   /** @type {ToolDescriptor[]} */
   const tools = []
   /** @type {Map<string, string>} */
