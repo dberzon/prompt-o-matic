@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import { spawn, spawnSync } from 'child_process'
 import path from 'path'
 import { healthCheck, runPolish } from './api/lib/polishCore.js'
-import { resolveProviderSelection, runWithResolvedProvider } from './api/lib/polishCore.js'
+import { createLlmClient } from './api/lib/llm/client.js'
 import { runReferenceImageAnalysis } from './api/lib/referenceImageCore.js'
 import { runCharacterOptimize } from './api/lib/characterOptimizeCore.js'
 import { runBatchCharacterGeneration } from './api/lib/characters/batchGeneration.js'
@@ -254,6 +254,7 @@ function apiDevPlugin(env) {
     name: 'api-dev-polish',
     configureServer(server) {
       const chromaUrl = env.CHROMA_URL || 'http://127.0.0.1:8000'
+      const llmGenerate = createLlmClient({ env, fetchImpl: fetch }).raw
 
       const autoStartChroma = env.AUTO_START_CHROMA !== 'false'
       server.httpServer?.once('listening', () => {
@@ -356,33 +357,12 @@ function apiDevPlugin(env) {
       })
 
       server.middlewares.use('/api/characters-generate-batch', async (req, res) => {
-        if (req.method !== 'POST') {
-          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
-          return
-        }
-
+        if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
         let runtime = null
         try {
           assertCharacterBatchOperationAllowed('generate-batch', env)
           const body = await readJsonBody(req)
           runtime = createVectorRuntime({ env })
-          const llmGenerate = async ({ system, user, providerPayload }) => {
-            const providerSelection = await resolveProviderSelection({
-              engine: providerPayload?.engine,
-              localOnly: false,
-              fetchImpl: fetch,
-              env,
-              payload: providerPayload || {},
-            })
-            return runWithResolvedProvider({
-              provider: providerSelection.provider,
-              userMessage: user,
-              payload: providerPayload || {},
-              fetchImpl: fetch,
-              env,
-              systemPrompt: system,
-            })
-          }
           const result = await runBatchCharacterGeneration({
             db: runtime.db,
             vectorStore: runtime.vectorStore,
@@ -874,32 +854,12 @@ function apiDevPlugin(env) {
       })
 
       server.middlewares.use('/api/character-batch-candidate-mutate', async (req, res) => {
-        if (req.method !== 'POST') {
-          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
-          return
-        }
+        if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
         let runtime = null
         try {
           assertCharacterBatchOperationAllowed('candidate-mutate', env)
           const body = await readJsonBody(req)
           runtime = createVectorRuntime({ env })
-          const llmGenerate = async ({ system, user, providerPayload }) => {
-            const providerSelection = await resolveProviderSelection({
-              engine: providerPayload?.engine,
-              localOnly: false,
-              fetchImpl: fetch,
-              env,
-              payload: providerPayload || {},
-            })
-            return runWithResolvedProvider({
-              provider: providerSelection.provider,
-              userMessage: user,
-              payload: providerPayload || {},
-              fetchImpl: fetch,
-              env,
-              systemPrompt: system,
-            })
-          }
           const result = await mutateBatchCandidate({
             db: runtime.db,
             candidateId: body?.candidateId,
@@ -920,32 +880,12 @@ function apiDevPlugin(env) {
       })
 
       server.middlewares.use('/api/character-batch-refill', async (req, res) => {
-        if (req.method !== 'POST') {
-          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
-          return
-        }
+        if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
         let runtime = null
         try {
           assertCharacterBatchOperationAllowed('batch-refill', env)
           const body = await readJsonBody(req)
           runtime = createVectorRuntime({ env })
-          const llmGenerate = async ({ system, user, providerPayload }) => {
-            const providerSelection = await resolveProviderSelection({
-              engine: providerPayload?.engine,
-              localOnly: false,
-              fetchImpl: fetch,
-              env,
-              payload: providerPayload || {},
-            })
-            return runWithResolvedProvider({
-              provider: providerSelection.provider,
-              userMessage: user,
-              payload: providerPayload || {},
-              fetchImpl: fetch,
-              env,
-              systemPrompt: system,
-            })
-          }
           const result = await refillCharacterBatch({
             db: runtime.db,
             batchId: body?.batchId,
@@ -1220,10 +1160,7 @@ function apiDevPlugin(env) {
       })
 
       server.middlewares.use('/api/audition/generate', async (req, res) => {
-        if (req.method !== 'POST') {
-          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
-          return
-        }
+        if (req.method !== 'POST') { sendJsonMiddleware(res, 405, { error: 'Method not allowed' }); return }
         let runtime = null
         try {
           const body = await readJsonBody(req)
@@ -1239,27 +1176,7 @@ function apiDevPlugin(env) {
           const workflowId = typeof body?.workflowId === 'string' && body.workflowId.trim()
             ? body.workflowId.trim()
             : undefined
-
           runtime = createVectorRuntime({ env })
-
-          const llmGenerate = async ({ system, user, providerPayload }) => {
-            const providerSelection = await resolveProviderSelection({
-              engine: providerPayload?.engine,
-              localOnly: false,
-              fetchImpl: fetch,
-              env,
-              payload: providerPayload || {},
-            })
-            return runWithResolvedProvider({
-              provider: providerSelection.provider,
-              userMessage: user,
-              payload: providerPayload || {},
-              fetchImpl: fetch,
-              env,
-              systemPrompt: system,
-            })
-          }
-
           let comfyService = null
           try {
             comfyService = createComfyService({ env })
