@@ -1,0 +1,30 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`stageRegistry chainFor > matches snapshot of character stage id + name metadata 1`] = `
+[
+  {
+    "id": 1,
+    "name": "Entity extraction",
+  },
+  {
+    "id": 2,
+    "name": "Historical/cultural enrichment",
+  },
+  {
+    "id": 3,
+    "name": "Psychology enrichment",
+  },
+  {
+    "id": 4,
+    "name": "Environmental projection",
+  },
+  {
+    "id": 5,
+    "name": "Visual descriptor",
+  },
+  {
+    "id": 6,
+    "name": "Conflict detection",
+  },
+]
+`;

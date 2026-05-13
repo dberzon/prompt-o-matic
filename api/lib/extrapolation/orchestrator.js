@@ -1,8 +1,17 @@
+import { getEntity } from '../db/repositories.js'
 import { resolveStageModelId } from './modelRouting.js'
+import { chainFor } from './stageRegistry.js'
 import { StageCache } from './stageCache.js'
-import { buildStageSnapshot, extrapolationStages, getStageById } from './stages.js'
+import { buildStageSnapshot } from './stages.js'
 
 const MIDDLE_STAGE_IDS = [2, 3, 4, 5]
+
+/**
+ * @param {{ type?: string } | null | undefined} entity
+ */
+function entityChainType(entity) {
+  return String(entity?.type || 'character').trim().toLowerCase()
+}
 
 export function resolveParallelMiddleStages({ parallelMiddleStages, env = process.env } = {}) {
   if (parallelMiddleStages !== undefined) return Boolean(parallelMiddleStages)
@@ -19,7 +28,9 @@ export async function runExtrapolationStage({
   prior = {},
   env = process.env,
 }) {
-  const stage = getStageById(stageId)
+  const entity = getEntity(db, entityId)
+  const chain = chainFor(entityChainType(entity))
+  const stage = chain.find((s) => s.id === stageId) || null
   if (!stage) {
     const err = new Error(`Unknown extrapolation stage: ${stageId}`)
     err.status = 400
@@ -87,12 +98,15 @@ export async function runExtrapolationPipeline({
   shouldCancel,
   parallelMiddleStages = resolveParallelMiddleStages({ env }),
 }) {
+  const entity = getEntity(db, entityId)
+  const chain = chainFor(entityChainType(entity))
+
   const prior = {}
   const stages = []
   const ctx = { prior, stages, onStageComplete }
   let middleStagesRan = false
 
-  for (const stage of extrapolationStages) {
+  for (const stage of chain) {
     if (typeof shouldCancel === 'function' && shouldCancel()) {
       return { cancelled: true, stages, prior }
     }
