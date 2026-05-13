@@ -23,6 +23,7 @@ export async function runExtrapolationStage({
   if (!stage) {
     const err = new Error(`Unknown extrapolation stage: ${stageId}`)
     err.status = 400
+    err.code = 'UNKNOWN_EXTRAPOLATION_STAGE'
     throw err
   }
 
@@ -132,3 +133,5 @@ export async function runExtrapolationPipeline({
 
   return { cancelled: false, stages, prior }
 }
+
+export { runExtrapolationStage as runStage }
