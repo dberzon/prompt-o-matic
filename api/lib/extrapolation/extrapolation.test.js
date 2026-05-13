@@ -13,6 +13,10 @@ import { StageCache } from './stageCache.js'
 import { createEntity, getEntity, listAttributes, listEntities, writeAttribute } from '../db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../db/sqlite.js'
 import { parseS6ConflictOutput } from './schemas/s6Conflict.js'
+import { parseS2HistoricalOutput } from './schemas/s2Historical.js'
+import { parseS3PsychologyOutput } from './schemas/s3Psychology.js'
+import { parseS4EnvironmentOutput } from './schemas/s4Environment.js'
+import { parseS5VisualDescriptorOutput } from './schemas/s5VisualDescriptor.js'
 
 const tempDirs = []
 const openDbs = []
@@ -60,6 +64,26 @@ describe('extrapolation prompts and parsers', () => {
 
   it('S6 conflict schema accepts stub empty payload used by orchestrator LLM stubs', () => {
     expect(() => parseS6ConflictOutput({ conflicts: [] })).not.toThrow()
+  })
+
+  it('S2–S5 output schemas accept orchestrator happy-path stub payloads', () => {
+    expect(() =>
+      parseS2HistoricalOutput({ attributes: [{ key: 'culture.slang', value: 'bro', confidence: 0.5 }] }),
+    ).not.toThrow()
+    expect(() =>
+      parseS3PsychologyOutput({ attributes: [{ key: 'behavior.temperament', value: 'wry', confidence: 0.7 }] }),
+    ).not.toThrow()
+    expect(() =>
+      parseS4EnvironmentOutput({
+        environments: [{ name: 'Communal apartment', summary: 'Shared kitchen' }],
+        attributes: [{ key: 'home.context', value: 'lives in communal apartment' }],
+      }),
+    ).not.toThrow()
+    expect(() => parseS4EnvironmentOutput({ environments: [], relationshipAttributes: [] })).not.toThrow()
+    expect(() => parseS5VisualDescriptorOutput({ visualDescriptor: 'frontal portrait, neutral expression' })).not.toThrow()
+    expect(() =>
+      parseS5VisualDescriptorOutput({ 'visual.descriptor': 'frontal portrait, neutral expression (alt key)' }),
+    ).not.toThrow()
   })
 
   it('builds S2 prompt from era canon attrs', () => {
@@ -135,7 +159,7 @@ describe('extrapolation orchestrator', () => {
         })
       }
       if (user.includes('psychology')) {
-        return JSON.stringify({ attributes: [{ key: 'psychology.temperament', value: 'wry', confidence: 0.7 }] })
+        return JSON.stringify({ attributes: [{ key: 'behavior.temperament', value: 'wry', confidence: 0.7 }] })
       }
       if (user.includes('frontal portrait')) {
         return JSON.stringify({ visualDescriptor: 'frontal portrait, neutral expression' })
@@ -199,7 +223,7 @@ describe('extrapolation orchestrator', () => {
         })
       }
       if (user.includes('psychology')) {
-        return JSON.stringify({ attributes: [{ key: 'psychology.temperament', value: 'wry', confidence: 0.7 }] })
+        return JSON.stringify({ attributes: [{ key: 'behavior.temperament', value: 'wry', confidence: 0.7 }] })
       }
       if (user.includes('frontal portrait')) {
         return JSON.stringify({ visualDescriptor: 'frontal portrait, neutral expression' })
