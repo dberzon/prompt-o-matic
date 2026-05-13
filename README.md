@@ -5,7 +5,7 @@ Cinematic prompt builder for [Qwen image generation](https://chat.qwen.ai). Dire
 ## Documentation
 
 - Technical developer handoff: [docs/TECHNICAL.md](docs/TECHNICAL.md)
-- Project context and flow: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), [docs/TAKEOVER_FLOW.md](docs/TAKEOVER_FLOW.md)
+- Project context and flow: [PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), [AGENT_HANDOFF.md](AGENT_HANDOFF.md)
 - Debugging and dev panel: [docs/DEBUGGING.md](docs/DEBUGGING.md)
 
 ## Features
@@ -26,8 +26,9 @@ Cinematic prompt builder for [Qwen image generation](https://chat.qwen.ai). Dire
 | **Character Builder** | Define named character bank entries with descriptions. These entries feed into the Casting Room's Path A (audition) workflow. |
 | **Casting Room** | Generate AI actor portraits through two paths: Path A (cast from a bank brief via LLM + ComfyUI) and Path B (batch-generate diverse candidates with vector similarity screening). Manage the active character's portfolio and image gallery. |
 | **Actor Bank** | Browse all saved characters with search, gender, and age filters. Full detail view: inline rename, archive/restore, image keep/discard curation, portfolio re-queue, prompt descriptor edit/generate. Characters can be imported directly into Prompt Builder character slots. |
+| **Continuity** | Worldbuilding entities in SQLite: extrapolation (stage chain depends on entity `type`), attribute review, visual anchors, conflict resolution for character-shaped chains, MVP Done gate (five-scene continuity QA). |
 
-**Dependency chain:** Character Builder → Casting Room → Actor Bank. Prompt Builder is independent.
+**Dependency chain:** Character Builder → Casting Room → Actor Bank. Prompt Builder is independent. Continuity consumes the entity layer (`/api/entities/*`); Prompt Builder can consume Actor Bank slugs and Character Builder entries as today.
 
 ## AI engine setup
 

@@ -29,7 +29,7 @@ Also hosts the Active Character section for renaming, archiving, compiling promp
 Full character management interface for the `characters` table. Grid view with filters (search, gender, age) and sort options (recent renders / recently created / A–Z). Per-character detail view provides: inline rename, archive/restore, image keep/discard curation, portfolio re-queue when `portfolio_failed`, and an "Open in Casting Room" button that switches tabs and sets the active character in one click.
 
 **Tab 5 — Continuity** (`activeTab='continuity'`)
-Entity-centric worldbuilding: select or create entities, run the S1–S6 extrapolation pipeline, review inferred attributes, manage primary reference anchors, resolve Stage 6 conflicts, and run the MVP Done gate (five-scene continuity QA with blind reviewer scoring). UI: `EntityContinuityPanel`, `EntityEditor`, `EntityExtrapolationPanel`, `AttributeReviewPanel`, `EntityConflictPanel`, `EntityContinuityQaPanel`, `VisualAnchorPicker`.
+Entity-centric worldbuilding: select or create entities (`type` includes `character`, `environment`, `prop`, `institution`, `location`, `era`), run extrapolation (stage set depends on `type` — see `api/lib/extrapolation/stageRegistry.js`), review inferred attributes, manage primary reference anchors, resolve Stage 6 conflicts on character-shaped chains, and run the MVP Done gate (five-scene continuity QA with blind reviewer scoring). UI: `EntityContinuityPanel`, `EntityEditor`, `EntityExtrapolationPanel`, `AttributeReviewPanel`, `EntityConflictPanel`, `EntityContinuityQaPanel`, `VisualAnchorPicker`.
 
 **Dependency chain:**
 - Character Builder → Casting Room Path A (bank entries consumed by audition)
@@ -99,7 +99,7 @@ Schema defined in `api/lib/db/schema.js`. All query functions in `api/lib/db/rep
 | `saved_prompts` | Named prompt snapshots from the Prompt Builder (migrated from localStorage). |
 | `workspace_profiles` | Named workspace state snapshots for the Prompt Builder (migrated from localStorage). |
 | `comfy_jobs` (migration 6) | Persistent ComfyUI job tracking — survives page reloads. Keyed by `prompt_id` (UNIQUE). |
-| `entities` | Worldbuilding entities (`character`, `environment`, `prop`, `institution`) with soft-archive via `archived_at`. |
+| `entities` | Worldbuilding entities (`character`, `environment`, `prop`, `institution`, `location`, `era`) with soft-archive via `archived_at`. |
 | `entity_attributes` | Provenance-tracked attributes (`canon`, `inferred`, `suggested`, `temporary`, `derived`); writes go through `writeAttribute` only. |
 | `entity_relationships` | Directed relationships between entities with typed `type` and provenance. |
 | `visual_anchors` | Reference images, seeds, and other continuity anchors per entity; one primary anchor per entity. |
@@ -145,7 +145,8 @@ Soft-archive is separate: `archived_at` column (ISO timestamp if archived, NULL 
 | `api/entity-extrapolate.js` | Extrapolation pipeline + per-stage routes |
 | `api/entity-extrapolate-stage5.js` | Stage 5 reference portrait queue |
 | `api/promptpack-from-entity.js` | Entity prompt-pack compile route handler |
-| `api/lib/extrapolation/orchestrator.js` | S1–S6 orchestrator, stage cache, model routing |
+| `api/lib/extrapolation/stageRegistry.js` | Resolves extrapolation stage chain from entity `type` (character-shaped S1–S6, `location` three-stage pipeline, `era` placeholders) |
+| `api/lib/extrapolation/orchestrator.js` | Pipeline + per-stage runner, stage cache, model routing |
 | `api/lib/continuity/mvpDoneGate.js` | Readiness checks + continuity QA orchestration |
 | `api/lib/comfy/ipadapterFeasibility.js` | IPAdapter feasibility decision for Qwen-Image |
 | `api/lib/prompts/entityAttributeProfile.js` | Maps entity attributes into prompt-compiler profile shape |
@@ -209,7 +210,7 @@ Chroma is auto-spawned by `vite.config.js` on dev server start when `AUTO_START_
 
 ## Session Handoff (2026-05-11, evening)
 
-**MVP acceptance complete:** Ruslan Section 13 happy path (`api/ruslanMvpAcceptance.test.js`); MVP Done gate readiness + five-scene QA + blind scoring (`api/ruslanMvpDoneGate.test.js`, `GET /api/entities/:id/mvp-done-gate`, Continuity tab `EntityContinuityQaPanel`). Extrapolation pipeline epics closed (`rsm9`, stages S1–S6). S6 conflict UI shipped (`EntityConflictPanel`).
+**MVP acceptance complete:** Ruslan Section 13 happy path (`api/ruslanMvpAcceptance.test.js`); MVP Done gate readiness + five-scene QA + blind scoring (`api/ruslanMvpDoneGate.test.js`, `GET /api/entities/:id/mvp-done-gate`, Continuity tab `EntityContinuityQaPanel`). Extrapolation pipeline epics closed (`rsm9`, character-shaped stages S1–S6). **Location entities:** dedicated three-stage extrapolation (`api/lib/extrapolation/stages/location/`). S6 conflict UI shipped (`EntityConflictPanel`).
 
 **Still open (start with `bd ready`):** P1 polish — anchor gallery `zpcf`, audit trail `ibfa`, CLIP embedding cache `7h8h`, user-upload override `tjao`, S2–S5 parallelization `0yie`. Migration epic `y9mw` may remain for legacy `characters` → `entities` lift workflows. P2 deferred items unblocked after MVP gate.
 

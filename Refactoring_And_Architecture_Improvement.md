@@ -114,12 +114,12 @@ qwen-prompt-builder/
 │  │  │  ├─ gapDetector.js                # (new) drives "What's missing"
 │  │  │  └─ approval.js                   # (new) section-level approve/reject
 │  │  │
-│  │  ├─ extrapolation/                   # six-stage pipeline (mostly intact)
-│  │  │  ├─ orchestrator.js               # (refactor) dispatch on entity.type
+│  │  ├─ extrapolation/                   # type-aware staged pipelines (`stageRegistry.js`)
+│  │  │  ├─ orchestrator.js               # resolves chain via `chainFor(entity.type)`
 │  │  │  ├─ stages/
-│  │  │  │  ├─ character/                 # current S1..S6 logic
-│  │  │  │  ├─ location/                  # (new) location-aware stages
-│  │  │  │  └─ era/                       # (new) era-aware stages
+│  │  │  │  ├─ character/                 # (future split) current S1..S6 in `stages.js`
+│  │  │  │  ├─ location/                 # shipped: geography / inhabitants / history (ids 1–3)
+│  │  │  │  └─ era/                       # placeholder until era-specific stages exist
 │  │  │  ├─ parsers/                      # add dropDiagnostics
 │  │  │  ├─ stageCache.js
 │  │  │  └─ progressBus.js                # (new) SSE source
@@ -488,7 +488,7 @@ Bold = blocker for V2.
 | `api/lib/agents/adapters/mcpServer.js` | MCP exposure |
 | `api/lib/agents/adapters/httpAdapter.js` | `/api/agents/tools/:name` |
 | `api/lib/agents/executor.js` | Run tool, validate I/O |
-| `api/lib/extrapolation/stages/{character,location,era}/` | Type-aware S1–S6 |
+| `api/lib/extrapolation/stages/location/*`, `stageRegistry.js` | Character-shaped S1–S6; `location` three-stage chain; `era` no-op placeholders |
 | `api/lib/extrapolation/progressBus.js` | SSE event source |
 | **`api/routes/_registry.js`** | Replaces 72 inline middlewares |
 | `api/routes/bibles/*` | Bible HTTP surface |

@@ -14,7 +14,7 @@ For full technical detail, see `APPLICATION_REFERENCE.md`.
 | **Character Builder** | Author named character descriptions (bank entries) stored in SQLite and mirrored to localStorage. Optional **identity hints** and **guidance strength** (light vs strict casting) merge into the optimized/saved description. These feed Path A in the Casting Room. |
 | **Casting Room** | Two paths: Path A (audition from bank entry, LLM generates profiles, ComfyUI renders) and Path B (batch generation with vector similarity screening). Shared Active Character section for portfolio management and image gallery. |
 | **Actor Bank** | Full character management interface for the `characters` table. Grid with search/filter. Detail view: inline rename, archive/restore, image curation, portfolio re-queue, prompt descriptor edit/generate. Characters can be imported into Prompt Builder slots. |
-| **Continuity** | Worldbuilding entity editor: extrapolation pipeline, attribute review, primary reference anchors, Stage 6 conflict resolution, and MVP Done gate (five-scene continuity QA with blind reviewer scoring). |
+| **Continuity** | Worldbuilding entity editor: type-aware extrapolation (`stageRegistry.js`), attribute review, primary reference anchors, Stage 6 conflict resolution on character-shaped chains, and MVP Done gate (five-scene continuity QA with blind reviewer scoring). |
 
 ---
 
@@ -58,7 +58,9 @@ Queues prompt packs to ComfyUI, polls job status, ingests output images into `ge
 Additive worldbuilding persistence alongside legacy `characters`: `entities`, provenance-tracked `entity_attributes`, `entity_relationships`, and `visual_anchors`. REST handlers under `/api/entities/*` support CRUD, relationship management, anchor upload, attribute promote/dismiss/edit, and S6 conflict resolve/dismiss. Prompt packs compile from entity canon + inferred/derived attributes via `POST /api/promptpack/from-entity/:id` (relationship-derived attrs use `relation.<type>:<other_slug>` keys and scope gating). Attribute writes outside tests must go through `writeAttribute`; `api/lib/db/entityAttributesProvenanceGuard.test.js` blocks direct `INSERT INTO entity_attributes` elsewhere.
 
 ### Extrapolation pipeline (`api/lib/extrapolation/`)
-Six staged LLM passes turn sparse notes into entities, canon/inferred attributes, environments, visual descriptors, and conflict markers. Orchestrator: `api/lib/extrapolation/orchestrator.js` with per-stage cache (`stageCache.js`) and model routing (`modelRouting.js`). Entry points: `POST /api/extrapolate/character/:id` (full pipeline) and `POST /api/extrapolate/stage/:id/:n` or `POST /api/entities/:id/extrapolate/stage/:n`. Stage 5 reference portrait queue: `POST /api/entities/:id/extrapolate/stage/5`. Ruslan worked example fixture: `api/lib/extrapolation/fixtures/ruslanWorkedExample.js`.
+Staged LLM passes expand sparse notes into provenance-tracked attributes (and, for the character-shaped chain, visual descriptors and conflict markers). Chains are selected by entity `type` via `api/lib/extrapolation/stageRegistry.js` (`chainFor`). Orchestrator: `api/lib/extrapolation/orchestrator.js` with per-stage cache (`stageCache.js`) and model routing (`modelRouting.js`). Entry points: `POST /api/extrapolate/character/:id` (full pipeline for the given entity id) and `POST /api/extrapolate/stage/:id/:n` or `POST /api/entities/:id/extrapolate/stage/:n` (only stage ids that exist on that entity’s chain are valid). Stage 5 reference portrait queue (character-shaped entities only): `POST /api/entities/:id/extrapolate/stage/5`. Ruslan worked example fixture: `api/lib/extrapolation/fixtures/ruslanWorkedExample.js`.
+
+**Character-shaped types** (`character`, `environment`, `prop`, `institution`): six stages as below.
 
 | Stage | Role |
 |---|---|
@@ -68,6 +70,10 @@ Six staged LLM passes turn sparse notes into entities, canon/inferred attributes
 | S4 | Environmental projection + `provenance=derived` relationship attrs |
 | S5 | Visual descriptor + primary reference anchor generation |
 | S6 | Cross-stage conflict detection → suggested conflict markers |
+
+**`location`:** three stages — (1) geography, (2) inhabitants, (3) history — implemented under `api/lib/extrapolation/stages/location/` with prompts `location.geography`, `location.inhabitants`, `location.history`.
+
+**`era`:** placeholder chain (stages 1–6 no-op) until a dedicated pipeline is implemented.
 
 ### Continuity QA and MVP Done gate (`api/lib/continuity/`)
 Section 4 acceptance: one character plus environment context, five scene generations, reviewer scores ≥4/5 on face/body/wardrobe (blind to seed). Readiness: `GET /api/entities/:id/mvp-done-gate`. Queue scenes: `POST /api/entities/:id/continuity-qa/generate` (requires readiness). Scoring: `GET/POST /api/entities/:id/continuity-qa/scoring-sheet|scores`. CLI: `scripts/run-continuity-qa-generations.mjs`. Automated harness: `api/ruslanMvpAcceptance.test.js`, `api/ruslanMvpDoneGate.test.js`.
@@ -94,7 +100,7 @@ Qwen-Image DiT templates do not ship a validated IPAdapter node chain. MVP decis
 | `saved_prompts` | Named prompt snapshots (migrated from localStorage) |
 | `workspace_profiles` | Named workspace state snapshots (migrated from localStorage) |
 | `comfy_jobs` (migration 6) | Persistent ComfyUI job tracking |
-| `entities` | Worldbuilding entities with type and archive state |
+| `entities` | Worldbuilding entities with `type` (`character`, `environment`, `prop`, `institution`, `location`, `era`) and archive state |
 | `entity_attributes` | Provenance-tracked attributes per entity |
 | `entity_relationships` | Typed relationships between entities |
 | `visual_anchors` | Continuity anchors (reference images, seeds, etc.) |

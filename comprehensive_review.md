@@ -23,11 +23,10 @@ QPB started as a **cinematic text-to-image prompt builder for Qwen-Image** (dire
    - ComfyUI workflow mapping with dry-run, validation, multi-job status, ingest, SSE render events
 
 3. **Worldbuilding & Continuity Intelligence layer** (the most recent addition, per `docs/proposals/worldbuilding-continuity-system.md`)
-   - `entities` table (type ∈ `character | environment | prop | institution`)
+   - `entities` table (type ∈ `character | environment | prop | institution | location | era`)
    - Provenance-tracked `entity_attributes` (`canon | inferred | suggested | temporary | derived`)
    - `entity_relationships`, `visual_anchors`
-   - **Six-stage extrapolation pipeline** orchestrated in `api/lib/extrapolation/orchestrator.js`:
-     - S1 entity extraction · S2 historical/cultural · S3 psychology · S4 environment projection · S5 visual descriptor · S6 conflict detection
+   - **Type-aware extrapolation** (`api/lib/extrapolation/stageRegistry.js` + `orchestrator.js`): character-shaped types use six stages (S1 entity extraction · S2 historical/cultural · S3 psychology · S4 environment projection · S5 visual descriptor · S6 conflict detection). **`location`** uses three stages (geography, inhabitants, history). **`era`** currently registers a placeholder no-op chain.
    - **MVP Done gate** (`api/lib/continuity/mvpDoneGate.js`) with 5 prerequisites and 5-scene blind-seed reviewer scoring (face/body/wardrobe ≥ 4/5)
    - Entity → prompt pack compiler that maps canon/inferred/derived attrs onto the legacy `CharacterProfile` shape
 
@@ -50,7 +49,7 @@ api/                       — Vite middleware route handlers
     llm/providers/         — claude / lmstudio / ollama / mock
     db/                    — better-sqlite3, schema, repositories, guard
     characters/            — legacy character pipeline + batch generation
-    extrapolation/         — six-stage pipeline (orchestrator, prompts/, parsers/, schemas/, stageCache.js)
+    extrapolation/         — `stageRegistry.js` + orchestrator: character-shaped S1–S6, location 3-stage, era placeholders; prompts/, parsers/, schemas/, stageCache.js
     continuity/            — MVP Done gate, QA harness, scoring, anchors
     comfy/                 — workflow mapping, queue, SSE service
     prompts/               — Qwen prompt compiler, negative library, entity→profile shim
@@ -83,7 +82,8 @@ api/                       — Vite middleware route handlers
 ### 2.3 The polish system prompt is craft-level
 `api/lib/polishCore.js:12-99` is a 88-line system prompt that encodes serious cinematography: 60–110 word target, anti-CGI anchors, passive figures, single light source, named film stocks, per-director compositional logic for 15 named auteurs plus a generic fallback. It reads like a cinematographer's brief — not a checklist. This is a real asset.
 
-### 2.4 Six-stage extrapolation pipeline with the right ergonomics
+### 2.4 Extrapolation pipelines (type-aware) with the right ergonomics
+- Stage chain is selected from entity `type` (`chainFor` in `stageRegistry.js`). Character-shaped entities still run S1–S6; `location` runs three structured stages; `era` is a stub until implemented.
 - Stage cache is keyed by `(canon_snapshot, stageId, modelId)` and stored as JSON on disk (`data/extrapolation-stage-cache/`). Re-running with unchanged canon is free.
 - Parallel middle stages (S2–S5) gated by env flag `EXTRAPOLATION_PARALLEL_STAGES_2_5` — sensible default off, opt-in for speed.
 - Per-stage model routing via `EXTRAPOLATION_STAGE_MODELS` JSON env var. (`modelRouting.js`)
@@ -110,7 +110,7 @@ The vision is "**universal Character / Location / Era Bibles** with **intelligen
 
 ### 3.1 No formal "Bible" concept — entities are flat attribute bags
 
-The Worldbuilding proposal (`docs/proposals/worldbuilding-continuity-system.md`) talks about characters/environments/props/institutions, but in code there is **no Bible schema**. A "Character Bible" today is:
+The Worldbuilding proposal (`docs/proposals/worldbuilding-continuity-system.md`) sketches characters, environments, props, institutions (and the shipped DB adds `location` and `era`), but in code there is **no Bible schema**. A "Character Bible" today is:
 
 - ~12+ attributes the LLM happened to produce, keyed by dotted strings
 - A primary reference image
@@ -118,7 +118,9 @@ The Worldbuilding proposal (`docs/proposals/worldbuilding-continuity-system.md`)
 
 There is no template that says "a complete Character Bible has Demographics, Physical Description, Wardrobe, Voice & Speech, Psychology, History, Relationships, Distinctive Features, Forbidden Confusions, Reference Visuals." The frontend `EntityEditor.jsx:10-15` hardcodes section *names* per type but those sections only show attributes whose key starts with `section.toLowerCase()`. There is no required-field list, no completeness measure, no schema.
 
-**Location Bibles** and **Era Bibles** don't exist as concepts. Environments are entities with type `environment` but their extrapolation track is parasitic: they only appear as a side-effect of S4 ("Environmental projection") which runs *from* a character. There is no path that says "describe a location in 2 sentences → get a rich Location Bible." An "era" is at best a string-valued canon attribute `setting.era` that S2 keys off — never a first-class entity.
+**Location Bibles** — You can now create `entities` with `type='location'` and run a dedicated three-stage extrapolation chain (`api/lib/extrapolation/stages/location/`). There is still no formal "Bible schema" or completeness ring; attributes remain LLM-keyed bags.
+
+**Era Bibles** — `type='era'` exists in the schema and `stageRegistry`, but stages are no-op placeholders until an era pipeline is implemented. Narrative era context still often lives on character or environment attributes (e.g. `setting.era`).
 
 ### 3.2 Gap detection is essentially absent
 
@@ -389,7 +391,7 @@ Provide `getPrompt(id, version?)`. Wire S1–S6, polish, character-optimize, aud
 
 ### Honourable mentions (if you want a 4th)
 
-- **Make extrapolation type-aware.** Today S1–S6 assume a character. Dispatch on `entity.type` so locations get a location-specific S2/S3/S4 track (period fixtures, atmosphere, weather logic). One day of work; large vision payoff.
+- **Extend type-aware extrapolation beyond the shipped tracks.** `stageRegistry.js` already dispatches: character-shaped S1–S6, `location` three-stage pipeline, `era` placeholders. Remaining work: real `era` stages, richer environment/prop-specific prompts if desired, and optional S1 prompt/schema updates so extracted secondary entities can include `location` / `era` when appropriate.
 - **Add a stage-level "regenerate with new seed"** button that salts the cache key (`stageCache.js`). One line of code, removes a real iteration pain.
 - **Surface dropped items.** When `s2Parser.js`, `s3Parser.js`, etc. drop a malformed item, log it on the stage result so the UI can show `"3 attributes returned, 1 dropped (missing key)"`. Tiny, hugely valuable for debugging.
 

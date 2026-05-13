@@ -65,7 +65,7 @@ Configured in `.cursor/mcp.json`. Use them when relevant:
 
 ## Architecture Awareness
 
-Single-process Vite app: React 18 UI plus ~55 `/api/*` middleware routes in `vite.config.js` (no separate API server). Five tabs: Prompt Builder, Character Builder, Casting Room, Actor Bank, and Continuity (entity layer, extrapolation, anchors, MVP Done gate).
+Single-process Vite app: React 18 UI plus ~55 `/api/*` middleware routes in `vite.config.js` (no separate API server). Five tabs: Prompt Builder, Character Builder, Casting Room, Actor Bank, and Continuity (entity layer, type-aware extrapolation via `stageRegistry.js`, anchors, MVP Done gate).
 
 **Polish flow (do NOT break):**
 `App.jsx` → `utils/assembler.js` → `PromptOutput.jsx` → `hooks/usePolish.js` → `POST /api/polish` → `api/lib/polishCore.js` → provider

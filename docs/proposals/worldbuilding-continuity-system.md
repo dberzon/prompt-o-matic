@@ -1,6 +1,9 @@
 # Worldbuilding & Continuity Intelligence System
 
-**Status:** Proposal
+**Status:** Proposal (historical sketch; implementation has diverged — see note in §5.2)
+
+**Implementation note (2026):** The shipped schema adds `location` and `era` to `entities.type`, adds `archived_at`, uses TEXT timestamps in several places, and implements type-aware extrapolation (`api/lib/extrapolation/stageRegistry.js`). Treat the SQL below as conceptual unless reconciled with `api/lib/db/schema.js`.
+
 **Target:** CastingRoom / Prompt-O-Matic
 **Scope:** Net-new semantic layer above existing prompt assembly
 
@@ -66,7 +69,7 @@ The `provenance` field is load-bearing. Any code path that writes to `entity_att
 ```sql
 CREATE TABLE entities (
   id            TEXT PRIMARY KEY,
-  type          TEXT NOT NULL CHECK(type IN ('character','environment','prop','institution')),
+  type          TEXT NOT NULL CHECK(type IN ('character','environment','prop','institution','location','era')),
   name          TEXT NOT NULL,
   created_at    INTEGER NOT NULL,
   updated_at    INTEGER NOT NULL

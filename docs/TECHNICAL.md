@@ -87,11 +87,14 @@ Primary tables:
 - `generated_images`
 - `character_batches`
 - `character_batch_candidates`
+- Worldbuilding / Continuity: `entities` (including `type` `character` \| `environment` \| `prop` \| `institution` \| `location` \| `era`), `entity_attributes`, `entity_relationships`, `visual_anchors`
 
 Design intent:
 
 - SQLite is the canonical source of truth.
 - Chroma stores derived embeddings/search state and can be rebuilt.
+
+Extrapolation stage chains are **not** always six stages: `api/lib/extrapolation/stageRegistry.js` maps `character` / `environment` / `prop` / `institution` to the existing six-stage character pipeline; `location` uses three stages (geography, inhabitants, history); `era` currently registers placeholder no-op stages until a real pipeline exists.
 
 ## 7) API Domains
 
@@ -115,8 +118,12 @@ Major route groups:
   - List/approve/reject/view proxy
 - Vector maintenance
   - Status/index/reindex/similarity routes
+- Entities / Continuity (worldbuilding)
+  - `GET/POST/PUT/DELETE /api/entities`, nested relationships, anchors, attribute actions, conflicts
+  - `POST /api/extrapolate/character/:id`, `POST /api/extrapolate/stage/:id/:n`, `POST /api/entities/:id/extrapolate/stage/:n`
+  - `GET /api/entities/:id/mvp-done-gate`, continuity QA generate/score routes (see `AGENT_HANDOFF.md`)
 
-For exact payloads and phased behavior, see `README.md`.
+For exact payloads and phased behavior, see `README.md` and `APPLICATION_REFERENCE.md`.
 
 ## 8) Frontend Behavior Notes
 
@@ -125,7 +132,8 @@ For exact payloads and phased behavior, see `README.md`.
   - scene + director + chips assembly,
   - rule validation and fix-ups,
   - workspace history,
-  - operator pipeline panel access.
+  - operator pipeline panel access,
+  - Continuity tab (`EntityContinuityPanel`) for entity worldbuilding.
 - Pipeline/operator flows are exposed through UI components such as `CastingPipelinePanel.jsx`.
 
 ## 9) Comfy Workflow Mapping

@@ -662,7 +662,7 @@ Auth/gating: ENABLE_PROMPT_PACK_API required (same as compile-character)
 ```
 GET/POST/PUT/DELETE  /api/entities
 GET/PUT/DELETE       /api/entities/:id
-Purpose: Entity CRUD. DELETE soft-archives via archived_at.
+Purpose: Entity CRUD. DELETE soft-archives via archived_at. `type` must be one of: `character`, `environment`, `prop`, `institution`, `location`, `era` (see schema CHECK).
 Response: { ok: true, item | items, total }
 Auth/gating: local-studio (no ENABLE_* flag)
 ```
@@ -689,6 +689,51 @@ POST  /api/entities/:entityId/attributes/:attrId/dismiss
 Purpose: Attribute review actions (promote/edit via promoteToCanon; dismiss via dismissSuggested).
 Request body (edit): { value }
 Response: { ok: true, item: attribute }
+Auth/gating: local-studio
+```
+
+Entity `type` values (see `api/lib/db/schema.js`, `chainFor` in `api/lib/extrapolation/stageRegistry.js`): `character`, `environment`, `prop`, `institution` use the six-stage character extrapolation chain (S1–S6). `location` uses stages **1–3** only (geography, inhabitants, history). `era` currently has a placeholder six-stage no-op chain.
+
+```
+POST  /api/extrapolate/character/:entityId
+Purpose: Run the full extrapolation pipeline for the entity (stage set depends on `entities.type`).
+Request body: optional `{ llm?, parallelMiddleStages? }` (parallelism applies to character-shaped middle stages).
+Response: { ok: true, entityId, stages: [...], ... }
+Auth/gating: local-studio
+```
+
+```
+POST  /api/extrapolate/stage/:entityId/:stageId
+POST  /api/entities/:entityId/extrapolate/stage/:stageId
+Purpose: Run a single extrapolation stage. `stageId` must exist on the chain for that entity’s `type` (e.g. `location` accepts 1–3 only).
+Request body: optional `{ llm?, prior? }`
+Response: { ok: true, entityId, stageId, writes?, suggestions?, conflicts?, dropped?, raw?, cacheHit?, modelId? }
+Auth/gating: local-studio
+```
+
+```
+GET   /api/entities/:entityId/mvp-done-gate
+Purpose: MVP Done gate readiness checklist for continuity QA.
+Auth/gating: local-studio
+```
+
+```
+POST  /api/entities/:entityId/continuity-qa/generate
+Purpose: Queue five-scene continuity QA generations (requires readiness).
+Auth/gating: local-studio
+```
+
+```
+GET   /api/entities/:entityId/continuity-qa/scoring-sheet
+POST  /api/entities/:entityId/continuity-qa/scores
+Purpose: Blind reviewer scoring sheet and score submission.
+Auth/gating: local-studio
+```
+
+```
+POST  /api/entities/:entityId/conflicts/:conflictId/resolve
+POST  /api/entities/:entityId/conflicts/:conflictId/dismiss
+Purpose: Stage 6 conflict actions (character-shaped extrapolation).
 Auth/gating: local-studio
 ```
 

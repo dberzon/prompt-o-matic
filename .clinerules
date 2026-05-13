@@ -108,7 +108,7 @@ api/        Vite middleware route handlers (one file = one route)
     llm/providers/               claudeProvider, lmStudioProvider, ollamaProvider, mockProvider
     db/                          better-sqlite3, schema, repositories
     characters/                  character entity logic, batch review, prompt descriptors
-    extrapolation/                 six-stage LLM pipeline (orchestrator, parsers, prompts, cache)
+    extrapolation/                 type-aware staged LLM pipelines (`stageRegistry.js`: character-shaped S1–S6, location 3-stage, era placeholders; orchestrator, parsers, prompts, cache)
     continuity/                  MVP Done gate, continuity QA generation/scoring
     comfy/                       ComfyUI workflow mapping + queue management
     vector/                      Chroma store + character/entity indexing
@@ -121,12 +121,12 @@ api/        Vite middleware route handlers (one file = one route)
 
 **Provider resolution order in `polishCore.js`:** embedded sidecar → local (LM Studio or Ollama, controlled by `LLM_PROVIDER`) → Claude cloud. Engine selector in UI: `auto | local | cloud | embedded`.
 
-**Data layer:** SQLite (`better-sqlite3`) at `data/qpb-local.sqlite` is canonical. Legacy casting uses `characters`, prompt packs, and batches. The additive **entity layer** (`entities`, provenance-tracked `entity_attributes`, `entity_relationships`, `visual_anchors`) powers the **Continuity** tab: six-stage extrapolation, reference anchors, conflict review, and MVP Done gate (five-scene continuity QA). localStorage holds UI prefs + custom presets only.
+**Data layer:** SQLite (`better-sqlite3`) at `data/qpb-local.sqlite` is canonical. Legacy casting uses `characters`, prompt packs, and batches. The additive **entity layer** (`entities`, provenance-tracked `entity_attributes`, `entity_relationships`, `visual_anchors`) powers the **Continuity** tab: extrapolation chains keyed by entity `type` (see `api/lib/extrapolation/stageRegistry.js`), reference anchors, conflict review where applicable, and MVP Done gate (five-scene continuity QA). localStorage holds UI prefs + custom presets only.
 
 **Runtime modes (`APP_MODE`):** `local-studio` (full access, current mode) vs `cloud` (read-only, intended for Vercel polish-only deploy).
 
 **For deeper detail, prefer reading these files over guessing:**
-- `PROJECT_CONTEXT.md` — fuller subsystem map (five tabs, entity layer, extrapolation stages)
+- `PROJECT_CONTEXT.md` — fuller subsystem map (five tabs, entity layer, type-aware extrapolation chains)
 - `AGENT_HANDOFF.md` — tab map and API domains for handoffs
 - `APPLICATION_REFERENCE.md` — full technical reference
 - `.cursorrules` — Cursor MCP servers and safe-zone / danger-zone breakdown
@@ -147,7 +147,7 @@ api/        Vite middleware route handlers (one file = one route)
 ### Entity layer & extrapolation
 - **Entity attributes:** Always `writeAttribute` from `api/lib/db/repositories.js`; never raw `INSERT INTO entity_attributes` outside tests (`entityAttributesProvenanceGuard.test.js`).
 - **Provenance:** `canon`, `inferred`, `suggested`, `temporary`, `derived` — every attribute write must set provenance and source stage when applicable.
-- **Extrapolation:** Stage logic in `api/lib/extrapolation/` (orchestrator, parsers, prompts). Stage cache must use an isolated `cacheDir` in tests to avoid stale disk hits.
+- **Extrapolation:** Stage logic in `api/lib/extrapolation/` (`stageRegistry.js` picks the chain from `entity.type`; orchestrator, parsers, prompts). Stage cache must use an isolated `cacheDir` in tests to avoid stale disk hits.
 - **Continuity:** Primary `reference_image` anchor per entity; `buildComfyPromptPayload` injects anchor bytes when mapping allows. IPAdapter on Qwen-Image DiT is spec-only (`ipadapterFeasibility.js`); MVP uses reference-image conditioning.
 - **API handlers:** Thin route files under `api/`; domain logic in `api/lib/`; register new routes in `vite.config.js`.
 

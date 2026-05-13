@@ -108,7 +108,7 @@ api/        Vite middleware route handlers (one file = one route)
     llm/providers/               claudeProvider, lmStudioProvider, ollamaProvider, mockProvider
     db/                          better-sqlite3, schema, repositories
     characters/                  character entity logic, batch review, prompt descriptors
-    extrapolation/                 six-stage LLM pipeline (orchestrator, parsers, prompts, cache)
+    extrapolation/                 type-aware staged LLM pipelines (`stageRegistry.js`: character-shaped S1–S6, location 3-stage, era placeholders; orchestrator, parsers, prompts, cache)
     continuity/                  MVP Done gate, continuity QA generation/scoring
     comfy/                       ComfyUI workflow mapping + queue management
     vector/                      Chroma store + character/entity indexing
@@ -123,7 +123,7 @@ api/        Vite middleware route handlers (one file = one route)
 
 **Provider resolution order in `polishCore.js`:** embedded sidecar → local (LM Studio or Ollama, controlled by `LLM_PROVIDER`) → Claude cloud. Engine selector in UI: `auto | local | cloud | embedded`.
 
-**Data layer:** SQLite (`better-sqlite3`) at `data/qpb-local.sqlite` is canonical. Legacy casting uses `characters`, prompt packs, and batches. The additive **entity layer** (`entities`, provenance-tracked `entity_attributes`, `entity_relationships`, `visual_anchors`) powers the **Continuity** tab: six-stage extrapolation, reference anchors, conflict review, and MVP Done gate (five-scene continuity QA). localStorage holds UI prefs + custom presets only.
+**Data layer:** SQLite (`better-sqlite3`) at `data/qpb-local.sqlite` is canonical. Legacy casting uses `characters`, prompt packs, and batches. The additive **entity layer** (`entities`, provenance-tracked `entity_attributes`, `entity_relationships`, `visual_anchors`) powers the **Continuity** tab: extrapolation chains keyed by entity `type` (see `api/lib/extrapolation/stageRegistry.js`), reference anchors, conflict review where applicable, and MVP Done gate (five-scene continuity QA). localStorage holds UI prefs + custom presets only.
 
 **Runtime modes (`APP_MODE`):** `local-studio` (full access, current mode) vs `cloud` (read-only, intended for Vercel polish-only deploy).
 

@@ -1,6 +1,6 @@
 # Qwen Prompt Builder — Full Guide
 
-> **Last updated:** 2026-05-05
+> **Last updated:** 2026-05-13
 > Covers: recently completed work, full interface walkthrough, external services reference.
 
 ---
@@ -13,6 +13,7 @@
    - [Tab 2 — Character Builder](#tab-2--character-builder)
    - [Tab 3 — Casting Room](#tab-3--casting-room)
    - [Tab 4 — Actor Bank](#tab-4--actor-bank)
+   - [Tab 5 — Continuity](#tab-5--continuity)
 3. [Full Workflow Walkthrough](#3-full-workflow-walkthrough)
    - [Journey A — Cast from Bank](#journey-a--cast-from-bank)
    - [Journey B — Batch Pipeline](#journey-b--batch-pipeline)
@@ -25,6 +26,13 @@
 ## 1. What Was Recently Completed
 
 The following work was completed in the most recent sessions (newest first).
+
+---
+
+### Location entities and type-aware extrapolation (May 2026)
+
+- `entities.type` supports `location` and `era` (see `api/lib/db/schema.js`).
+- `api/lib/extrapolation/stageRegistry.js` selects the pipeline by type: character-shaped (`character`, `environment`, `prop`, `institution`) keeps the existing S1–S6 chain; `location` uses three stages under `api/lib/extrapolation/stages/location/` (geography, inhabitants, history); `era` registers placeholder no-op stages until implemented.
 
 ---
 
@@ -146,7 +154,7 @@ All Approve/Reject language was replaced with clearer, context-specific labels:
 
 ## 2. Application Interface
 
-The app has four main tabs accessible via the top navigation bar.
+The app has five main tabs accessible via the top navigation bar.
 
 ---
 
@@ -186,17 +194,10 @@ Six groups of technical modifiers:
 
 Each chip is a short phrase that appends to the final prompt. Multiple chips can be active simultaneously.
 
-**Time / Weather Quick-Set**
-Buttons for rapid time-of-day and weather presets (golden hour, overcast, night, etc).
+**Reference board**
+A reference image holder exists for visual guidance while authoring; AI vision extraction into the prompt is not wired in the current build.
 
-**Composition Modifiers**
-Additional framing controls (rule of thirds, negative space, edge tension, etc).
-
-**Garment / Clothing Expander**
-Expands the scene description with clothing material and texture detail.
-
-**Reference Image Upload**
-Upload a reference image. The backend (via Claude Vision API) extracts dominant palette, mood, and composition notes, which are injected into the assembled prompt.
+Expand **Workflow tips** in the prompt panel for polish modes (assembled vs on-screen text), Comfy preview from the displayed prompt, and A/B snapshot compare behavior.
 
 ---
 
@@ -329,7 +330,18 @@ Browse all saved characters with filtering and search.
 
 - Filter by status, gender, age range, project tone
 - View character cards with key metadata
-- Click a character to load them as the Active Character in the Casting Room
+- Open a character’s detail view for rename, archive/restore, gallery curation, prompt descriptor edit/generate, and **Open in Casting Room** (switches to Casting Room with that character active)
+- Import Actor Bank characters into Prompt Builder slots from the director section
+
+---
+
+### Tab 5 — Continuity
+
+SQLite-backed **entities** for worldbuilding: create or select an entity, choose `type` (`character`, `environment`, `prop`, `institution`, `location`, or `era`), and run **extrapolation**. The stage pipeline depends on `type` (see `api/lib/extrapolation/stageRegistry.js`): character-shaped types use six stages (S1–S6); `location` runs three stages (geography → inhabitants → history); `era` is a placeholder chain until a dedicated pipeline ships.
+
+After extrapolation: review inferred attributes, manage **visual anchors** (including a primary reference image where applicable), resolve **Stage 6 conflicts** on character-shaped runs, and use the **MVP Done gate** plus continuity QA scoring when you are validating a character through the five-scene harness.
+
+For API detail, see `APPLICATION_REFERENCE.md` (Entities + extrapolation routes) and `PROJECT_CONTEXT.md`.
 
 ---
 

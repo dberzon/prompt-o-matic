@@ -14,7 +14,7 @@ Provider resolution for most flows goes through `api/lib/polishCore.js` (`resolv
 | 6 | Batch candidate generation | `api/lib/characters/batchGeneration.js` | inline `system` | `POST /api/characters-generate-batch`, batch refill |
 | 7 | Batch similarity mutation | `api/lib/characters/batchGeneration.js` | inline `system` | same batch pipeline when mutating similar candidates |
 | 8 | Batch candidate mutate (review) | `api/lib/characters/batchReview.js` | inline `system` | `POST /api/character-batch-candidate-mutate` |
-| 9 | Continuity extrapolation (stages 1–6) | `api/lib/extrapolation/stages.js` | inline `system` per stage | `POST /api/entities/:id/extrapolate/stage/:n`, related extrapolate routes |
+| 9 | Continuity extrapolation | Character-shaped: `api/lib/extrapolation/stages.js` (stages 1–6). **Location:** `api/lib/extrapolation/stages/location/*.js` with prompts `location.geography`, `location.inhabitants`, `location.history` (stages 1–3). **Era:** placeholder/no-op until implemented. | inline `system` / structured stage runners | `POST /api/entities/:id/extrapolate/stage/:n`, `POST /api/extrapolate/character/:id`, related extrapolate routes |
 
 ---
 
