@@ -47,6 +47,7 @@ export function qpbDevServer(opts = {}) {
           try {
             await route.handler(req, res)
           } catch (err) {
+            if (res.headersSent) return
             const normalized = normalizeHandlerError(err)
             sendJsonMiddleware(res, normalized.status, { error: normalized.message })
           }

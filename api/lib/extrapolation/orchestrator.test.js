@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as repositories from '../db/repositories.js'
+import { createProgressBus } from './progress-bus.js'
 import { runExtrapolationPipeline } from './orchestrator.js'
 import { chainFor, UnknownExtrapolationEntityTypeError } from './stageRegistry.js'
 import { extrapolationStages } from './stages.js'
@@ -242,5 +243,52 @@ describe('orchestrator dropped[] propagation', () => {
 
     const snap6 = stageSnapshots.find((s) => s.stageId === 6)
     expect(snap6?.dropped?.length).toBeGreaterThan(0)
+  })
+})
+
+describe('orchestrator progress bus', () => {
+  it('emits ordered lifecycle events and closes the bus', async () => {
+    const db = ensureDb(createTempDbPath())
+    repositories.createEntity(db, { id: 'ent_prog', type: 'character', name: 'Red Square' })
+    repositories.writeAttribute(db, {
+      entityId: 'ent_prog',
+      key: 'description',
+      value: 'A public square.',
+      provenance: 'canon',
+      confidence: 1,
+      sourceStage: 1,
+    })
+
+    const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qpb-orchestrator-prog-'))
+    tempDirs.push(cacheDir)
+    const cache = new StageCache({ cacheDir })
+
+    const origGetEntity = repositories.getEntity
+    const spy = vi.spyOn(repositories, 'getEntity').mockImplementation((d, id) => {
+      const row = origGetEntity(d, id)
+      if (id === 'ent_prog' && row) return { ...row, type: 'location' }
+      return row
+    })
+
+    const bus = createProgressBus()
+    const types = []
+    bus.subscribe((e) => types.push(e.type))
+
+    await runExtrapolationPipeline({
+      db,
+      entityId: 'ent_prog',
+      llm: async () => '{}',
+      cache,
+      parallelMiddleStages: false,
+      progress: bus,
+    })
+
+    spy.mockRestore()
+
+    expect(types[0]).toBe('run:start')
+    expect(types[types.length - 1]).toBe('run:end')
+    expect(types.filter((t) => t === 'stage:start').length).toBe(6)
+    expect(types.filter((t) => t === 'stage:finish').length).toBe(6)
+    expect(bus.closed).toBe(true)
   })
 })

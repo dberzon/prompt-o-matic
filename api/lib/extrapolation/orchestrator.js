@@ -76,17 +76,38 @@ export async function runExtrapolationStage({
   }
 }
 
-async function recordStageResult({ prior, stages, onStageComplete }, result) {
+/**
+ * @param {{ prior: Record<number, unknown>, stages: unknown[], onStageComplete?: function, progress?: { emit?: (e: Record<string, unknown> & { type: string }) => void } }} ctx
+ * @param {import('./types.js').StageRunResult & { stageId: number, modelId?: string, cacheHit?: boolean }} result
+ */
+async function recordStageResult(ctx, result) {
+  const { prior, stages, onStageComplete, progress } = ctx
   prior[result.stageId] = result
   stages.push(result)
+  if (progress && typeof progress.emit === 'function') {
+    progress.emit({
+      type: 'stage:finish',
+      stageId: result.stageId,
+      cacheHit: Boolean(result.cacheHit),
+    })
+  }
   if (typeof onStageComplete === 'function') {
     await onStageComplete(result)
   }
 }
 
 /**
+ * @param {{ emit?: (e: Record<string, unknown> & { type: string }) => void } | null | undefined} progress
+ * @param {Record<string, unknown> & { type: string }} event
+ */
+function emitProgress(progress, event) {
+  if (progress && typeof progress.emit === 'function') progress.emit(event)
+}
+
+/**
  * @param {object} opts
  * @param {((r: import('./types.js').StageRunResult & { stageId: number, modelId?: string, cacheHit?: boolean }) => void | Promise<void>)=} opts.onStageComplete
+ * @param {{ emit: (e: Record<string, unknown> & { type: string }) => void, close?: () => void }=} opts.progress SSE / in-process progress bus (optional)
  */
 export async function runExtrapolationPipeline({
   db,
@@ -97,55 +118,78 @@ export async function runExtrapolationPipeline({
   onStageComplete,
   shouldCancel,
   parallelMiddleStages = resolveParallelMiddleStages({ env }),
+  progress,
 }) {
   const entity = getEntity(db, entityId)
   const chain = chainFor(entityChainType(entity))
 
   const prior = {}
   const stages = []
-  const ctx = { prior, stages, onStageComplete }
+  const ctx = { prior, stages, onStageComplete, progress }
   let middleStagesRan = false
 
-  for (const stage of chain) {
-    if (typeof shouldCancel === 'function' && shouldCancel()) {
-      return { cancelled: true, stages, prior }
-    }
+  try {
+    emitProgress(progress, { type: 'run:start', entityId })
 
-    if (parallelMiddleStages && MIDDLE_STAGE_IDS.includes(stage.id)) {
-      if (middleStagesRan) continue
-      middleStagesRan = true
-      const middleResults = await Promise.all(MIDDLE_STAGE_IDS.map((stageId) => runExtrapolationStage({
+    for (const stage of chain) {
+      if (typeof shouldCancel === 'function' && shouldCancel()) {
+        emitProgress(progress, { type: 'run:end', cancelled: true })
+        return { cancelled: true, stages, prior }
+      }
+
+      if (parallelMiddleStages && MIDDLE_STAGE_IDS.includes(stage.id)) {
+        if (middleStagesRan) continue
+        middleStagesRan = true
+        for (const stageId of MIDDLE_STAGE_IDS) {
+          emitProgress(progress, { type: 'stage:start', stageId })
+        }
+        const middleResults = await Promise.all(MIDDLE_STAGE_IDS.map((stageId) => runExtrapolationStage({
+          db,
+          entityId,
+          stageId,
+          llm,
+          cache,
+          prior,
+          env,
+        })))
+        for (const stageId of MIDDLE_STAGE_IDS) {
+          const result = middleResults.find((item) => item.stageId === stageId)
+          if (!result) {
+            throw new Error(`Missing extrapolation stage result for stage ${stageId}`)
+          }
+          await recordStageResult(ctx, result)
+        }
+        continue
+      }
+
+      emitProgress(progress, { type: 'stage:start', stageId: stage.id })
+      const result = await runExtrapolationStage({
         db,
         entityId,
-        stageId,
+        stageId: stage.id,
         llm,
         cache,
         prior,
         env,
-      })))
-      for (const stageId of MIDDLE_STAGE_IDS) {
-        const result = middleResults.find((item) => item.stageId === stageId)
-        if (!result) {
-          throw new Error(`Missing extrapolation stage result for stage ${stageId}`)
-        }
-        await recordStageResult(ctx, result)
-      }
-      continue
+      })
+      await recordStageResult(ctx, result)
     }
 
-    const result = await runExtrapolationStage({
-      db,
-      entityId,
-      stageId: stage.id,
-      llm,
-      cache,
-      prior,
-      env,
+    emitProgress(progress, { type: 'run:end', cancelled: false })
+    return { cancelled: false, stages, prior }
+  } catch (err) {
+    emitProgress(progress, {
+      type: 'run:error',
+      message: err?.message || String(err),
+      code: err?.code,
     })
-    await recordStageResult(ctx, result)
+    emitProgress(progress, { type: 'run:end', cancelled: false, error: true })
+    throw err
+  } finally {
+    if (progress && typeof progress.close === 'function') {
+      progress.close()
+    }
   }
-
-  return { cancelled: false, stages, prior }
 }
 
 export { runExtrapolationStage as runStage }
