@@ -1,4 +1,5 @@
 import { extrapolationStages } from './stages.js'
+import { locationStages } from './stages/location/index.js'
 
 /** DB entity kinds that share the character-shaped six-stage extrapolation chain until dedicated chains exist. */
 const CHARACTER_SHAPED_ENTITY_TYPES = new Set(['character', 'environment', 'prop', 'institution'])
@@ -40,7 +41,7 @@ function buildPlaceholderChain(kind) {
   }))
 }
 
-const locationChain = buildPlaceholderChain('location')
+const locationChain = locationStages
 const eraChain = buildPlaceholderChain('era')
 
 /**

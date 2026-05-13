@@ -173,7 +173,7 @@ export const MIGRATIONS = [
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_characters_slug ON characters(slug)',
   `CREATE TABLE IF NOT EXISTS entities (
     id TEXT PRIMARY KEY,
-    type TEXT NOT NULL CHECK (type IN ('character', 'environment', 'prop', 'institution')),
+    type TEXT NOT NULL CHECK (type IN ('character', 'environment', 'prop', 'institution', 'location', 'era')),
     name TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL

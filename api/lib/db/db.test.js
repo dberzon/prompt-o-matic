@@ -315,6 +315,8 @@ describe('entity layer schema migrations', () => {
     const { db } = createTempDb()
     const now = new Date().toISOString()
     db.prepare("INSERT INTO entities (id, type, name, created_at, updated_at) VALUES ('e1', 'character', 'Elena', ?, ?)").run(now, now)
+    db.prepare("INSERT INTO entities (id, type, name, created_at, updated_at) VALUES ('e_loc', 'location', 'Set', ?, ?)").run(now, now)
+    db.prepare("INSERT INTO entities (id, type, name, created_at, updated_at) VALUES ('e_era', 'era', '1990s', ?, ?)").run(now, now)
     expect(() =>
       db.prepare("INSERT INTO entities (id, type, name, created_at, updated_at) VALUES ('e2', 'invalid_type', 'X', ?, ?)").run(now, now),
     ).toThrow(/CHECK/i)

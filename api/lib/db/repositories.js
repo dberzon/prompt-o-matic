@@ -1106,7 +1106,7 @@ export function deleteWorkspaceProfile(db, id) {
 }
 
 
-const ENTITY_TYPES = new Set(['character', 'environment', 'prop', 'institution'])
+const ENTITY_TYPES = new Set(['character', 'environment', 'prop', 'institution', 'location', 'era'])
 
 function mapEntityRow(row) {
   if (!row) return null

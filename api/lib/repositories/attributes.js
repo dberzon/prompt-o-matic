@@ -55,7 +55,7 @@ export function validateAttributeKeyForEntityType(entityType, key) {
     if (CHARACTER_ROOTS.has(root)) return { ok: true }
     return { ok: false, reason: `invalid_character_key_root:${root}` }
   }
-  if (entityType === 'environment') {
+  if (entityType === 'environment' || entityType === 'location') {
     if (LOCATION_ROOTS.has(root)) return { ok: true }
     return { ok: false, reason: `invalid_environment_key_root:${root}` }
   }

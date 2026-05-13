@@ -58,11 +58,53 @@ function runLegacyProjectNullBackfillOnce(db) {
   }
 }
 
+/**
+ * Expand `entities.type` CHECK constraint to include `location` and `era`
+ * (one-time upgrade for DBs created before those types existed).
+ */
+function expandEntityTypesIfNeeded(db) {
+  try {
+    const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'entities'").get()
+    if (!row?.sql || String(row.sql).includes("'location'")) return
+    db.pragma('foreign_keys = OFF')
+    db.exec('DROP TABLE IF EXISTS __entities_retype')
+    db.exec(`
+      CREATE TABLE __entities_retype (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL CHECK (type IN ('character', 'environment', 'prop', 'institution', 'location', 'era')),
+        name TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        archived_at TEXT,
+        project_id TEXT
+      )
+    `)
+    db.exec(`
+      INSERT INTO __entities_retype (id, type, name, created_at, updated_at, archived_at, project_id)
+      SELECT id, type, name, created_at, updated_at, archived_at, project_id FROM entities
+    `)
+    db.exec('DROP TABLE entities')
+    db.exec('ALTER TABLE __entities_retype RENAME TO entities')
+    db.exec('CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type)')
+    db.exec('CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name)')
+    db.exec('CREATE INDEX IF NOT EXISTS idx_entities_project_id ON entities(project_id)')
+  } catch {
+    /* best-effort — leave table unchanged if rebuild fails */
+  } finally {
+    try {
+      db.pragma('foreign_keys = ON')
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
 export function initializeDatabase(db) {
   db.exec(CREATE_TABLES_SQL)
   for (const migration of MIGRATIONS) {
     try { db.exec(migration) } catch { /* column already exists */ }
   }
+  expandEntityTypesIfNeeded(db)
   runLegacyProjectNullBackfillOnce(db)
   runDataBackfills(db)
 }

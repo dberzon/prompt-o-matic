@@ -122,6 +122,9 @@ export async function runExtrapolationPipeline({
 }) {
   const entity = getEntity(db, entityId)
   const chain = chainFor(entityChainType(entity))
+  const chainIds = new Set(chain.map((s) => s.id))
+  const canParallelMiddle =
+    Boolean(parallelMiddleStages) && MIDDLE_STAGE_IDS.every((id) => chainIds.has(id))
 
   const prior = {}
   const stages = []
@@ -137,7 +140,7 @@ export async function runExtrapolationPipeline({
         return { cancelled: true, stages, prior }
       }
 
-      if (parallelMiddleStages && MIDDLE_STAGE_IDS.includes(stage.id)) {
+      if (canParallelMiddle && MIDDLE_STAGE_IDS.includes(stage.id)) {
         if (middleStagesRan) continue
         middleStagesRan = true
         for (const stageId of MIDDLE_STAGE_IDS) {
