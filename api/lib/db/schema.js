@@ -1,3 +1,5 @@
+import { FILE_MIGRATION_STATEMENTS } from './migrations/index.js'
+
 export const CREATE_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS characters (
   id TEXT PRIMARY KEY,
@@ -216,4 +218,8 @@ export const MIGRATIONS = [
   )`,
   'CREATE INDEX IF NOT EXISTS idx_visual_anchors_entity_id ON visual_anchors(entity_id)',
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_visual_anchors_primary ON visual_anchors(entity_id) WHERE is_primary = 1',
+  // File-based migrations live in ./migrations/<id>.sql and are appended here
+  // so the existing per-statement try/catch loop in sqlite.js handles them
+  // identically to the inline strings above.
+  ...FILE_MIGRATION_STATEMENTS,
 ]

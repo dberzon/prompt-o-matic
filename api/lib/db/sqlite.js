@@ -25,6 +25,7 @@ export function createSqliteDatabase({ env = process.env, dbPath } = {}) {
   fs.mkdirSync(path.dirname(resolvedPath), { recursive: true })
   const db = new Database(resolvedPath)
   db.pragma('journal_mode = WAL')
+  db.pragma('foreign_keys = ON')
   return db
 }
 
