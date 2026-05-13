@@ -1,0 +1,131 @@
+.panel {
+  border: 1px solid #2a3340;
+  border-radius: 8px;
+  padding: 12px;
+  background: #141a22;
+  color: #e8ecf1;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.sectionTitle {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.approvalBadge {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 4px 8px;
+  border-radius: 999px;
+}
+
+.approved {
+  background: #134e2a;
+  color: #b6f5c6;
+}
+
+.rejected {
+  background: #5c1f24;
+  color: #ffc9cf;
+}
+
+.pending {
+  background: #3a3f28;
+  color: #f0e6a6;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.fieldRow {
+  margin-bottom: 10px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #0f1319;
+  border: 1px solid transparent;
+}
+
+.missingRequired {
+  border-color: #c45c4a;
+  background: #22151a;
+}
+
+.missingRecommended {
+  border-color: #3d4a5c;
+  opacity: 0.85;
+}
+
+.fieldHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
+}
+
+.fieldKey {
+  font-size: 12px;
+  font-weight: 600;
+  color: #b8c2ce;
+}
+
+.badgeRequired {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #ffb4a8;
+}
+
+.badgeRecommended {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: #9db7d9;
+}
+
+.provenance {
+  font-size: 10px;
+  color: #7a8699;
+  margin-left: auto;
+}
+
+.input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid #2f3a48;
+  background: #0b0f14;
+  color: #e8ecf1;
+}
+
+.readonlyValue {
+  font-size: 13px;
+  padding: 6px 0;
+  color: #dbe3ec;
+}
+
+.button {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid #3a4a5f;
+  background: #1a2230;
+  color: #dbe3ec;
+  cursor: pointer;
+}
+
+.button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
