@@ -12,6 +12,7 @@ import { runExtrapolationPipeline, runExtrapolationStage } from './orchestrator.
 import { StageCache } from './stageCache.js'
 import { createEntity, getEntity, listAttributes, listEntities, writeAttribute } from '../db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../db/sqlite.js'
+import { parseS6ConflictOutput } from './schemas/s6Conflict.js'
 
 const tempDirs = []
 const openDbs = []
@@ -55,6 +56,10 @@ describe('extrapolation prompts and parsers', () => {
     expect(institutions.length).toBeGreaterThanOrEqual(1)
     expect(getEntity(db, 'rita_vlasova')?.name).toBe('Rita Vlasova')
     expect(listAttributes(db, { entityId: 'ruslan_levashov', provenance: 'canon' }).length).toBeGreaterThanOrEqual(12)
+  })
+
+  it('S6 conflict schema accepts stub empty payload used by orchestrator LLM stubs', () => {
+    expect(() => parseS6ConflictOutput({ conflicts: [] })).not.toThrow()
   })
 
   it('builds S2 prompt from era canon attrs', () => {
