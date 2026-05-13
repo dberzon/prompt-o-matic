@@ -149,6 +149,7 @@ export async function enqueueReferencePortraitRender({
     comfyService,
     fetchImpl,
     skipUpload: true,
+    sourceComfyImage: outputImage,
   })
 
   return {

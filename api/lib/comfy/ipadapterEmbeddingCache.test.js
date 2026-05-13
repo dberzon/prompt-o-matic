@@ -14,6 +14,7 @@ import {
   imagePayloadDigest,
   parseIpAdapterEmbeddingPayload,
   resolveIpAdapterWorkflowImage,
+  serializeIpAdapterEmbeddingPayload,
 } from './ipadapterEmbeddingCache.js'
 
 const tempDirs = []
@@ -121,5 +122,102 @@ describe('ipadapter embedding cache', () => {
     expect(cached?.comfyImage?.filename).toBe('reference-anchor.png')
     expect(fetchImpl).not.toHaveBeenCalled()
     expect(resolveIpAdapterWorkflowImage(db, 'ent_filename')?.filename).toBe('reference-anchor.png')
+  })
+
+  it('does not cache a fabricated filename when upload is skipped for raw bytes', async () => {
+    const db = createTempDb()
+    createEntity(db, { id: 'ent_skip_upload', type: 'character', name: 'Ruslan' })
+    createVisualAnchor(db, {
+      id: 'anchor_skip_upload',
+      entityId: 'ent_skip_upload',
+      type: 'reference_image',
+      payload: Buffer.from('png-bytes'),
+      isPrimary: true,
+    })
+
+    const fetchImpl = vi.fn()
+    const cached = await ensureIpAdapterEmbeddingCache({
+      db,
+      entityId: 'ent_skip_upload',
+      comfyService: { config: { baseUrl: 'http://127.0.0.1:8188', timeoutMs: 5000 } },
+      fetchImpl,
+      skipUpload: true,
+    })
+
+    expect(cached?.clipEmbedding).toHaveLength(768)
+    expect(cached?.comfyImage).toBeUndefined()
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(listVisualAnchors(db, { entityId: 'ent_skip_upload', type: 'ipadapter_embedding' })).toHaveLength(0)
+    expect(resolveIpAdapterWorkflowImage(db, 'ent_skip_upload')?.filename).toBeUndefined()
+  })
+
+  it('caches a known Comfy output image using LoadImage annotation syntax', async () => {
+    const db = createTempDb()
+    createEntity(db, { id: 'ent_output_image', type: 'character', name: 'Ruslan' })
+    createVisualAnchor(db, {
+      id: 'anchor_output_image',
+      entityId: 'ent_output_image',
+      type: 'reference_image',
+      payload: Buffer.from('png-bytes'),
+      isPrimary: true,
+    })
+
+    const fetchImpl = vi.fn()
+    const cached = await ensureIpAdapterEmbeddingCache({
+      db,
+      entityId: 'ent_output_image',
+      comfyService: { config: { baseUrl: 'http://127.0.0.1:8188', timeoutMs: 5000 } },
+      fetchImpl,
+      skipUpload: true,
+      sourceComfyImage: { filename: 'ref.png', subfolder: 'stage5', type: 'output' },
+    })
+
+    expect(cached?.comfyImage).toEqual({ filename: 'ref.png', subfolder: 'stage5', type: 'output' })
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(listVisualAnchors(db, { entityId: 'ent_output_image', type: 'ipadapter_embedding' })).toHaveLength(1)
+    expect(resolveIpAdapterWorkflowImage(db, 'ent_output_image')?.filename).toBe('stage5/ref.png [output]')
+  })
+
+  it('repairs a previously fabricated filename by uploading on the next render', async () => {
+    const db = createTempDb()
+    createEntity(db, { id: 'ent_repair', type: 'character', name: 'Ruslan' })
+    const reference = createVisualAnchor(db, {
+      id: 'anchor_repair',
+      entityId: 'ent_repair',
+      type: 'reference_image',
+      payload: Buffer.from('png-bytes'),
+      isPrimary: true,
+    })
+    const digest = imagePayloadDigest(reference.payload)
+    createVisualAnchor(db, {
+      id: 'anchor_stale_embedding',
+      entityId: 'ent_repair',
+      type: 'ipadapter_embedding',
+      payload: serializeIpAdapterEmbeddingPayload({
+        sourceAnchorId: reference.id,
+        imageDigest: digest,
+        comfyImage: { filename: `reference-${digest.slice(0, 16)}.png`, subfolder: '', type: 'input' },
+        clipEmbedding: deriveClipVisionEmbeddingFromImage(reference.payload),
+      }),
+      isPrimary: false,
+    })
+
+    expect(resolveIpAdapterWorkflowImage(db, 'ent_repair')?.filename).toBeUndefined()
+
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ name: 'uploaded-reference.png', subfolder: '', type: 'input' }),
+    }))
+    const cached = await ensureIpAdapterEmbeddingCache({
+      db,
+      entityId: 'ent_repair',
+      comfyService: { config: { baseUrl: 'http://127.0.0.1:8188', timeoutMs: 5000 } },
+      fetchImpl,
+    })
+
+    expect(cached?.comfyImage?.filename).toBe('uploaded-reference.png')
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(listVisualAnchors(db, { entityId: 'ent_repair', type: 'ipadapter_embedding' })).toHaveLength(1)
+    expect(resolveIpAdapterWorkflowImage(db, 'ent_repair')?.filename).toBe('uploaded-reference.png')
   })
 })

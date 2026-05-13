@@ -7,6 +7,7 @@ import {
 
 const EMBEDDING_PAYLOAD_VERSION = 1
 const CLIP_EMBEDDING_DIMENSION = 768
+const COMFY_IMAGE_TYPES = new Set(['input', 'output', 'temp'])
 
 export function imagePayloadDigest(payload) {
   const buffer = Buffer.isBuffer(payload)
@@ -66,6 +67,37 @@ function resolveComfyImageFromPayload(imagePayload) {
   return { filename: value, subfolder: '', type: 'input' }
 }
 
+function syntheticFallbackFilename(digest) {
+  return `reference-${digest.slice(0, 16)}.png`
+}
+
+function isSyntheticFallbackComfyImage(comfyImage, digest) {
+  return comfyImage?.filename === syntheticFallbackFilename(digest)
+    && !comfyImage?.subfolder
+    && (comfyImage?.type || 'input') === 'input'
+}
+
+function hasUnsafePathSegment(value) {
+  return String(value || '').split('/').some((segment) => segment === '..')
+}
+
+function normalizeComfyImage(comfyImage) {
+  const filename = String(comfyImage?.filename || '').trim()
+  if (!filename || filename.includes('/') || filename.includes('\\') || hasUnsafePathSegment(filename)) return null
+  const subfolder = String(comfyImage?.subfolder || '').trim()
+  if (subfolder.startsWith('/') || subfolder.includes('\\') || hasUnsafePathSegment(subfolder)) return null
+  const type = String(comfyImage?.type || 'input').trim() || 'input'
+  if (!COMFY_IMAGE_TYPES.has(type)) return null
+  return { filename, subfolder, type }
+}
+
+function comfyImageToLoadImageValue(comfyImage) {
+  const normalized = normalizeComfyImage(comfyImage)
+  if (!normalized) return null
+  const path = [normalized.subfolder, normalized.filename].filter(Boolean).join('/')
+  return normalized.type === 'input' ? path : `${path} [${normalized.type}]`
+}
+
 async function uploadReferenceImageToComfy({
   baseUrl,
   imageBytes,
@@ -119,10 +151,11 @@ export function resolveIpAdapterWorkflowImage(db, entityId) {
 
   const digest = imagePayloadDigest(primary.payload)
   const { parsed } = findMatchingEmbeddingAnchor(db, entityId, primary, digest)
-  if (parsed?.comfyImage?.filename) {
+  const cachedFilename = comfyImageToLoadImageValue(parsed?.comfyImage)
+  if (cachedFilename && !isSyntheticFallbackComfyImage(parsed.comfyImage, digest)) {
     return {
       kind: 'cached',
-      filename: parsed.comfyImage.filename,
+      filename: cachedFilename,
       comfyImage: parsed.comfyImage,
       clipEmbedding: parsed.clipEmbedding || null,
     }
@@ -149,17 +182,22 @@ export async function ensureIpAdapterEmbeddingCache({
   comfyService,
   fetchImpl = fetch,
   skipUpload = false,
+  sourceComfyImage = null,
 }) {
   const primary = resolvePrimaryReferenceAnchor(db, entityId)
   if (!primary?.payload) return null
 
   const digest = imagePayloadDigest(primary.payload)
   const existing = findMatchingEmbeddingAnchor(db, entityId, primary, digest)
-  if (existing.parsed?.clipEmbedding?.length && existing.parsed?.comfyImage?.filename) {
+  if (
+    existing.parsed?.clipEmbedding?.length
+    && comfyImageToLoadImageValue(existing.parsed?.comfyImage)
+    && !isSyntheticFallbackComfyImage(existing.parsed.comfyImage, digest)
+  ) {
     return existing.parsed
   }
 
-  let comfyImage = resolveComfyImageFromPayload(primary.payload)
+  let comfyImage = normalizeComfyImage(sourceComfyImage) || resolveComfyImageFromPayload(primary.payload)
   if (!comfyImage && Buffer.isBuffer(primary.payload) && !skipUpload && comfyService?.config?.baseUrl) {
     comfyImage = await uploadReferenceImageToComfy({
       baseUrl: comfyService.config.baseUrl,
@@ -168,15 +206,16 @@ export async function ensureIpAdapterEmbeddingCache({
       timeoutMs: comfyService.config.timeoutMs,
     })
   }
+
+  const clipEmbedding = deriveClipVisionEmbeddingFromImage(primary.payload)
   if (!comfyImage) {
-    comfyImage = {
-      filename: `reference-${digest.slice(0, 16)}.png`,
-      subfolder: '',
-      type: 'input',
+    return {
+      sourceAnchorId: primary.id,
+      imageDigest: digest,
+      clipEmbedding,
     }
   }
 
-  const clipEmbedding = deriveClipVisionEmbeddingFromImage(primary.payload)
   const payload = serializeIpAdapterEmbeddingPayload({
     sourceAnchorId: primary.id,
     imageDigest: digest,
