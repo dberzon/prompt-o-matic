@@ -1,8 +1,17 @@
 import { useState } from 'react'
 import styles from './Header.module.css'
 
-export default function Header({ onClear }) {
+export default function Header({ onClear, comfyStatus = null, comfyError = '' }) {
   const [guideOpen, setGuideOpen] = useState(false)
+  const comfyReady = comfyStatus?.available === true
+  const comfyLabel = comfyStatus == null
+    ? 'Comfy checking…'
+    : comfyReady
+      ? 'Comfy connected'
+      : 'Comfy unavailable'
+  const comfyTitle = comfyReady
+    ? `ComfyUI reachable at ${comfyStatus?.baseUrl || 'configured URL'}`
+    : comfyError || comfyStatus?.error || 'Start ComfyUI and confirm COMFYUI_BASE_URL in .env.local'
 
   return (
     <header className={styles.header}>
@@ -19,6 +28,19 @@ export default function Header({ onClear }) {
           </div>
         </div>
         <div className={styles.actions}>
+          <span
+            className={`${styles.serviceBadge} ${
+              comfyReady
+                ? styles.serviceBadgeReady
+                : comfyStatus == null
+                  ? styles.serviceBadgePending
+                  : styles.serviceBadgeUnavailable
+            }`}
+            title={comfyTitle}
+          >
+            <span className={styles.serviceDot} />
+            {comfyLabel}
+          </span>
           <a
             className={styles.link}
             href="https://chat.qwen.ai"

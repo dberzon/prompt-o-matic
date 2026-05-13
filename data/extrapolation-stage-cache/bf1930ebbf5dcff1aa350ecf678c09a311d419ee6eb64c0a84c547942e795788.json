@@ -1,0 +1,86 @@
+{
+  "snapshot": [
+    {
+      "key": "appearance.build",
+      "value": "heavy-built, wide shoulders, slight belly"
+    },
+    {
+      "key": "appearance.eyes",
+      "value": "piggy eyes"
+    },
+    {
+      "key": "appearance.face",
+      "value": "rounded childish face"
+    },
+    {
+      "key": "appearance.height",
+      "value": "short"
+    },
+    {
+      "key": "appearance.lips",
+      "value": "thin lips"
+    },
+    {
+      "key": "appearance.nose",
+      "value": "short upturned nose"
+    },
+    {
+      "key": "appearance.skin",
+      "value": "freckles"
+    },
+    {
+      "key": "demographics.age",
+      "value": "20-25"
+    },
+    {
+      "key": "demographics.gender",
+      "value": "male"
+    },
+    {
+      "key": "description",
+      "value": "Ruslan Levashov, male, 20–25, short, heavy-built, wide shoulders, slight belly, rounded childish face, piggy eyes, short upturned nose, thin lips, freckles. Lives with his mother and disabled sister in a communal apartment on the outskirts of Moscow during Perestroika. Studies mechanical engineering in technical college. Smokes with friends during breaks. Drinks in Soviet beer halls. In love with Rita Vlasova from pedagogical college."
+    },
+    {
+      "key": "relationship.rita",
+      "value": "in love with Rita Vlasova"
+    },
+    {
+      "key": "setting.era",
+      "value": "Perestroika"
+    },
+    {
+      "key": "setting.location",
+      "value": "outskirts of Moscow"
+    }
+  ],
+  "stageId": 3,
+  "modelId": "auto",
+  "cachedAt": "2026-05-11T18:37:39.611Z",
+  "result": {
+    "writes": [
+      {
+        "id": "121c9574-b662-44f4-9e1d-08658a9f6197",
+        "entityId": "ruslan_levashov",
+        "key": "behavior.temperament",
+        "value": "wry and loyal",
+        "provenance": "inferred",
+        "confidence": 0.7,
+        "sourceStage": 3,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.611Z"
+      }
+    ],
+    "suggestions": [],
+    "conflicts": [],
+    "raw": {
+      "attributes": [
+        {
+          "key": "behavior.temperament",
+          "value": "wry and loyal",
+          "confidence": 0.7
+        }
+      ]
+    }
+  }
+}

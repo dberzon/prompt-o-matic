@@ -10,8 +10,8 @@ Qwen Prompt Builder (QPB) is a local-first creative tool for constructing, manag
 
 **Four tabs and their single jobs:**
 
-- **Prompt Builder** — Constructs and refines a single text-to-image prompt from freetext scene input, director style chips, scenario templates, and an optional LLM polish pass. This is the primary creative composition interface.
-- **Character Builder** — Creates and manages named character bank entries that describe a specific person's appearance. These entries are the input for the Casting Room's Path A (audition) flow.
+- **Prompt Builder** — Constructs and refines a single text-to-image prompt from freetext scene input, director style chips, scenario templates, and an optional LLM polish pass. Supports **Edit prompt** (read-only vs textarea), **Polish with AI** (fuse assembled fragments) vs **Polish current text** (refine the on-screen prompt as a single fragment), **Render in ComfyUI** from the displayed text, and **A/B snapshot compare** (two saved prompts, per-slot Comfy results with tab-scoped `sessionStorage` under `qpb_compare_renders_v1` and per-column clear). This is the primary creative composition interface.
+- **Character Builder** — Creates and manages named character bank entries that describe a specific person's appearance. Optional **identity hints** (dropdowns) and **guidance strength** (`light` vs `strict_casting`) merge into the description sent to optimize and save. These entries are the input for the Casting Room's Path A (audition) flow.
 - **Casting Room** — Generates AI actor portfolios through two paths: Path A (audition from bank, LLM generates character variations from a bank entry, then ComfyUI renders them), and Path B (batch generation using vector similarity checking). Also hosts the Active Character section for managing approved characters and queuing portfolio renders.
 - **Actor Bank** — Full character management interface for the `characters` table. Grid view with filters (search, gender, age) and sort options. Per-character detail view with: inline rename, archive/restore, image keep/discard curation, portfolio re-queue on failure, and "Open in Casting Room" cross-tab bridge. All management actions that previously required the Casting Room are now available here.
 
@@ -1044,7 +1044,12 @@ All state relevant to the Prompt Builder:
 |---|---|---|---|---|
 | `selectedVariant` | object\|null | `null` | Active variant override | No |
 | `restoredText` | string\|null | `null` | Restored-from-history override | No |
-| `manualEdit` | string\|null | `null` | In-textarea manual edit | No |
+| `manualEdit` | string\|null | `null` | In-textarea manual edit (only when **Edit prompt** mode is on) | No |
+| `isManualEditMode` | boolean | `false` | When false, prompt is read-only until user opens edit mode | No |
+| `snapshotA` / `snapshotB` | object\|null | `null` | Saved prompt text + metadata for A/B compare | No |
+| `lastCompareRender` | `{A,B}` | from `sessionStorage` | Last successful Comfy images + snippet per snapshot slot | `sessionStorage` `qpb_compare_renders_v1` |
+| `compareSlotError` | `{A,B}` | `''` | Per-slot Comfy queue/poll errors | No |
+| `activeRenderSlot` | `'main'\|'A'\|'B'\|null` | `null` | Which Comfy job is active (for spinners) | No |
 | `history` | array | from localStorage | Prompt history (max 12) | `HISTORY_KEY = 'qpb_prompt_history_v1'` |
 | `savedPrompts` | array | from DB | Named saved prompts | SQLite `saved_prompts` table |
 | `localProvider` | string | from localStorage | Local LLM provider | `LOCAL_PROVIDER_KEY = 'qpb_local_provider_v1'` |
@@ -1209,11 +1214,18 @@ const displayText = manualEdit !== null
 const handlePolish = () => {
   setRestoredText(null)
   setManualEdit(null)
+  setIsManualEditMode(false)
   setSelectedVariant(null)
   polish({ ... })
 }
 ```
-Yes — `handlePolish()` clears `restoredText`, `manualEdit`, AND `selectedVariant` before starting the polish request. The polish result will therefore display once returned.
+Yes — `handlePolish()` clears `restoredText`, `manualEdit`, exits manual edit mode, AND `selectedVariant` before starting the polish request. The polish result will therefore display once returned.
+
+**`handlePolishCurrentText()` behavior:** Clears the same overrides as `handlePolish`, then calls `polish({ fragments: [displayText.trim()], scene: null, scenario: null, narrativeBeat: null, directorName, directorNote, ... })` so the LLM refines the **currently displayed** prompt string (manual, restored, variant, or polished) while still receiving director register context. Use this for iterative human → AI refinement loops.
+
+**Manual edit mode:** With chips present, the default view is read-only. **Edit prompt** copies the current `displayText` into `manualEdit` and shows a textarea; **Done editing** leaves `manualEdit` set but returns to read-only; **Discard edits** clears `manualEdit`; **Reset** clears overrides and returns to assembled fragments.
+
+**Comfy snapshot renders:** `queueRenderWithPrompt(text, compareSlot)` where `compareSlot` is `'main'`, `'A'`, or `'B'`. Main updates `renderImages` / main progress UI. A/B jobs on success update `lastCompareRender[slot]` only (they do not replace the main strip) and persist via `writeCompareRendersToSession`. Only one Comfy job runs at a time.
 
 **What happens to manualEdit when a chip changes:** `manualEdit` is NOT cleared by chip changes. It persists until the user explicitly resets to assembled (`handleResetToAssembled`) or starts a new polish run.
 
@@ -1341,12 +1353,17 @@ This is the last bullet in the DIRECTOR REGISTER section, after 16 named directo
 | Prompt history | localStorage | `qpb_prompt_history_v1` | Array, max **12** entries (HISTORY_LIMIT=12) |
 | Local provider | localStorage | `qpb_local_provider_v1` | `'ollama'|'lmstudio'|'mock'` |
 | LM Studio host/port/model | localStorage | `qpb_lmstudio_host_v1`, `_port_`, `_model_` | |
+| Compare A/B last renders | sessionStorage | `qpb_compare_renders_v1` | Last Comfy image ids + snippet per slot for Prompt Builder; tab-scoped; cleared when both slots empty |
 
 **Saved prompts cap:** No cap is enforced in the code. The `createSavedPrompt` repository function has no COUNT check before insertion. There is no enforced limit of 30 — any limit previously documented was not found in the current codebase.
 
 **Prompt history cap:** Exactly **12** entries (`HISTORY_LIMIT = 12` in `PromptOutput.jsx`). When a new entry is added: dedup by text, prepend, then `slice(0, HISTORY_LIMIT)`.
 
 **Share URL:** The state is base64-encoded as a JSON object in the URL hash (`#state=...`). Contains: `scene`, `dirKey`, `charCount`, `chars`, `scenario`, `chips`, `blendEnabled`, `blendDir`, `blendWeight`, `narrativeBeat`, `useStyleKeyForPolish`, `aiEngine`, `localOnly`.
+
+### 4.12 Collapsible UI hints
+
+`PromptOutput.jsx` includes a `<details>` block (**Workflow tips**) summarizing edit mode, both polish modes, Comfy preview behavior, and A/B compare + `sessionStorage`. `CharacterBuilder.jsx` includes **How this tab works** for identity hints, guidance strength, optimize/save flow, and reload parsing.
 
 ---
 
@@ -1364,12 +1381,14 @@ From the `CharacterBuilder.jsx` state:
 |---|---|---|---|
 | `name` | string | Yes | Display name (e.g., "Elena") |
 | `slug` | string | Derived | Auto-generated from name via `toSnakeSlug(name)` (snake_case). Can be overridden manually via `slugDraft`. |
-| `description` | string | Yes (or `acceptedText`) | Freetext character description — the raw input |
+| `description` | string | Yes (or `acceptedText`) | Freetext character description — primary creative input |
+| `identityHints` | object | No | Optional dropdown selections (gender presentation, regional look, age bracket, build, eyes, hair); merged into saved/optimized text |
+| `guidanceStrength` | string | No | `'light'` (soft hints) or `'strict_casting'` (hints treated as anchors); stored as `guidance mode:` line in raw description |
 | `acceptedText` | string | No | The accepted/optimized description (can be LLM-rewritten) |
 
-### Validation
+Saved `rawDescription` is the **effective** string: freetext plus optional trailing `identity hints:` / `guidance mode:` / `casting directive:` blocks produced by the UI. `loadCharacter` parses those suffixes back into `description`, `identityHints`, and `guidanceStrength`.
 
-- `canSave = Boolean(slug && name.trim() && (acceptedText.trim() || description.trim()))`
+- `canSave = Boolean(slug && name.trim() && (acceptedText.trim() || effectiveDescription.trim()))` where `effectiveDescription` merges freetext with optional identity/guidance suffixes.
 - If `slugDraft` is manually set and a different character already occupies that slug (`isDuplicate`), save is blocked.
 - Slug collision with an existing bank entry (`SQLITE_CONSTRAINT_UNIQUE`) is surfaced as `'Slug already in bank under a different character'`.
 
@@ -1390,8 +1409,8 @@ From the `CharacterBuilder.jsx` state:
 
 - **Optional.** The user can call `optimize()` (from `useCharacterOptimize` hook, which calls `/api/optimize-character`) to generate an LLM-rewritten version of `description`.
 - The optimized text is shown in a preview area. The user can accept it (sets `acceptedText`) or discard it.
-- If `acceptedText` is empty at save time, `rawDescription` is used as both `description` and `optimizedDescription` will be null/empty.
-- Save writes verbatim: `rawDescription = description.trim()`, `optimizedDescription = (acceptedText || optimized || '').trim()`.
+- If `acceptedText` is empty at save time, the effective description (freetext + optional hint suffixes) is still required for save.
+- Save writes: `rawDescription = effectiveDescription.trim()` (merged freetext + identity/guidance lines), `optimizedDescription = (acceptedText || optimized || '').trim()`.
 
 ### Listing/management
 

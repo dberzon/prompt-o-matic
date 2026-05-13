@@ -1,0 +1,90 @@
+{
+  "timestamp": "2026-05-09T13:34:04.078Z",
+  "mode": "headless",
+  "workerType": "audit",
+  "model": "haiku",
+  "durationMs": 36497,
+  "executionId": "audit_1778333607581_bdke9f",
+  "success": true,
+  "findings": {
+    "vulnerabilities": [
+      {
+        "severity": "high",
+        "file": "Multiple API handlers",
+        "line": "Throughout",
+        "description": "Missing per-user authorization checks. All handlers use `assertCharacterBatchOperationAllowed()` which appears to be a feature flag, not per-user resource authorization. No validation that the requesting user owns/can access the batchId, characterId, or promptPackId being operated on. This allows any authenticated user to access any resource."
+      },
+      {
+        "severity": "high",
+        "file": "api/character-batch-candidates.js, api/character-batch.js, others",
+        "line": "Various",
+        "description": "Insufficient input validation on resource IDs. While code checks `typeof req.query?.batchId === 'string'`, it doesn't validate ID format, length, or structure. Could enable NoSQL injection or enumeration attacks if using document DBs or similar stores."
+      },
+      {
+        "severity": "medium",
+        "file": "api/comfy-ingest-many.js, api/comfy-jobs-status.js",
+        "line": "Loop processing",
+        "description": "Missing validation of array item structure. Code iterates `body.jobs` with minimal validation per item. No validation of `job.promptId`, `job.promptPackId`, or `job.characterId` format before processing."
+      },
+      {
+        "severity": "medium",
+        "file": "api/character-batch-refill.js, api/characters-generate-batch.js, api/character-batch-candidate-mutate.js",
+        "line": "Request body parameters",
+        "description": "No validation of numeric parameters. `targetCount`, `maxNewCandidates` passed without type/range validation. Could be negative, extremely large, or non-numeric, causing backend errors or resource exhaustion."
+      },
+      {
+        "severity": "medium",
+        "file": "All API handlers",
+        "line": "Error handling",
+        "description": "Potential information disclosure in error responses. Error messages include operation names (`'CHARACTER_BATCH_GET_ERROR'`) and rely on `normalizeHandlerError()` which may expose stack traces or implementation details."
+      },
+      {
+        "severity": "medium",
+        "file": "All API handlers",
+        "line": "Throughout",
+        "description": "No visible request size limits or rate limiting. Large POST payloads could cause denial of service. No throttling on batch generation or ComfyUI queue operations."
+      },
+      {
+        "severity": "medium",
+        "file": "api/character-portfolio-queue.js, api/characters-generate-batch.js",
+        "line": "Function calls",
+        "description": "Unsafe nested optional chaining. `raw?.queue?.queue_running.some()` doesn't validate the intermediate objects exist before calling `.some()`. Should validate structure before method calls."
+      },
+      {
+        "severity": "low",
+        "file": "api/comfy-validate-workflow.js",
+        "line": "14",
+        "description": "Conditional trim() without null check. `body.workflowId.trim()` could throw if `body.workflowId` is null/undefined despite the typeof check (type coercion edge case)."
+      },
+      {
+        "severity": "low",
+        "file": "All API handlers",
+        "line": "Throughout",
+        "description": "Missing CSRF protection. No visible CSRF token validation on POST requests. If frontend is CORS-enabled to external origins, vulnerable to cross-site attacks."
+      },
+      {
+        "severity": "low",
+        "file": "All API handlers",
+        "line": "Throughout",
+        "description": "No audit logging. Operations like approve, reject, save candidates have no logged trail of who performed the action and when."
+      }
+    ],
+    "riskScore": 72,
+    "recommendations": [
+      "**CRITICAL**: Implement per-user authorization. Add user context (userId/claims) to all requests. Validate that the user owns or has explicit permission for each resource (batchId, characterId, promptPackId) before processing.",
+      "Implement strict input validation schema (Zod, Joi, or similar) for all request parameters. Validate ID format (UUID, alphanumeric range), numeric ranges, enum values.",
+      "Add request size limits (e.g., `express.json({ limit: '1mb' })`) to prevent DoS via large payloads.",
+      "Implement rate limiting on sensitive operations (batch generation, ComfyUI queue, ingest) using tokens or sliding windows.",
+      "Sanitize error responses - return generic error messages to clients, log detailed errors server-side only. Never expose operation names or implementation details.",
+      "Add CSRF protection: require CSRF tokens on all state-changing operations (POST/PUT/DELETE), validate origin headers.",
+      "Implement audit logging: log userId, operation, resource IDs, timestamps for all batch operations.",
+      "Add Content-Type validation - explicitly check `req.headers['content-type']` includes 'application/json' before parsing.",
+      "Validate all nested object structures before method calls - replace `?.some()` with explicit existence checks.",
+      "Fix optional chaining edge case in `comfy-validate-workflow.js` line 14 - validate `body.workflowId` exists before calling `.trim()`.",
+      "Document and review the `normalizeHandlerError()` function - ensure it doesn't leak stack traces or sensitive context.",
+      "Add database connection security: validate that `createVectorRuntime()` properly closes connections even on error (already using finally blocks, good)."
+    ]
+  },
+  "rawOutputPreview": "I'll analyze this codebase for security vulnerabilities. Let me examine the API handlers for the Qwen Prompt Builder application.\n\n```json\n{\n  \"vulnerabilities\": [\n    {\n      \"severity\": \"high\",\n      \"file\": \"Multiple API handlers\",\n      \"line\": \"Throughout\",\n      \"description\": \"Missing per-user authorization checks. All handlers use `assertCharacterBatchOperationAllowed()` which appears to be a feature flag, not per-user resource authorization. No validation that the requesting user owns/can access the batchId, characterId, or promptPackId being operated on. This allows any authenticated user to access any resource.\"\n    },\n    {\n      \"severity\": \"high\",\n      \"file\": \"api/character-batch-candidates.js, api/character-batch.js, others\",\n      \"line\": \"Various\",\n      \"description\": \"Insufficient input validation on resource IDs. While code checks `typeof req.query?.batchId === 'string'`, it doesn't validate ID format, length, or structure. Could enable NoSQL injection or enumeration attacks if using document DBs or similar stores.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"api/comfy-ingest-many.js, api/comfy-jobs-status.js\",\n      \"line\": \"Loop processing\",\n      \"description\": \"Missing validation of array item structure. Code iterates `body.jobs` with minimal validation per item. No validation of `job.promptId`, `job.promptPackId`, or `job.characterId` format before processing.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"api/character-batch-refill.js, api/characters-generate-batch.js, api/character-batch-candidate-mutate.js\",\n      \"line\": \"Request body parameters\",\n      \"description\": \"No validation of numeric parameters. `targetCount`, `maxNewCandidates` passed without type/range validation. Could be negative, extremely large, or non-numeric, causing backend errors or resource exhaustion.\"\n    },\n    {\n      \"severity\": \"medium\",\n      \"file\": \"All API handlers\",\n      \"line\": \"Error handling\",\n      \"description\": \"Potential inf",
+  "rawOutputLength": 6031
+}

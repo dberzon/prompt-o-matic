@@ -10,8 +10,8 @@ For full technical detail, see `APPLICATION_REFERENCE.md`.
 
 | Tab | Job |
 |---|---|
-| **Prompt Builder** | Assemble a prompt from scene input, director chips (61 directors), scenario templates, and optional LLM polish. Independent of the other tabs. |
-| **Character Builder** | Author named character descriptions (bank entries) stored in SQLite and mirrored to localStorage. These feed Path A in the Casting Room. |
+| **Prompt Builder** | Assemble a prompt from scene input, director chips (61 directors), scenario templates, and optional LLM polish. Supports **manual edit mode** (read-only vs textarea), **Polish current text** (re-polish on-screen prompt as one fragment), Comfy **Render in ComfyUI** from the displayed prompt, and **A/B snapshot compare** (two saved prompts, per-slot Comfy results, `sessionStorage` restore). Independent of the other tabs. |
+| **Character Builder** | Author named character descriptions (bank entries) stored in SQLite and mirrored to localStorage. Optional **identity hints** and **guidance strength** (light vs strict casting) merge into the optimized/saved description. These feed Path A in the Casting Room. |
 | **Casting Room** | Two paths: Path A (audition from bank entry, LLM generates profiles, ComfyUI renders) and Path B (batch generation with vector similarity screening). Shared Active Character section for portfolio management and image gallery. |
 | **Actor Bank** | Full character management interface for the `characters` table. Grid with search/filter. Detail view: inline rename, archive/restore, image curation, portfolio re-queue, prompt descriptor edit/generate. Characters can be imported into Prompt Builder slots. |
 | **Continuity** | Worldbuilding entity editor: extrapolation pipeline, attribute review, primary reference anchors, Stage 6 conflict resolution, and MVP Done gate (five-scene continuity QA with blind reviewer scoring). |
@@ -35,6 +35,9 @@ Chroma is auto-spawned by `vite.config.js` on dev start unless `AUTO_START_CHROM
 
 ### Assembler (`src/utils/assembler.js`)
 Builds ordered prompt fragments from scene, scenario, chips, and characters. Applies 29 REWRITES rules to scene text, then assembles in fixed cinematic order (shot → lens → scenario → scene → env → texture → comp → light → color → film → qual). Passes result through `dedupeFragments()` (3-check algorithm: exact, substring, Jaccard similarity).
+
+### Prompt panel (`src/components/PromptOutput.jsx`)
+Renders assembled/polished/manual prompt text, polish controls, Comfy queue for the **current displayed** prompt, optional A/B snapshot saves, per-slot Comfy compare results (last images kept per column, persisted in `sessionStorage` under `qpb_compare_renders_v1` for the tab), and workflow hints (`<details>`). **Polish with AI** sends full `fragments: prompt[]` plus scene/scenario/narrative beat; **Polish current text** sends `fragments: [displayText.trim()]` with scene/scenario/narrative beat cleared so the LLM focuses on refining the visible string while still receiving director register fields.
 
 ### Polish System (`api/lib/polishCore.js`)
 LLM-based prompt refinement. Provider resolution chain: embedded sidecar → local (Ollama / LM Studio) → Claude cloud. System prompt enforces: 60–110 words, no abstract adjectives, static composition, passive figures, single light source, anti-CGI anchors. Controlled by `POST /api/polish`.
@@ -96,7 +99,7 @@ Qwen-Image DiT templates do not ship a validated IPAdapter node chain. MVP decis
 | `entity_relationships` | Typed relationships between entities |
 | `visual_anchors` | Continuity anchors (reference images, seeds, etc.) |
 
-**localStorage** is used for: custom presets, custom directors, AI engine preference, local-only flag, prompt history (max 12), Character Builder entries (mirrored from SQLite), and a few transient UI preferences. Saved prompts and workspace profiles were migrated to SQLite in P5.
+**localStorage** is used for: custom presets, custom directors, AI engine preference, local-only flag, prompt history (max 12), Character Builder entries (mirrored from SQLite), and a few transient UI preferences. Saved prompts and workspace profiles were migrated to SQLite in P5. **sessionStorage** (`qpb_compare_renders_v1`) stores the last successful Comfy compare images for Prompt Builder snapshot slots A/B within a browser tab.
 
 ---
 

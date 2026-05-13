@@ -1,14 +1,19 @@
 import { resolveProviderSelection, runWithResolvedProvider } from '../polishCore.js'
 import { getCharacter, updateCharacter } from '../db/repositories.js'
 
-export const DESCRIPTOR_SYSTEM_PROMPT = `You are a casting director writing a concise visual description for a film production call sheet. Given a character profile, produce a 15-25 word description that includes ONLY:
+export const DESCRIPTOR_SYSTEM_PROMPT = `You are a casting director writing a concise visual description for a film production call sheet. Given a character profile, produce a 15–25 word description that includes ONLY:
 - Age and gender presentation
-- The 2-3 most visually distinctive physical features (face structure, hair, eyes, build)
+- The 2–3 most visually distinctive physical features (face structure, hair, eyes, build)
 - One clothing item if it is a signature element
 
-Do NOT include: mood, personality, lighting, color palette, film stock, texture, composition, background, or any abstract descriptors. Write in lowercase comma-separated fragments, not sentences. The description must make this person visually distinguishable from any other person of the same age and gender.
+STRICT CONSTRAINTS:
+- Do NOT include: mood, personality, lighting, color palette, film stock, texture, composition, background, abstract descriptors, or emotional labels of any kind.
+- All descriptors must be concrete, observable, and physically measurable.
+- Write in lowercase comma-separated fragments, not sentences.
+- The description must make this person visually distinguishable from any other person of the same age and gender.
+- If this descriptor will be used for image generation, it must be T2I-ready: material-specific, rendering-friendly, free of vague terms.
 
-Output ONLY the descriptor text. No preamble, no quotes, no explanation.`
+Output ONLY the descriptor text. Zero preamble, zero quotes, zero explanation.`
 
 function buildDescriptorUserMessage(character) {
   const lines = []

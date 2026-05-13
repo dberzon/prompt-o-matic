@@ -33,6 +33,24 @@ export function queueComfyPromptPack({ promptPackId, workflowId, dryRun }) {
   return apiPost('/api/comfy-queue-prompt-pack', { promptPackId, workflowId, dryRun })
 }
 
+export function queueBuilderPromptRender({
+  positivePrompt,
+  negativePrompt,
+  aspectRatio,
+  workflowId,
+  seed,
+  dryRun,
+}) {
+  return apiPost('/api/comfy-queue-builder-prompt', {
+    positivePrompt,
+    negativePrompt,
+    aspectRatio,
+    workflowId,
+    seed,
+    dryRun,
+  })
+}
+
 export function getComfyJobStatus(promptId) {
   return apiGet('/api/comfy-job-status', { id: promptId })
 }

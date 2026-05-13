@@ -27,6 +27,8 @@ Both journeys converge at **Active Character → Portfolio → Gallery**.
 
 ## Journey A — Cast from Bank
 
+> Quick cross-link: when shaping a brief, the **Character Builder** tab now includes a **How this tab works** guide plus optional identity hints and guidance strength (`light` / `strict_casting`). For iterative prompt refinement before/after casting, the **Prompt Builder** tab includes **Workflow tips** with Edit prompt, Polish current text, and A/B compare behavior.
+
 ### Step 1: Create a Casting Brief
 
 1. Click the **Character Builder** tab.

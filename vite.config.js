@@ -561,7 +561,7 @@ function apiDevPlugin(env) {
 
       server.middlewares.use('/api/render-events', (req, res) => {
         if (req.method !== 'GET') { res.statusCode = 405; res.end(); return }
-        const comfyBaseUrl = env.COMFY_BASE_URL || 'http://127.0.0.1:8188'
+        const comfyBaseUrl = (env.COMFYUI_BASE_URL || env.COMFY_BASE_URL || 'http://127.0.0.1:8188').replace(/\/+$/, '')
         startComfyWatcher(comfyBaseUrl, env)
         res.writeHead(200, {
           'Content-Type': 'text/event-stream',
@@ -1633,6 +1633,38 @@ function apiDevPlugin(env) {
         } catch (err) {
           const normalized = normalizeHandlerError(err)
           sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'COMFY_QUEUE_PROMPT_PACK_ERROR' })
+        } finally {
+          runtime?.close?.()
+        }
+      })
+
+      server.middlewares.use('/api/comfy-queue-builder-prompt', async (req, res) => {
+        if (req.method !== 'POST') {
+          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
+          return
+        }
+        let runtime = null
+        try {
+          assertComfyOperationAllowed('queue', env)
+          const body = await readJsonBody(req)
+          runtime = createVectorRuntime({ env })
+          const service = createComfyService({ env })
+          const { queuePromptBuilderRender } = await import('./api/lib/prompts/builderPromptRender.js')
+          const result = await queuePromptBuilderRender({
+            db: runtime.db,
+            comfyService: service,
+            positivePrompt: body?.positivePrompt,
+            negativePrompt: body?.negativePrompt,
+            aspectRatio: body?.aspectRatio,
+            workflowId: body?.workflowId,
+            seed: body?.seed,
+            dryRun: body?.dryRun === true,
+            allowWorkflowFallback: body?.allowWorkflowFallback !== false,
+          })
+          sendJsonMiddleware(res, 200, { ok: true, ...result })
+        } catch (err) {
+          const normalized = normalizeHandlerError(err)
+          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'COMFY_QUEUE_BUILDER_PROMPT_ERROR' })
         } finally {
           runtime?.close?.()
         }

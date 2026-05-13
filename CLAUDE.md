@@ -119,6 +119,8 @@ api/        Vite middleware route handlers (one file = one route)
 **The polish flow (do NOT break this chain):**
 `App.jsx` → `utils/assembler.js` → `PromptOutput.jsx` → `hooks/usePolish.js` → `POST /api/polish` → `api/lib/polishCore.js` → provider (LM Studio / Claude / Ollama)
 
+`PromptOutput.jsx` adds **manual edit mode**, **Polish with AI** (assembler fragments) vs **Polish current text** (what is on screen), Comfy preview from the displayed prompt, and **A/B compare** with last renders in `sessionStorage` (`qpb_compare_renders_v1`). `CharacterBuilder.jsx` merges optional **identity hints** and **guidance strength** into the saved `rawDescription` (see `APPLICATION_REFERENCE.md` §5).
+
 **Provider resolution order in `polishCore.js`:** embedded sidecar → local (LM Studio or Ollama, controlled by `LLM_PROVIDER`) → Claude cloud. Engine selector in UI: `auto | local | cloud | embedded`.
 
 **Data layer:** SQLite (`better-sqlite3`) at `data/qpb-local.sqlite` is canonical. Legacy casting uses `characters`, prompt packs, and batches. The additive **entity layer** (`entities`, provenance-tracked `entity_attributes`, `entity_relationships`, `visual_anchors`) powers the **Continuity** tab: six-stage extrapolation, reference anchors, conflict review, and MVP Done gate (five-scene continuity QA). localStorage holds UI prefs + custom presets only.

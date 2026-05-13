@@ -55,6 +55,15 @@ describe('comfy service', () => {
     expect(dimensionsFromAspectRatio('16:9')).toEqual({ width: 1344, height: 768 })
   })
 
+  it('omits IPAdapter placeholder nodes when no reference image is configured', () => {
+    const payload = buildComfyPromptPayload({
+      promptPack: validQwenImagePromptPack,
+      workflowId: 'qwen-image-2512-default',
+    })
+    expect(payload.prompt['98']).toBeUndefined()
+    expect(payload.prompt['99']).toBeUndefined()
+  })
+
   it('injects primary reference anchor into workflow when available', () => {
     const db = createTempDb()
     createEntity(db, { id: 'ent_anchor', type: 'character', name: 'Ruslan' })
@@ -337,7 +346,7 @@ describe('comfy service', () => {
     const svc = createComfyService({ env: { COMFYUI_BASE_URL: 'http://127.0.0.1:8188' } })
     const result = svc.listWorkflows()
     expect(result.ok).toBe(true)
-    expect(result.defaultWorkflowId).toBe('qwen-image-2512-default')
+    expect(result.defaultWorkflowId).toBe('qwen-image-2512-comfyui-00010')
     expect(result).toHaveProperty('requestedWorkflowId')
     expect(result).toHaveProperty('resolvedWorkflowId')
     expect(result).toHaveProperty('usedFallback')

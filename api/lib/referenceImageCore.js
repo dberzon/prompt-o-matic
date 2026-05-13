@@ -8,19 +8,30 @@ Return a JSON object with EXACTLY these fields — nothing else:
   "lighting": "one sentence: light quality (hard/soft), direction, temperature, source type",
   "composition": "one sentence: shot scale, framing, depth of field, subject placement",
   "filmCharacter": "one sentence: grain, softness, any analog or digital quality",
-  "mood": "2-4 words only — physical descriptors, not emotional labels",
+  "mood": "2–4 words only — physical descriptors, not emotional labels",
   "chipSuggestions": {
-    "light": ["1-2 short cinematic light phrases matching what you see"],
-    "color": ["1-2 short grade/palette phrases"],
-    "film": ["0-1 film stock or grain phrase"]
+    "light": ["1–2 short cinematic light phrases matching what you see"],
+    "color": ["1–2 short grade/palette phrases"],
+    "film": ["0–1 film stock or grain phrase"]
   }
 }
 
 STRICT RULES:
-- Output ONLY the JSON object. No markdown, no code fences, no preamble, no explanation.
+- Output ONLY the raw JSON object. Zero preamble, zero markdown, zero code fences, zero explanations.
+- The output must start exactly with { and end exactly with }.
+- Use double quotes for all keys and string values. Ensure valid JSON syntax.
 - All descriptions must be physical and material — never abstract or emotional.
-- chipSuggestions values are short phrases (5-10 words each) matching cinematic prompt language.
-- If a field is not clearly visible or relevant, use an empty string or empty array.`
+- chipSuggestions values are short phrases (5–10 words each) using cinematic prompt language optimized for Qwen-Image 2512.
+- If a field is not clearly visible or relevant, use an empty string or empty array.
+- Forbidden in any field: mood words (moody, atmospheric, mysterious, intense, brooding, dreamlike). Translate to observable visual properties only.`
+
+function cleanReferenceImageJsonText(text) {
+  return String(text ?? '')
+    .replace(/^```json\s*/i, '')
+    .replace(/^```\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim()
+}
 
 export async function runReferenceImageAnalysis({ payload, env = process.env }) {
   const { imageDataUrl } = payload || {}
@@ -84,7 +95,7 @@ export async function runReferenceImageAnalysis({ payload, env = process.env }) 
   }
 
   const data = await response.json()
-  const text = data?.content?.[0]?.text?.trim() ?? ''
+  const text = cleanReferenceImageJsonText(data?.content?.[0]?.text)
 
   try {
     const features = JSON.parse(text)

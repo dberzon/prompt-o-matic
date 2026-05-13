@@ -1,5 +1,9 @@
 export function sendJsonNode(res, status, payload) {
-  res.status(status).json(payload)
+  if (typeof res?.status === 'function') {
+    return res.status(status).json(payload)
+  }
+  res.writeHead(status, { 'Content-Type': 'application/json' })
+  res.end(JSON.stringify(payload))
 }
 
 export function sendJsonMiddleware(res, status, payload) {

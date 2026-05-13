@@ -1,0 +1,55 @@
+{
+  "snapshot": [
+    {
+      "key": "description",
+      "value": "Ruslan Levashov, male, 20–25, short, heavy-built, wide shoulders, slight belly, rounded childish face, piggy eyes, short upturned nose, thin lips, freckles. Lives with his mother and disabled sister in a communal apartment on the outskirts of Moscow during Perestroika. Studies mechanical engineering in technical college. Smokes with friends during breaks. Drinks in Soviet beer halls. In love with Rita Vlasova from pedagogical college."
+    }
+  ],
+  "stageId": 2,
+  "modelId": "auto",
+  "cachedAt": "2026-05-11T18:37:53.124Z",
+  "result": {
+    "writes": [
+      {
+        "id": "b0ca899c-3535-4bf0-aa10-ff8b35962894",
+        "entityId": "ruslan_levashov",
+        "key": "wardrobe.jacket",
+        "value": "worn student jacket",
+        "provenance": "inferred",
+        "confidence": 0.6,
+        "sourceStage": 2,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:53.124Z"
+      },
+      {
+        "id": "20151e3c-0c73-468a-b9b0-62174b1c7a9f",
+        "entityId": "ruslan_levashov",
+        "key": "habit.cigarette",
+        "value": "Belomorkanal",
+        "provenance": "inferred",
+        "confidence": 0.6,
+        "sourceStage": 2,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:53.124Z"
+      }
+    ],
+    "suggestions": [],
+    "conflicts": [],
+    "raw": {
+      "attributes": [
+        {
+          "key": "wardrobe.jacket",
+          "value": "worn student jacket",
+          "confidence": 0.9
+        },
+        {
+          "key": "habit.cigarette",
+          "value": "Belomorkanal",
+          "confidence": 0.8
+        }
+      ]
+    }
+  }
+}

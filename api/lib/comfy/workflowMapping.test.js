@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   listAvailableWorkflows,
+  resolveDefaultQueueWorkflowId,
   resolveWorkflowId,
   resolveWorkflowSelection,
   workflowExists,
@@ -79,5 +80,10 @@ describe('workflow discovery mapping', () => {
       workflowsDir: dir,
       allowFallback: false,
     })).toThrow('Unknown workflowId')
+  })
+
+  it('selects a runnable default workflow when none is requested', () => {
+    expect(resolveDefaultQueueWorkflowId()).toBe('qwen-image-2512-comfyui-00010')
+    expect(resolveWorkflowSelection(null).resolvedWorkflowId).toBe('qwen-image-2512-comfyui-00010')
   })
 })

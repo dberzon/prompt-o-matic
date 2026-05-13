@@ -5,6 +5,80 @@ import { liftEntityFromBankEntry } from '../lib/api/entities.js'
 import { toSnakeSlug, withUniqueSuffix } from '../utils/slugify.js'
 import styles from './CharacterBuilder.module.css'
 
+const HINT_OPTIONS = {
+  genderPresentation: ['', 'masculine-presenting', 'feminine-presenting', 'androgynous'],
+  ethnicityOrRegionalLook: ['', 'middle eastern', 'east asian', 'south asian', 'black african', 'white european', 'latino', 'mixed'],
+  ageBracket: ['', 'late teens', '20s', '30s', '40s', '50s', '60+'],
+  bodyType: ['', 'slim', 'athletic', 'average', 'stocky', 'heavyset'],
+  eyeColor: ['', 'brown', 'hazel', 'green', 'blue', 'gray'],
+  hairColor: ['', 'black', 'dark brown', 'brown', 'blonde', 'red', 'gray', 'white'],
+  hairLength: ['', 'buzz cut', 'short', 'medium', 'long', 'very long'],
+}
+
+const EMPTY_IDENTITY_HINTS = {
+  genderPresentation: '',
+  ethnicityOrRegionalLook: '',
+  ageBracket: '',
+  bodyType: '',
+  eyeColor: '',
+  hairColor: '',
+  hairLength: '',
+}
+
+const GUIDANCE_STRENGTH_OPTIONS = ['light', 'strict_casting']
+
+function buildIdentityHintSummary(hints) {
+  const parts = []
+  if (hints.genderPresentation) parts.push(`gender presentation: ${hints.genderPresentation}`)
+  if (hints.ethnicityOrRegionalLook) parts.push(`ethnicity/regional look: ${hints.ethnicityOrRegionalLook}`)
+  if (hints.ageBracket) parts.push(`apparent age: ${hints.ageBracket}`)
+  if (hints.bodyType) parts.push(`build: ${hints.bodyType}`)
+  if (hints.eyeColor) parts.push(`eyes: ${hints.eyeColor}`)
+  if (hints.hairColor || hints.hairLength) {
+    const hair = [hints.hairColor, hints.hairLength].filter(Boolean).join(', ')
+    parts.push(`hair: ${hair}`)
+  }
+  return parts.join('; ')
+}
+
+function buildEffectiveDescription(baseDescription, identityHintSummary, guidanceStrength) {
+  const base = String(baseDescription ?? '').trim()
+  if (!identityHintSummary) return base
+  const lines = []
+  if (base) lines.push(base)
+  lines.push(`identity hints: ${identityHintSummary}`)
+  lines.push(`guidance mode: ${guidanceStrength}`)
+  if (guidanceStrength === 'strict_casting') {
+    lines.push('casting directive: treat identity hints as required anchors and avoid unspecified demographic defaults.')
+  }
+  return lines.join('\n\n')
+}
+
+function parseDescriptionWithIdentityHints(text) {
+  const source = String(text ?? '')
+  const guidanceMatch = source.match(/\n\nguidance mode:\s*(light|strict_casting)\s*(?:\n\ncasting directive:[\s\S]*)?$/i)
+  const guidanceStrength = guidanceMatch ? guidanceMatch[1].toLowerCase() : 'light'
+  const hintMatch = source.match(/\n\nidentity hints:\s*(.+?)\s*(?:\n\nguidance mode:[\s\S]*)?$/i)
+  if (!hintMatch) return { baseDescription: source, hints: null, guidanceStrength }
+  const hintText = hintMatch[1] || ''
+  const hints = { ...EMPTY_IDENTITY_HINTS }
+  const segments = hintText.split(';').map((part) => part.trim()).filter(Boolean)
+  for (const segment of segments) {
+    if (segment.startsWith('gender presentation:')) hints.genderPresentation = segment.replace('gender presentation:', '').trim()
+    if (segment.startsWith('ethnicity/regional look:')) hints.ethnicityOrRegionalLook = segment.replace('ethnicity/regional look:', '').trim()
+    if (segment.startsWith('apparent age:')) hints.ageBracket = segment.replace('apparent age:', '').trim()
+    if (segment.startsWith('build:')) hints.bodyType = segment.replace('build:', '').trim()
+    if (segment.startsWith('eyes:')) hints.eyeColor = segment.replace('eyes:', '').trim()
+    if (segment.startsWith('hair:')) {
+      const hair = segment.replace('hair:', '').trim().split(',').map((part) => part.trim()).filter(Boolean)
+      hints.hairColor = hair[0] || ''
+      hints.hairLength = hair[1] || ''
+    }
+  }
+  const baseDescription = source.slice(0, hintMatch.index).trimEnd()
+  return { baseDescription, hints, guidanceStrength }
+}
+
 function readLocalSetting(key, fallback) {
   try {
     const raw = localStorage.getItem(key)
@@ -25,6 +99,8 @@ export default function CharacterBuilder({
   const [name, setName] = useState('')
   const [slugDraft, setSlugDraft] = useState('')
   const [description, setDescription] = useState('')
+  const [identityHints, setIdentityHints] = useState(EMPTY_IDENTITY_HINTS)
+  const [guidanceStrength, setGuidanceStrength] = useState('light')
   const [acceptedText, setAcceptedText] = useState('')
   const [flash, setFlash] = useState('')
   const [flashIsError, setFlashIsError] = useState(false)
@@ -82,13 +158,24 @@ export default function CharacterBuilder({
 
   const slugAuto = useMemo(() => toSnakeSlug(name), [name])
   const slug = toSnakeSlug(slugDraft || slugAuto)
-  const canSave = Boolean(slug && name.trim() && (acceptedText.trim() || description.trim()))
+  const identityHintSummary = useMemo(
+    () => buildIdentityHintSummary(identityHints),
+    [identityHints]
+  )
+  const effectiveDescription = useMemo(() => {
+    return buildEffectiveDescription(description, identityHintSummary, guidanceStrength)
+  }, [description, identityHintSummary, guidanceStrength])
+  const canSave = Boolean(slug && name.trim() && (acceptedText.trim() || effectiveDescription.trim()))
   const orderedCharacters = useMemo(
     () => Object.values(characters).sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0)),
     [characters]
   )
 
   const isDuplicate = Boolean(characters[slug] && characters[slug].name !== name.trim())
+  const onHintChange = (key) => (event) => {
+    const nextValue = event.target.value
+    setIdentityHints((prev) => ({ ...prev, [key]: nextValue }))
+  }
 
   const runOptimize = useCallback(async () => {
     const localProvider = readLocalSetting('qpb_local_provider_v1', 'ollama')
@@ -99,7 +186,7 @@ export default function CharacterBuilder({
       ? `http://${lmStudioHost}:${lmStudioPort}/v1`
       : null
     await optimize({
-      description,
+      description: effectiveDescription,
       engine: aiEngine,
       localOnly,
       embeddedPort: embeddedStatus?.port ?? null,
@@ -109,7 +196,7 @@ export default function CharacterBuilder({
       lmStudioBaseUrl,
       lmStudioModel: localProvider === 'lmstudio' ? lmStudioModel : null,
     })
-  }, [description, aiEngine, localOnly, embeddedStatus, optimize])
+  }, [effectiveDescription, aiEngine, localOnly, embeddedStatus, optimize])
 
   const saveCharacter = async () => {
     if (!canSave || saving) return
@@ -124,7 +211,7 @@ export default function CharacterBuilder({
     const value = {
       slug: finalSlug,
       name: name.trim(),
-      rawDescription: description.trim(),
+      rawDescription: effectiveDescription.trim(),
       optimizedDescription: (acceptedText || optimized || '').trim(),
       createdAt: Date.now(),
     }
@@ -181,9 +268,12 @@ export default function CharacterBuilder({
   }
 
   const loadCharacter = (entry) => {
+    const parsed = parseDescriptionWithIdentityHints(entry.rawDescription ?? '')
     setName(entry.name ?? '')
     setSlugDraft(entry.slug ?? '')
-    setDescription(entry.rawDescription ?? '')
+    setDescription(parsed.baseDescription)
+    setIdentityHints(parsed.hints || EMPTY_IDENTITY_HINTS)
+    setGuidanceStrength(parsed.guidanceStrength || 'light')
     setAcceptedText(entry.optimizedDescription ?? '')
     reset()
   }
@@ -297,9 +387,87 @@ export default function CharacterBuilder({
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Describe clothing, posture, face, props, materials..."
         />
+        <div className={styles.hintsCard}>
+          <div className={styles.label}>Optional identity hints</div>
+          <div>
+            <label className={styles.label}>Guidance strength</label>
+            <select
+              className={styles.input}
+              value={guidanceStrength}
+              onChange={(e) => setGuidanceStrength(e.target.value)}
+            >
+              {GUIDANCE_STRENGTH_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option === 'light' ? 'Light' : 'Strict casting'}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className={styles.grid}>
+            <div>
+              <label className={styles.label}>Gender presentation</label>
+              <select className={styles.input} value={identityHints.genderPresentation} onChange={onHintChange('genderPresentation')}>
+                {HINT_OPTIONS.genderPresentation.map((option) => <option key={option || 'empty'} value={option}>{option || 'Unspecified'}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={styles.label}>Race / regional look</label>
+              <select className={styles.input} value={identityHints.ethnicityOrRegionalLook} onChange={onHintChange('ethnicityOrRegionalLook')}>
+                {HINT_OPTIONS.ethnicityOrRegionalLook.map((option) => <option key={option || 'empty'} value={option}>{option || 'Unspecified'}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={styles.label}>Age bracket</label>
+              <select className={styles.input} value={identityHints.ageBracket} onChange={onHintChange('ageBracket')}>
+                {HINT_OPTIONS.ageBracket.map((option) => <option key={option || 'empty'} value={option}>{option || 'Unspecified'}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={styles.label}>Build</label>
+              <select className={styles.input} value={identityHints.bodyType} onChange={onHintChange('bodyType')}>
+                {HINT_OPTIONS.bodyType.map((option) => <option key={option || 'empty'} value={option}>{option || 'Unspecified'}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={styles.label}>Eye color</label>
+              <select className={styles.input} value={identityHints.eyeColor} onChange={onHintChange('eyeColor')}>
+                {HINT_OPTIONS.eyeColor.map((option) => <option key={option || 'empty'} value={option}>{option || 'Unspecified'}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={styles.label}>Hair color</label>
+              <select className={styles.input} value={identityHints.hairColor} onChange={onHintChange('hairColor')}>
+                {HINT_OPTIONS.hairColor.map((option) => <option key={option || 'empty'} value={option}>{option || 'Unspecified'}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={styles.label}>Hair length</label>
+              <select className={styles.input} value={identityHints.hairLength} onChange={onHintChange('hairLength')}>
+                {HINT_OPTIONS.hairLength.map((option) => <option key={option || 'empty'} value={option}>{option || 'Unspecified'}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className={styles.hint}>
+            Keep this light: free-text stays primary. Hints only prevent vague AI defaults.
+            {identityHintSummary ? ` Using: ${identityHintSummary}` : ' No hints selected.'}
+            {identityHintSummary && guidanceStrength === 'strict_casting'
+              ? ' Strict mode enforces these hints as hard casting anchors.'
+              : ''}
+          </div>
+        </div>
+
+        <details className={styles.hintsDetails}>
+          <summary className={styles.hintsDetailsSummary}>How this tab works</summary>
+          <ul className={styles.hintsDetailsList}>
+            <li>Write a rich free-text description first; optional dropdowns add <strong>identity hints</strong> (gender presentation, age bracket, etc.) merged into the text sent to optimize and save.</li>
+            <li><strong>Guidance strength</strong>: <em>Light</em> keeps hints as soft context; <em>Strict casting</em> tells the model to treat hints as hard anchors.</li>
+            <li><strong>Optimize with AI</strong> rewrites the combined description; <strong>Accept</strong> stores the optimized line. Saved <code>@slug</code> tokens work in the Prompt Builder scene field.</li>
+            <li>Reloading a saved character restores both free text and hints from the stored description.</li>
+          </ul>
+        </details>
 
         <div className={styles.row}>
-          <button className={styles.btn} onClick={runOptimize} disabled={!description.trim() || state === 'loading'}>
+          <button className={styles.btn} onClick={runOptimize} disabled={!effectiveDescription.trim() || state === 'loading'}>
             {state === 'loading' ? 'Optimizing...' : 'Optimize with AI'}
           </button>
           {error ? <span className={styles.error}>{error}</span> : null}

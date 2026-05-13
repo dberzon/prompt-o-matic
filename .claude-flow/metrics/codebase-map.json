@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-05-09T13:31:27.582Z",
+  "projectRoot": "C:\\Users\\user\\Documents\\qwen-prompt-builder",
+  "structure": {
+    "hasPackageJson": true,
+    "hasTsConfig": false,
+    "hasClaudeConfig": true,
+    "hasClaudeFlow": true
+  },
+  "scannedAt": 1778333487582
+}

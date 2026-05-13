@@ -41,6 +41,12 @@
   background: var(--surface-2, #f5f5f5);
 }
 
+.chromaBadgeUnavailable {
+  color: #d17a4a;
+  border-color: #d17a4a40;
+  background: #d17a4a12;
+}
+
 .chromaDot {
   width: 6px;
   height: 6px;

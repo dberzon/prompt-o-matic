@@ -3,6 +3,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const DEFAULT_WORKFLOW_ID = 'qwen-image-2512-default'
+const RUNNABLE_DEFAULT_WORKFLOW_ID = 'qwen-image-2512-comfyui-00010'
 const WORKFLOWS_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'workflows')
 
 function clone(value) {
@@ -122,12 +123,24 @@ export function resolveWorkflowId(workflowId, { workflowsDir = WORKFLOWS_DIR } =
   return DEFAULT_WORKFLOW_ID
 }
 
+export function resolveDefaultQueueWorkflowId({ env = process.env, workflowsDir = WORKFLOWS_DIR } = {}) {
+  const requested = typeof env.COMFYUI_DEFAULT_WORKFLOW_ID === 'string' ? env.COMFYUI_DEFAULT_WORKFLOW_ID.trim() : ''
+  if (requested && workflowExists(requested, { workflowsDir })) {
+    return requested
+  }
+  if (workflowExists(RUNNABLE_DEFAULT_WORKFLOW_ID, { workflowsDir })) {
+    return RUNNABLE_DEFAULT_WORKFLOW_ID
+  }
+  const available = listAvailableWorkflows({ workflowsDir }).filter((workflow) => workflow.valid)
+  return available[0]?.workflowId || DEFAULT_WORKFLOW_ID
+}
+
 export function resolveWorkflowSelection(workflowId, { allowFallback = true, workflowsDir = WORKFLOWS_DIR } = {}) {
   const requestedWorkflowId = typeof workflowId === 'string' && workflowId.trim() ? workflowId.trim() : null
   if (!requestedWorkflowId) {
     return {
       requestedWorkflowId: null,
-      resolvedWorkflowId: DEFAULT_WORKFLOW_ID,
+      resolvedWorkflowId: resolveDefaultQueueWorkflowId({ workflowsDir }),
       usedFallback: false,
     }
   }
@@ -179,6 +192,19 @@ export function validateWorkflowMapping({ workflow, mapping }) {
   }
 }
 
+function stripUnmappedOptionalNodes(workflow, mapping, { ipadapterImage } = {}) {
+  if (ipadapterImage || !workflow || !mapping?.optionalFields) return workflow
+  const nodeIds = new Set()
+  for (const key of ['ipadapterImage', 'ipadapterStrength']) {
+    const nodeId = mapping.optionalFields[key]?.nodeId
+    if (nodeId) nodeIds.add(nodeId)
+  }
+  for (const nodeId of nodeIds) {
+    delete workflow[nodeId]
+  }
+  return workflow
+}
+
 export function injectPromptPackIntoWorkflow({
   workflow,
   mapping,
@@ -215,5 +241,6 @@ export function injectPromptPackIntoWorkflow({
   if (ipadapterStrength !== undefined && mapping.optionalFields?.ipadapterStrength) {
     setMappedInput(workflow, mapping.optionalFields.ipadapterStrength, ipadapterStrength)
   }
+  stripUnmappedOptionalNodes(workflow, mapping, { ipadapterImage })
   return workflow
 }

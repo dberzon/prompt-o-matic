@@ -1,0 +1,64 @@
+{
+  "snapshot": [
+    {
+      "key": "description",
+      "value": "Ruslan Levashov, male, 20–25, short, heavy-built, wide shoulders, slight belly, rounded childish face, piggy eyes, short upturned nose, thin lips, freckles. Lives with his mother and disabled sister in a communal apartment on the outskirts of Moscow during Perestroika. Studies mechanical engineering in technical college. Smokes with friends during breaks. Drinks in Soviet beer halls. In love with Rita Vlasova from pedagogical college."
+    }
+  ],
+  "stageId": 4,
+  "modelId": "auto",
+  "cachedAt": "2026-05-11T18:37:53.130Z",
+  "result": {
+    "writes": [
+      {
+        "id": "401bc5e2-5736-4eaf-a855-3605da574d37",
+        "entityId": "env_soviet_beer_hall_ruslan_levashov",
+        "key": "summary",
+        "value": "Friday hangout with friends",
+        "provenance": "suggested",
+        "confidence": 0.7,
+        "sourceStage": 4,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:53.129Z"
+      },
+      {
+        "id": "5c3c8e78-1dc4-40ce-b057-9c1522893a76",
+        "entityId": "ruslan_levashov",
+        "key": "routine.friday",
+        "value": "spends Fridays at the beer hall",
+        "provenance": "inferred",
+        "confidence": 0.7,
+        "sourceStage": 4,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:53.129Z"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "env_soviet_beer_hall_ruslan_levashov",
+        "type": "environment",
+        "name": "Soviet beer hall",
+        "archivedAt": null,
+        "createdAt": "2026-05-11T18:37:53.129Z",
+        "updatedAt": "2026-05-11T18:37:53.129Z"
+      }
+    ],
+    "conflicts": [],
+    "raw": {
+      "environments": [
+        {
+          "name": "Soviet beer hall",
+          "summary": "Friday hangout with friends"
+        }
+      ],
+      "attributes": [
+        {
+          "key": "routine.friday",
+          "value": "spends Fridays at the beer hall"
+        }
+      ]
+    }
+  }
+}

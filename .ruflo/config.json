@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "beads": {
+      "command": "npx",
+      "args": ["-y", "@ruvnet/beads"]
+    },
+    "serena": {
+      "command": "npx",
+      "args": ["-y", "@ruvnet/serena"]
+    }
+  }
+}

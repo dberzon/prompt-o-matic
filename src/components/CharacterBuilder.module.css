@@ -13,6 +13,48 @@
   gap: 8px;
 }
 
+.hintsCard {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--surface-2);
+}
+
+.hintsDetails {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0 8px 6px;
+  background: var(--surface-2);
+}
+
+.hintsDetailsSummary {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-2);
+  padding: 6px 0;
+  list-style: none;
+}
+
+.hintsDetailsSummary::-webkit-details-marker {
+  display: none;
+}
+
+.hintsDetailsList {
+  margin: 0;
+  padding: 0 0 4px 14px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+.hintsDetailsList li {
+  margin-bottom: 4px;
+}
+
 .headerRow {
   display: flex;
   justify-content: space-between;
@@ -38,6 +80,10 @@
   background: var(--surface-2);
   color: var(--text);
   padding: 8px;
+}
+
+select.input {
+  min-height: 34px;
 }
 
 .textarea {

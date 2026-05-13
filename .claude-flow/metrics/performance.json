@@ -1,0 +1,98 @@
+{
+  "timestamp": "2026-05-09T13:37:22.829Z",
+  "mode": "headless",
+  "workerType": "optimize",
+  "model": "sonnet",
+  "durationMs": 115236,
+  "executionId": "optimize_1778333727593_vxcqsq",
+  "success": true,
+  "findings": {
+    "sections": [
+      {
+        "title": "Performance Analysis: Qwen Prompt Builder",
+        "content": "\n",
+        "level": 2
+      },
+      {
+        "title": "1. Memory Leaks — `setTimeout` Without Cleanup (Low severity, easy wins)",
+        "content": "\nFound in `CharacterBuilder.jsx:169,253`, `DirectorSection.jsx:122`, `PromptOutput.jsx:47,50,355,358,367,370`.\n\nIf the component unmounts before the timer fires, the callback still runs and tries to set state on an unmounted component.\n\n**Fix pattern** (apply to all instances):\n```jsx\n// Before:\nsetTimeout(() => setFlash(''), 1300);\n\n// After:\nuseEffect(() => {\n  if (!flash) return;\n  const id = setTimeout(() => setFlash(''), 1300);\n  return () => clearTimeout(id);\n}, [flash]);\n```\n\nOr as a one-liner inside a click handler:\n```jsx\nconst timerRef = useRef(null);\n// in handler:\nclearTimeout(timerRef.current);\ntimerRef.current = setTimeout(() => setCopiedSeedIdx(null), 1500);\n// in cleanup:\nuseEffect(() => () => clearTimeout(timerRef.current), []);\n```\n\n---\n\n",
+        "level": 3
+      },
+      {
+        "title": "2. React Re-renders — Objects Created in Render",
+        "content": "\n**`App.jsx:294-301`** — `bankCharsForSelector.map()` creates new object references on every render, invalidating downstream memoization.\n\n```jsx\n// Before (creates new objects every render):\nconst derived = bankCharsForSelector.map(c => ({ ...c, extra: compute(c) }));\n\n// After:\nconst derived = useMemo(\n  () => bankCharsForSelector.map(c => ({ ...c, extra: compute(c) })),\n  [bankCharsForSelector]\n);\n```\n\n---\n\n",
+        "level": 3
+      },
+      {
+        "title": "3. Over-Broad Effect Dependencies",
+        "content": "\n**`App.jsx:318-346`** — Character hydration effect depends on both `bankCharsForSelector` and `chars`, running on every unrelated character change.\n\n```jsx\n// Before: one effect doing too much\nuseEffect(() => {\n  const lookup = new Map(bankCharsForSelector.map(c => [c.slug, c]));\n  // ...hydrate slots using chars and lookup\n}, [bankCharsForSelector, chars]);\n\n// After: split into two effects with tighter scope\nconst bankLookup = useMemo(\n  () => new Map(bankCharsForSelector.map(c => [c.slug, c])),\n  [bankCharsForSelector]\n);\n\nuseEffect(() => {\n  // hydration logic using bankLookup and chars\n}, [bankLookup, chars]);\n```\n\n**`App.jsx:533`** — `pendingApply` effect captures 6 dependencies including stable function refs. Wrap `captureApplyState` in `useCallback` so it's stable:\n```jsx\nconst captureApplyState = useCallback(() => {\n  return { scene, selectedDir, narrativeBeat, chips };\n}, [scene, selectedDir, narrativeBeat, chips]);\n```\n\n---\n\n",
+        "level": 3
+      },
+      {
+        "title": "4. Caching Opportunities",
+        "content": "\n**`App.jsx:307`** — `fetchBankSlugs()` called on every `activeTab` change with no cache.\n\n```jsx\nconst bankSlugsCache = useRef(null);\n\nconst fetchBankSlugs = useCallback(async () => {\n  if (bankSlugsCache.current) return bankSlugsCache.current;\n  const result = await api.getBankSlugs();\n  bankSlugsCache.current = result;\n  return result;\n}, []);\n```\n\n**`PromptOutput.jsx:176-200`** — Health check re-runs on every dependency change. Debounce it:\n```jsx\nuseEffect(() => {\n  const id = setTimeout(() => checkHealth(), 30_000);\n  return () => clearTimeout(id);\n}, [endpoint]); // only re-check when endpoint changes, not on every render\n```\n\n---\n\n",
+        "level": 3
+      },
+      {
+        "title": "5. Redundant JSON Serialization (`assembler.js`)",
+        "content": "\n`JSON.stringify` is called on every chip group comparison in `summarizeApplyDiff`. For chip maps with many keys, this is expensive in a hot path.\n\n```js\n// Before:\nif (JSON.stringify(bv) !== JSON.stringify(av)) { ... }\n\n// After: compare keys+values structurally first\nfunction shallowEqualSets(a, b) {\n  if (a.size !== b.size) return false;\n  for (const [k, v] of a) if (b.get(k) !== v) return false;\n  return true;\n}\n// Only fall back to JSON.stringify for nested objects\n```\n\n---\n\n",
+        "level": 3
+      },
+      {
+        "title": "6. DOM Layout Thrash — Textarea Auto-Height (`PromptOutput.jsx:261-266`)",
+        "content": "\nHeight recalculation triggers a synchronous browser layout on every `displayText` keystroke.\n\n```jsx\n// Before: fires on every character typed\nuseEffect(() => {\n  ta.style.height = 'auto';\n  ta.style.height = ta.scrollHeight + 'px';\n}, [displayText]);\n\n// After: debounce at ~16ms (one frame)\nuseEffect(() => {\n  const id = requestAnimationFrame(() => {\n    ta.style.height = 'auto';\n    ta.style.height = ta.scrollHeight + 'px';\n  });\n  return () => cancelAnimationFrame(id);\n}, [displayText]);\n```\n\n---\n\n",
+        "level": 3
+      },
+      {
+        "title": "7. Gallery Without Virtualization (`PromptOutput.jsx:1139-1164`)",
+        "content": "\nImages load 20 at a time with no virtual scrolling. For large galleries this creates hundreds of mounted DOM nodes.\n\n**Suggestion:** Add a \"Load more\" button or use `react-window`/`react-virtual` for the image grid. This is the biggest UX-visible issue at scale.\n\n---\n\n",
+        "level": 3
+      },
+      {
+        "title": "Priority Order",
+        "content": "| # | Issue | File | Effort | Impact |\n|---|-------|------|--------|--------|\n| 1 | `setTimeout` cleanup | `CharacterBuilder`, `PromptOutput`, `DirectorSection` | Low | Prevents stale state updates |\n| 2 | Cache `fetchBankSlugs` | `App.jsx:307` | Low | Eliminates redundant network calls |\n| 3 | Split hydration effect | `App.jsx:318-346` | Low | Reduces spurious re-renders |\n| 4 | `useMemo` on mapped objects | `App.jsx:294-301` | Low | Stabilizes downstream memos |\n| 5 | Debounce textarea height | `PromptOutput.jsx:261` | Low | Removes layout thrash on typing |\n| 6 | Virtual scroll for gallery | `PromptOutput.jsx:1139` | Medium | Critical for large datasets |\n| 7 | Chip diff comparison | `assembler.js` | Medium | CPU savings in hot path |\n\nThe `setTimeout` cleanup and `fetchBankSlugs` caching are the quickest wins — each is a 3-5 line change. The gallery virtualization is the most impactful for users with large image histories.",
+        "level": 2
+      }
+    ],
+    "codeBlocks": [
+      {
+        "language": "jsx",
+        "code": "// Before:\nsetTimeout(() => setFlash(''), 1300);\n\n// After:\nuseEffect(() => {\n  if (!flash) return;\n  const id = setTimeout(() => setFlash(''), 1300);\n  return () => clearTimeout(id);\n}, [flash]);"
+      },
+      {
+        "language": "jsx",
+        "code": "const timerRef = useRef(null);\n// in handler:\nclearTimeout(timerRef.current);\ntimerRef.current = setTimeout(() => setCopiedSeedIdx(null), 1500);\n// in cleanup:\nuseEffect(() => () => clearTimeout(timerRef.current), []);"
+      },
+      {
+        "language": "jsx",
+        "code": "// Before (creates new objects every render):\nconst derived = bankCharsForSelector.map(c => ({ ...c, extra: compute(c) }));\n\n// After:\nconst derived = useMemo(\n  () => bankCharsForSelector.map(c => ({ ...c, extra: compute(c) })),\n  [bankCharsForSelector]\n);"
+      },
+      {
+        "language": "jsx",
+        "code": "// Before: one effect doing too much\nuseEffect(() => {\n  const lookup = new Map(bankCharsForSelector.map(c => [c.slug, c]));\n  // ...hydrate slots using chars and lookup\n}, [bankCharsForSelector, chars]);\n\n// After: split into two effects with tighter scope\nconst bankLookup = useMemo(\n  () => new Map(bankCharsForSelector.map(c => [c.slug, c])),\n  [bankCharsForSelector]\n);\n\nuseEffect(() => {\n  // hydration logic using bankLookup and chars\n}, [bankLookup, chars]);"
+      },
+      {
+        "language": "jsx",
+        "code": "const captureApplyState = useCallback(() => {\n  return { scene, selectedDir, narrativeBeat, chips };\n}, [scene, selectedDir, narrativeBeat, chips]);"
+      },
+      {
+        "language": "jsx",
+        "code": "const bankSlugsCache = useRef(null);\n\nconst fetchBankSlugs = useCallback(async () => {\n  if (bankSlugsCache.current) return bankSlugsCache.current;\n  const result = await api.getBankSlugs();\n  bankSlugsCache.current = result;\n  return result;\n}, []);"
+      },
+      {
+        "language": "jsx",
+        "code": "useEffect(() => {\n  const id = setTimeout(() => checkHealth(), 30_000);\n  return () => clearTimeout(id);\n}, [endpoint]); // only re-check when endpoint changes, not on every render"
+      },
+      {
+        "language": "js",
+        "code": "// Before:\nif (JSON.stringify(bv) !== JSON.stringify(av)) { ... }\n\n// After: compare keys+values structurally first\nfunction shallowEqualSets(a, b) {\n  if (a.size !== b.size) return false;\n  for (const [k, v] of a) if (b.get(k) !== v) return false;\n  return true;\n}\n// Only fall back to JSON.stringify for nested objects"
+      },
+      {
+        "language": "jsx",
+        "code": "// Before: fires on every character typed\nuseEffect(() => {\n  ta.style.height = 'auto';\n  ta.style.height = ta.scrollHeight + 'px';\n}, [displayText]);\n\n// After: debounce at ~16ms (one frame)\nuseEffect(() => {\n  const id = requestAnimationFrame(() => {\n    ta.style.height = 'auto';\n    ta.style.height = ta.scrollHeight + 'px';\n  });\n  return () => cancelAnimationFrame(id);\n}, [displayText]);"
+      }
+    ]
+  },
+  "rawOutputPreview": "Here's the full performance analysis with actionable code examples:\n\n---\n\n## Performance Analysis: Qwen Prompt Builder\n\n### 1. Memory Leaks — `setTimeout` Without Cleanup (Low severity, easy wins)\n\nFound in `CharacterBuilder.jsx:169,253`, `DirectorSection.jsx:122`, `PromptOutput.jsx:47,50,355,358,367,370`.\n\nIf the component unmounts before the timer fires, the callback still runs and tries to set state on an unmounted component.\n\n**Fix pattern** (apply to all instances):\n```jsx\n// Before:\nsetTimeout(() => setFlash(''), 1300);\n\n// After:\nuseEffect(() => {\n  if (!flash) return;\n  const id = setTimeout(() => setFlash(''), 1300);\n  return () => clearTimeout(id);\n}, [flash]);\n```\n\nOr as a one-liner inside a click handler:\n```jsx\nconst timerRef = useRef(null);\n// in handler:\nclearTimeout(timerRef.current);\ntimerRef.current = setTimeout(() => setCopiedSeedIdx(null), 1500);\n// in cleanup:\nuseEffect(() => () => clearTimeout(timerRef.current), []);\n```\n\n---\n\n### 2. React Re-renders — Objects Created in Render\n\n**`App.jsx:294-301`** — `bankCharsForSelector.map()` creates new object references on every render, invalidating downstream memoization.\n\n```jsx\n// Before (creates new objects every render):\nconst derived = bankCharsForSelector.map(c => ({ ...c, extra: compute(c) }));\n\n// After:\nconst derived = useMemo(\n  () => bankCharsForSelector.map(c => ({ ...c, extra: compute(c) })),\n  [bankCharsForSelector]\n);\n```\n\n---\n\n### 3. Over-Broad Effect Dependencies\n\n**`App.jsx:318-346`** — Character hydration effect depends on both `bankCharsForSelector` and `chars`, running on every unrelated character change.\n\n```jsx\n// Before: one effect doing too much\nuseEffect(() => {\n  const lookup = new Map(bankCharsForSelector.map(c => [c.slug, c]));\n  // ...hydrate slots using chars and lookup\n}, [bankCharsForSelector, chars]);\n\n// After: split into two effects with tighter scope\nconst bankLookup = useMemo(\n  () => new Map(bankCharsForSelector.map(c => [c.slug, c])),\n  [bankCharsForSelector]\n);\n\n",
+  "rawOutputLength": 5515
+}

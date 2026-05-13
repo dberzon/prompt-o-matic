@@ -22,7 +22,6 @@ import {
   getChromaHealth,
   getComfyJobStatus,
   getComfyJobsStatus,
-  getComfyStatus,
   ingestComfyOutputs,
   ingestComfyOutputsMany,
   listComfyWorkflows,
@@ -112,7 +111,7 @@ function RenderStatusBar({ isPollingAudit, isPollingPortfolio, auditionStatuses,
   )
 }
 
-export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed }) {
+export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed, comfyStatus = null, comfyError = '' }) {
   // ── Global UI state ───────────────────────────────────────────────────────
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
@@ -198,7 +197,6 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
   const [chromaReady, setChromaReady] = useState(false)
 
   // ── Dev tools ─────────────────────────────────────────────────────────────
-  const [comfyStatus, setComfyStatus] = useState(null)
   const [workflowValidation, setWorkflowValidation] = useState(null)
   const [lastQueueResponse, setLastQueueResponse] = useState(null)
   const [jobStatus, setJobStatus] = useState(null)
@@ -483,14 +481,14 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
   async function initialLoad() {
     setLoading(true); setError(''); setSuccess('')
     try {
-      const [batchResult, workflowResult, comfyResult, charsResult, archivedResult] = await Promise.all([
-        listCharacterBatches(), listComfyWorkflows(), getComfyStatus(),
+      const [batchResult, workflowResult, charsResult, archivedResult] = await Promise.all([
+        listCharacterBatches().catch(() => ({ items: [] })),
+        listComfyWorkflows().catch(() => ({ workflows: [] })),
         listCharacters().catch(() => ({ items: [] })),
         listCharacters({ includeArchived: 'only' }).catch(() => ({ items: [] })),
       ])
       setBatches(batchResult.items || [])
       setWorkflows(workflowResult.workflows || [])
-      setComfyStatus(comfyResult.comfy || null)
       const chars = (charsResult.items || []).filter((c) => c?.id)
       setSavedCharacters((prev) => {
         const map = new Map(prev.map((c) => [c.id, c]))
@@ -727,7 +725,11 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
       const msg = err.message || `Failed to ${action} candidate.`
       setError(msg)
       setBatchFeedback({ type: 'error', message: msg })
+    } finally {
+      setCandidateActionId(null)
     }
+  }
+
   async function handleGeneratePreviews() {
     if (!selectedWorkflowId) return
     const targets = candidates.filter((c) => c.reviewStatus === 'approved' && !batchPreviewJobs[c.id])
@@ -749,9 +751,6 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
     }
     setBatchPreviewJobs((prev) => ({ ...prev, ...newJobs }))
     if (Object.keys(newJobs).length) startAuditPoll()
-    setPreviewsGenerating(false)
-  } if (Object.keys(newJobs).length) startAuditPoll()
-    await refreshBatch(selectedBatchId)
     setPreviewsGenerating(false)
   }
 
@@ -980,10 +979,33 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
+  const comfyReady = comfyStatus?.available === true
+  const comfyLabel = comfyStatus == null
+    ? 'Comfy checking…'
+    : comfyReady
+      ? 'Comfy connected'
+      : 'Comfy unavailable'
+  const comfyTitle = comfyReady
+    ? `ComfyUI reachable at ${comfyStatus?.baseUrl || 'configured URL'}`
+    : comfyError || comfyStatus?.error || 'Start ComfyUI and confirm COMFYUI_BASE_URL in .env.local'
+
   return (
     <div className={styles.panel}>
       <div className={styles.titleRow}>
         <h2 className={styles.title}>Casting Room</h2>
+        <span
+          className={`${styles.chromaBadge} ${
+            comfyReady
+              ? styles.chromaBadgeReady
+              : comfyStatus == null
+                ? styles.chromaBadgeStarting
+                : styles.chromaBadgeUnavailable
+          }`}
+          title={comfyTitle}
+        >
+          <span className={styles.chromaDot} />
+          {comfyLabel}
+        </span>
         <span className={`${styles.chromaBadge} ${chromaReady ? styles.chromaBadgeReady : styles.chromaBadgeStarting}`}>
           <span className={styles.chromaDot} />
           {chromaReady ? 'Chroma ready' : 'Chroma starting…'}

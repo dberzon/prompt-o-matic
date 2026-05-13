@@ -8,7 +8,7 @@ import {
 import { parseJsonFromLlmText } from '../characters/jsonUtils.js'
 import { parseCharacterProfile } from '../characters/schemas.js'
 import { compileCharacterPromptPacks } from '../prompts/qwenPromptCompiler.js'
-import { buildBankEntryAuditionPrompt } from './auditionPrompts.js'
+import { buildBankEntryAuditionSystemPrompt } from './auditionPrompts.js'
 import { generateCharacterPromptDescriptor } from '../characters/promptDescriptor.js'
 
 const DEFAULT_VIEWS = ['front_portrait', 'profile_portrait']
@@ -39,11 +39,11 @@ export async function runAudition({
     : DEFAULT_VIEWS
 
   const safeCount = Math.max(1, Math.min(10, Math.trunc(count) || 1))
-  const userPrompt = buildBankEntryAuditionPrompt({ bankEntry, count: safeCount })
+  const systemPrompt = buildBankEntryAuditionSystemPrompt({ bankEntry, count: safeCount })
 
   const llmText = await llmGenerate({
-    system: 'You are a strict JSON generator. Return a JSON array only.',
-    user: userPrompt,
+    system: systemPrompt,
+    user: 'Return the JSON array.',
     providerPayload: { engine: 'auto', responseFormat: 'json' },
   })
 

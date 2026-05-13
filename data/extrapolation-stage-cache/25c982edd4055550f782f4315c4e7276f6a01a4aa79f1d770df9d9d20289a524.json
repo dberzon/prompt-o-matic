@@ -1,0 +1,404 @@
+{
+  "snapshot": [
+    {
+      "key": "description",
+      "value": "Ruslan Levashov, male, 20–25, short, heavy-built, wide shoulders, slight belly, rounded childish face, piggy eyes, short upturned nose, thin lips, freckles. Lives with his mother and disabled sister in a communal apartment on the outskirts of Moscow during Perestroika. Studies mechanical engineering in technical college. Smokes with friends during breaks. Drinks in Soviet beer halls. In love with Rita Vlasova from pedagogical college."
+    }
+  ],
+  "stageId": 1,
+  "modelId": "auto",
+  "cachedAt": "2026-05-11T18:37:39.582Z",
+  "result": {
+    "writes": [
+      {
+        "id": "ad2f72c6-1037-45b6-aa3c-5697a18993ff",
+        "entityId": "ruslan_levashov",
+        "key": "demographics.gender",
+        "value": "male",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.573Z"
+      },
+      {
+        "id": "53ec1fd3-409b-4c94-ada8-9d72e7a70b94",
+        "entityId": "ruslan_levashov",
+        "key": "demographics.age",
+        "value": "20-25",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.574Z"
+      },
+      {
+        "id": "b47b36ca-c422-4872-8af2-e09d3666382a",
+        "entityId": "ruslan_levashov",
+        "key": "appearance.height",
+        "value": "short",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.574Z"
+      },
+      {
+        "id": "5f50b2ad-2a59-4866-aefe-6f441423c913",
+        "entityId": "ruslan_levashov",
+        "key": "appearance.build",
+        "value": "heavy-built, wide shoulders, slight belly",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.574Z"
+      },
+      {
+        "id": "54465ecb-9c28-4cba-9279-fb4b93accae6",
+        "entityId": "ruslan_levashov",
+        "key": "appearance.face",
+        "value": "rounded childish face",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.575Z"
+      },
+      {
+        "id": "dcf0b24f-3a15-4520-9f6e-455882469a2b",
+        "entityId": "ruslan_levashov",
+        "key": "appearance.eyes",
+        "value": "piggy eyes",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.576Z"
+      },
+      {
+        "id": "a3f68bf3-34c8-4ccd-96ec-d2eededf0a57",
+        "entityId": "ruslan_levashov",
+        "key": "appearance.nose",
+        "value": "short upturned nose",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.576Z"
+      },
+      {
+        "id": "76a7758a-2703-4c9b-a54e-774e5133ddb6",
+        "entityId": "ruslan_levashov",
+        "key": "appearance.lips",
+        "value": "thin lips",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.576Z"
+      },
+      {
+        "id": "5ec54897-d083-4208-abc1-1a5795cbb934",
+        "entityId": "ruslan_levashov",
+        "key": "appearance.skin",
+        "value": "freckles",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.577Z"
+      },
+      {
+        "id": "939fee4f-a5e4-4fee-aa5f-555a5bfaec30",
+        "entityId": "ruslan_levashov",
+        "key": "setting.era",
+        "value": "Perestroika",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.577Z"
+      },
+      {
+        "id": "41e600c5-ac15-4bcd-87dd-b0ef697cfe38",
+        "entityId": "ruslan_levashov",
+        "key": "setting.location",
+        "value": "outskirts of Moscow",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.578Z"
+      },
+      {
+        "id": "4503f5f7-704c-4210-b4c1-ba195a8e2689",
+        "entityId": "ruslan_levashov",
+        "key": "relationship.rita",
+        "value": "in love with Rita Vlasova",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.578Z"
+      },
+      {
+        "id": "8d1a4462-d810-4479-9a2d-a395241116c7",
+        "entityId": "ruslan_mother",
+        "key": "name",
+        "value": "mother",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.579Z"
+      },
+      {
+        "id": "de76df84-9ae5-491b-9700-cd9ffaf36eb8",
+        "entityId": "ruslan_sister",
+        "key": "name",
+        "value": "disabled sister",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.580Z"
+      },
+      {
+        "id": "1293c9f6-99fa-4ef6-ae4a-7b5798eead15",
+        "entityId": "rita_vlasova",
+        "key": "name",
+        "value": "Rita Vlasova",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.580Z"
+      },
+      {
+        "id": "bfd963dd-295f-4b19-bc8c-974238686b79",
+        "entityId": "communal_apartment",
+        "key": "name",
+        "value": "communal apartment",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.581Z"
+      },
+      {
+        "id": "9abcf15b-9ff1-4e0a-8dcc-90d76bd7b090",
+        "entityId": "soviet_beer_hall",
+        "key": "name",
+        "value": "Soviet beer hall",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.581Z"
+      },
+      {
+        "id": "b238eb25-5852-41c1-b73d-9ecb9b66606f",
+        "entityId": "technical_college",
+        "key": "name",
+        "value": "technical college",
+        "provenance": "canon",
+        "confidence": 1,
+        "sourceStage": 1,
+        "supersededBy": null,
+        "dismissedAt": null,
+        "createdAt": "2026-05-11T18:37:39.581Z"
+      }
+    ],
+    "suggestions": [
+      {
+        "id": "ruslan_mother",
+        "type": "character",
+        "name": "Ruslan mother",
+        "archivedAt": null,
+        "createdAt": "2026-05-11T18:37:39.579Z",
+        "updatedAt": "2026-05-11T18:37:39.579Z"
+      },
+      {
+        "id": "ruslan_sister",
+        "type": "character",
+        "name": "Ruslan sister",
+        "archivedAt": null,
+        "createdAt": "2026-05-11T18:37:39.579Z",
+        "updatedAt": "2026-05-11T18:37:39.579Z"
+      },
+      {
+        "id": "rita_vlasova",
+        "type": "character",
+        "name": "Rita Vlasova",
+        "archivedAt": null,
+        "createdAt": "2026-05-11T18:37:39.580Z",
+        "updatedAt": "2026-05-11T18:37:39.580Z"
+      },
+      {
+        "id": "communal_apartment",
+        "type": "environment",
+        "name": "Communal apartment",
+        "archivedAt": null,
+        "createdAt": "2026-05-11T18:37:39.580Z",
+        "updatedAt": "2026-05-11T18:37:39.580Z"
+      },
+      {
+        "id": "soviet_beer_hall",
+        "type": "environment",
+        "name": "Soviet beer hall",
+        "archivedAt": null,
+        "createdAt": "2026-05-11T18:37:39.581Z",
+        "updatedAt": "2026-05-11T18:37:39.581Z"
+      },
+      {
+        "id": "technical_college",
+        "type": "institution",
+        "name": "Technical college",
+        "archivedAt": null,
+        "createdAt": "2026-05-11T18:37:39.581Z",
+        "updatedAt": "2026-05-11T18:37:39.581Z"
+      }
+    ],
+    "conflicts": [],
+    "raw": {
+      "primary": {
+        "attributes": [
+          {
+            "key": "demographics.gender",
+            "value": "male"
+          },
+          {
+            "key": "demographics.age",
+            "value": "20-25"
+          },
+          {
+            "key": "appearance.height",
+            "value": "short"
+          },
+          {
+            "key": "appearance.build",
+            "value": "heavy-built, wide shoulders, slight belly"
+          },
+          {
+            "key": "appearance.face",
+            "value": "rounded childish face"
+          },
+          {
+            "key": "appearance.eyes",
+            "value": "piggy eyes"
+          },
+          {
+            "key": "appearance.nose",
+            "value": "short upturned nose"
+          },
+          {
+            "key": "appearance.lips",
+            "value": "thin lips"
+          },
+          {
+            "key": "appearance.skin",
+            "value": "freckles"
+          },
+          {
+            "key": "setting.era",
+            "value": "Perestroika"
+          },
+          {
+            "key": "setting.location",
+            "value": "outskirts of Moscow"
+          },
+          {
+            "key": "relationship.rita",
+            "value": "in love with Rita Vlasova"
+          }
+        ]
+      },
+      "entities": [
+        {
+          "slug": "ruslan_mother",
+          "type": "character",
+          "name": "Ruslan mother",
+          "attributes": [
+            {
+              "key": "name",
+              "value": "mother"
+            }
+          ]
+        },
+        {
+          "slug": "ruslan_sister",
+          "type": "character",
+          "name": "Ruslan sister",
+          "attributes": [
+            {
+              "key": "name",
+              "value": "disabled sister"
+            }
+          ]
+        },
+        {
+          "slug": "rita_vlasova",
+          "type": "character",
+          "name": "Rita Vlasova",
+          "attributes": [
+            {
+              "key": "name",
+              "value": "Rita Vlasova"
+            }
+          ]
+        },
+        {
+          "slug": "communal_apartment",
+          "type": "environment",
+          "name": "Communal apartment",
+          "attributes": [
+            {
+              "key": "name",
+              "value": "communal apartment"
+            }
+          ]
+        },
+        {
+          "slug": "soviet_beer_hall",
+          "type": "environment",
+          "name": "Soviet beer hall",
+          "attributes": [
+            {
+              "key": "name",
+              "value": "Soviet beer hall"
+            }
+          ]
+        },
+        {
+          "slug": "technical_college",
+          "type": "institution",
+          "name": "Technical college",
+          "attributes": [
+            {
+              "key": "name",
+              "value": "technical college"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

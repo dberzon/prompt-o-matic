@@ -4,6 +4,11 @@ import { usePolish } from '../hooks/usePolish.js'
 import { scorePromptQuality } from '../utils/qualityScore.js'
 import { downloadPromptTxt } from '../utils/downloadPromptFile.js'
 import { listGeneratedImages } from '../lib/api/generatedImages.js'
+import {
+  getComfyJobsStatus,
+  ingestComfyOutputs,
+  queueBuilderPromptRender,
+} from '../lib/api/comfy.js'
 import { fetchSavedPrompts, createSavedPromptRemote, deleteSavedPromptRemote, renameSavedPromptRemote } from '../api/promptStorage.js'
 import styles from './PromptOutput.module.css'
 
@@ -15,6 +20,56 @@ const LOCAL_PROVIDER_KEY = 'qpb_local_provider_v1'
 const LMSTUDIO_HOST_KEY = 'qpb_lmstudio_host_v1'
 const LMSTUDIO_PORT_KEY = 'qpb_lmstudio_port_v1'
 const LMSTUDIO_MODEL_KEY = 'qpb_lmstudio_model_v1'
+const COMPARE_RENDERS_SESSION_KEY = 'qpb_compare_renders_v1'
+
+function parseCompareSlotRecord(raw) {
+  if (!raw || typeof raw !== 'object') return null
+  const images = Array.isArray(raw.images)
+    ? raw.images.filter((img) => img && typeof img.id === 'string' && img.id.trim())
+    : []
+  const promptSnippet = typeof raw.promptSnippet === 'string' ? raw.promptSnippet.slice(0, 500) : ''
+  const ts = Number(raw.timestamp)
+  const timestamp = Number.isFinite(ts) ? ts : Date.now()
+  if (images.length === 0 && !promptSnippet) return null
+  return { images, promptSnippet, timestamp }
+}
+
+function readCompareRendersFromSession() {
+  try {
+    const raw = sessionStorage.getItem(COMPARE_RENDERS_SESSION_KEY)
+    if (!raw) return { A: null, B: null }
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return { A: null, B: null }
+    return {
+      A: parseCompareSlotRecord(parsed.A),
+      B: parseCompareSlotRecord(parsed.B),
+    }
+  } catch {
+    return { A: null, B: null }
+  }
+}
+
+function writeCompareRendersToSession(next) {
+  try {
+    const pack = (slot) => {
+      const v = next[slot]
+      if (!v || !Array.isArray(v.images) || v.images.length === 0) return null
+      return {
+        images: v.images.map((img) => ({ id: String(img.id) })),
+        promptSnippet: String(v.promptSnippet ?? '').slice(0, 500),
+        timestamp: Number(v.timestamp) || Date.now(),
+      }
+    }
+    const payload = { A: pack('A'), B: pack('B') }
+    if (!payload.A && !payload.B) {
+      sessionStorage.removeItem(COMPARE_RENDERS_SESSION_KEY)
+    } else {
+      sessionStorage.setItem(COMPARE_RENDERS_SESSION_KEY, JSON.stringify(payload))
+    }
+  } catch {
+    /* quota or private mode */
+  }
+}
 
 function readHistory() {
   try {
@@ -83,6 +138,8 @@ export default function PromptOutput({
   aiEngine = 'auto',
   localOnly = false,
   embeddedStatus = null,
+  comfyStatus = null,
+  comfyError = '',
 }) {
   const isDev = import.meta.env.DEV
   const [showNeg, setShowNeg] = useState(false)
@@ -92,6 +149,7 @@ export default function PromptOutput({
   const [selectedVariant, setSelectedVariant] = useState(null)
   const [restoredText, setRestoredText] = useState(null)
   const [manualEdit, setManualEdit] = useState(null)
+  const [isManualEditMode, setIsManualEditMode] = useState(false)
   const [history, setHistory] = useState(() => readHistory())
   const textareaRef = useRef(null)
   const [showHistory, setShowHistory] = useState(false)
@@ -100,10 +158,23 @@ export default function PromptOutput({
   const [showGallery, setShowGallery] = useState(false)
   const [galleryImages, setGalleryImages] = useState([])
   const [galleryLoading, setGalleryLoading] = useState(false)
+  const [renderState, setRenderState] = useState('idle')
+  const [renderJob, setRenderJob] = useState(null)
+  const [renderImages, setRenderImages] = useState([])
+  const [renderError, setRenderError] = useState('')
+  const [showRenderResults, setShowRenderResults] = useState(false)
+  const renderPollRef = useRef(null)
   const [diffTargetId, setDiffTargetId] = useState(null)
   const [shareState, setShareState] = useState('idle')
   const [debugCopyState, setDebugCopyState] = useState('idle')
   const [showQualityHints, setShowQualityHints] = useState(false)
+  const [snapshotA, setSnapshotA] = useState(null)
+  const [snapshotB, setSnapshotB] = useState(null)
+  /** Last successful Comfy renders for snapshot A/B compare (also restored from sessionStorage). */
+  const [lastCompareRender, setLastCompareRender] = useState(readCompareRendersFromSession)
+  const [compareSlotError, setCompareSlotError] = useState({ A: '', B: '' })
+  /** 'main' | 'A' | 'B' while a Comfy job is active (set before renderJob ids exist, for per-button spinners). */
+  const [activeRenderSlot, setActiveRenderSlot] = useState(null)
   const [health, setHealth] = useState(null)
   const [healthError, setHealthError] = useState('')
   const [localProvider, setLocalProvider] = useState(() => readLocalSetting(LOCAL_PROVIDER_KEY, 'ollama'))
@@ -148,6 +219,16 @@ export default function PromptOutput({
 
   const hasManualEdit = manualEdit !== null
   const isEditable = hasContent
+
+  const enterManualEditMode = useCallback(() => {
+    if (!isEditable) return
+    setIsManualEditMode(true)
+    setManualEdit((prev) => (prev === null ? displayText : prev))
+  }, [isEditable, displayText])
+
+  const exitManualEditMode = useCallback(() => {
+    setIsManualEditMode(false)
+  }, [])
 
   const qualityReport = useMemo(
     () => scorePromptQuality({
@@ -255,7 +336,48 @@ export default function PromptOutput({
     setManualEdit(null)
     setRestoredText(null)
     setSelectedVariant(null)
+    setIsManualEditMode(false)
   }, [])
+
+  const handleDiscardManualEdits = useCallback(() => {
+    setManualEdit(null)
+    setIsManualEditMode(false)
+  }, [])
+
+  const saveSnapshot = useCallback((slot) => {
+    const text = displayText.trim()
+    if (!text) return
+    const snapshot = {
+      text,
+      timestamp: Date.now(),
+      source: hasManualEdit ? 'manual' : isPolished ? 'polished' : 'assembled',
+    }
+    if (slot === 'A') setSnapshotA(snapshot)
+    if (slot === 'B') setSnapshotB(snapshot)
+  }, [displayText, hasManualEdit, isPolished])
+
+  const loadSnapshot = useCallback((slot) => {
+    const snapshot = slot === 'A' ? snapshotA : snapshotB
+    if (!snapshot?.text) return
+    setManualEdit(snapshot.text)
+    setIsManualEditMode(true)
+    setRestoredText(null)
+    setSelectedVariant(null)
+  }, [snapshotA, snapshotB])
+
+  const clearCompareSlot = useCallback((slot) => {
+    setLastCompareRender((prev) => ({ ...prev, [slot]: null }))
+    setCompareSlotError((prev) => ({ ...prev, [slot]: '' }))
+  }, [])
+
+  const clearAllCompareRenders = useCallback(() => {
+    setLastCompareRender({ A: null, B: null })
+    setCompareSlotError({ A: '', B: '' })
+  }, [])
+
+  useEffect(() => {
+    writeCompareRendersToSession(lastCompareRender)
+  }, [lastCompareRender])
 
   // Auto-grow textarea effect
   useEffect(() => {
@@ -263,7 +385,7 @@ export default function PromptOutput({
       textareaRef.current.style.height = 'auto'
       textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`
     }
-  }, [displayText])
+  }, [displayText, isManualEditMode])
 
   // Clear selected variant when assembled prompt changes so stale variant text is never shown.
   useEffect(() => { setSelectedVariant(null) }, [assembledText])
@@ -273,6 +395,7 @@ export default function PromptOutput({
   const handlePolish = () => {
     setRestoredText(null)
     setManualEdit(null)
+    setIsManualEditMode(false)
     setSelectedVariant(null)
     polish({
       fragments: prompt,
@@ -293,6 +416,46 @@ export default function PromptOutput({
       cloudProvider: aiEngine === 'cloud' ? 'claude' : null,
     })
   }
+
+  const handlePolishCurrentText = useCallback(() => {
+    const sourceText = displayText.trim()
+    if (!sourceText) return
+    setRestoredText(null)
+    setManualEdit(null)
+    setIsManualEditMode(false)
+    setSelectedVariant(null)
+    polish({
+      fragments: [sourceText],
+      directorName,
+      directorNote,
+      scene: null,
+      scenario: null,
+      frontPrefix: useFrontPrefix ? DEFAULT_FRONT_PREFIX : '',
+      narrativeBeat: null,
+      engine: aiEngine,
+      localOnly,
+      dryRun,
+      embeddedPort: embeddedStatus?.port ?? null,
+      embeddedSecret: embeddedStatus?.secret ?? null,
+      localProvider,
+      lmStudioBaseUrl: localProvider === 'lmstudio' ? lmStudioBaseUrl : null,
+      lmStudioModel: localProvider === 'lmstudio' ? lmStudioModel : null,
+      cloudProvider: aiEngine === 'cloud' ? 'claude' : null,
+    })
+  }, [
+    displayText,
+    polish,
+    directorName,
+    directorNote,
+    useFrontPrefix,
+    aiEngine,
+    localOnly,
+    dryRun,
+    embeddedStatus,
+    localProvider,
+    lmStudioBaseUrl,
+    lmStudioModel,
+  ])
 
   const pushHistory = useCallback((kind, text) => {
     const value = (text ?? '').trim()
@@ -416,6 +579,148 @@ export default function PromptOutput({
   useEffect(() => {
     if (showGallery) loadGallery()
   }, [showGallery, loadGallery])
+
+  const comfyReady = comfyStatus?.available === true
+  const isRenderBusy = renderState === 'queuing' || renderState === 'rendering'
+  const mainRenderActive = activeRenderSlot === 'main' && (renderState === 'queuing' || renderState === 'rendering')
+  const compareSlotBusy = (slot) => activeRenderSlot === slot && (renderState === 'queuing' || renderState === 'rendering')
+
+  const queueRenderWithPrompt = useCallback(async (promptText, compareSlot = 'main') => {
+    const positivePrompt = String(promptText ?? '').trim()
+    if (!positivePrompt || !comfyReady || isRenderBusy) return
+    setActiveRenderSlot(compareSlot)
+    if (compareSlot === 'main') {
+      setRenderError('')
+      setRenderImages([])
+      setShowRenderResults(true)
+    } else {
+      setCompareSlotError((prev) => ({ ...prev, [compareSlot]: '' }))
+    }
+    setRenderState('queuing')
+    try {
+      const queued = await queueBuilderPromptRender({
+        positivePrompt,
+        negativePrompt: NEGATIVE_PROMPT,
+        aspectRatio: '2:3',
+      })
+      if (!queued?.promptId || !queued?.promptPackId) {
+        throw new Error('Comfy queue did not return a prompt id')
+      }
+      setRenderJob({
+        compareSlot,
+        positivePrompt,
+        promptId: queued.promptId,
+        promptPackId: queued.promptPackId,
+        characterId: queued.characterId,
+        workflowVersion: queued.workflowId || queued.resolvedWorkflowId || null,
+      })
+      setRenderState('rendering')
+    } catch (err) {
+      setRenderState(compareSlot === 'main' ? 'failed' : 'idle')
+      setActiveRenderSlot(null)
+      const message = err?.message || 'Failed to queue ComfyUI render'
+      if (compareSlot === 'main') {
+        setRenderError(message)
+      } else {
+        setCompareSlotError((prev) => ({ ...prev, [compareSlot]: message }))
+      }
+    }
+  }, [comfyReady, isRenderBusy])
+
+  const handleRenderInComfy = useCallback(async () => {
+    await queueRenderWithPrompt(displayText, 'main')
+  }, [queueRenderWithPrompt, displayText])
+
+  const renderSnapshot = useCallback(async (slot) => {
+    const snapshot = slot === 'A' ? snapshotA : snapshotB
+    await queueRenderWithPrompt(snapshot?.text || '', slot)
+  }, [snapshotA, snapshotB, queueRenderWithPrompt])
+
+  useEffect(() => {
+    if (renderState !== 'rendering' || !renderJob?.promptId) return undefined
+    let active = true
+    const poll = async () => {
+      try {
+        const statusData = await getComfyJobsStatus([{
+          promptId: renderJob.promptId,
+          promptPackId: renderJob.promptPackId,
+          view: 'cinematic_scene',
+        }])
+        if (!active) return
+        const item = (statusData?.items || []).find((entry) => entry.promptId === renderJob.promptId)
+        const status = item?.status || 'unknown'
+        if (status === 'success') {
+          const ingested = await ingestComfyOutputs({
+            promptId: renderJob.promptId,
+            promptPackId: renderJob.promptPackId,
+            characterId: renderJob.characterId,
+            viewType: 'cinematic_scene',
+            workflowVersion: renderJob.workflowVersion,
+          })
+          if (!active) return
+          const items = (ingested?.items || []).map((image) => ({ id: image.id }))
+          const slot = renderJob.compareSlot ?? 'main'
+          if (slot === 'main') {
+            setRenderImages(items)
+            setRenderState('success')
+            setActiveRenderSlot(null)
+          } else {
+            const snippet = String(renderJob.positivePrompt ?? '').trim().slice(0, 160)
+            setLastCompareRender((prev) => ({
+              ...prev,
+              [slot]: {
+                images: items,
+                promptSnippet: snippet,
+                timestamp: Date.now(),
+              },
+            }))
+            setRenderState('idle')
+            setRenderJob(null)
+            setActiveRenderSlot(null)
+          }
+          if (items.length) loadGallery()
+          return
+        }
+        if (status === 'failed' || item?.ok === false) {
+          const slot = renderJob.compareSlot ?? 'main'
+          const msg = item?.error || 'ComfyUI render failed'
+          if (slot === 'main') {
+            setRenderState('failed')
+            setRenderError(msg)
+            setActiveRenderSlot(null)
+          } else {
+            setCompareSlotError((prev) => ({ ...prev, [slot]: msg }))
+            setRenderState('idle')
+            setRenderJob(null)
+            setActiveRenderSlot(null)
+          }
+        }
+      } catch (err) {
+        if (!active) return
+        const slot = renderJob?.compareSlot ?? 'main'
+        const msg = err?.message || 'Render status check failed'
+        if (slot === 'main') {
+          setRenderState('failed')
+          setRenderError(msg)
+          setActiveRenderSlot(null)
+        } else {
+          setCompareSlotError((prev) => ({ ...prev, [slot]: msg }))
+          setRenderState('idle')
+          setRenderJob(null)
+          setActiveRenderSlot(null)
+        }
+      }
+    }
+    poll()
+    renderPollRef.current = window.setInterval(poll, 2000)
+    return () => {
+      active = false
+      if (renderPollRef.current) {
+        window.clearInterval(renderPollRef.current)
+        renderPollRef.current = null
+      }
+    }
+  }, [loadGallery, renderJob, renderState])
 
   const handleValidateLmStudio = useCallback(async () => {
     if (!lmStudioBaseUrl) {
@@ -575,6 +880,26 @@ export default function PromptOutput({
           )}
         </div>
         <div className={styles.headerActions}>
+          {isEditable && (
+            <button
+              type="button"
+              className={styles.repolishBtn}
+              onClick={isManualEditMode ? exitManualEditMode : enterManualEditMode}
+              title={isManualEditMode ? 'Stop editing prompt text' : 'Edit the displayed prompt manually'}
+            >
+              {isManualEditMode ? 'Done editing' : 'Edit prompt'}
+            </button>
+          )}
+          {hasManualEdit && (
+            <button
+              type="button"
+              className={styles.repolishBtn}
+              onClick={handleDiscardManualEdits}
+              title="Discard manual edits and restore the AI/assembled text"
+            >
+              Discard edits
+            </button>
+          )}
           {hasManualEdit && (
             <button
               type="button"
@@ -615,6 +940,35 @@ export default function PromptOutput({
           <CopyButton text={displayText} />
         </div>
       </div>
+
+      <details className={styles.workflowHints}>
+        <summary className={styles.workflowHintsSummary}>
+          Workflow tips: edit prompt, polish, Comfy, A/B compare
+        </summary>
+        <ul className={styles.workflowHintsList}>
+          <li>
+            <strong>Edit prompt</strong> switches the big block to a textarea so you can tweak wording directly.
+            <strong> Done editing</strong> returns to read-only. <strong>Discard edits</strong> drops manual text;
+            <strong>Reset</strong> rebuilds from chips again.
+          </li>
+          <li>
+            <strong>Polish with AI</strong> fuses chip fragments (and scene/director context) into one prompt.
+            <strong> Polish current text</strong> sends whatever is on screen now (including your manual edits) back through the model for another pass — use that for human → AI → human loops.
+          </li>
+          <li>
+            <strong>Render in ComfyUI</strong> always queues the <em>current displayed</em> prompt (manual text counts).
+            One job runs at a time; the main button only shows progress for main renders.
+          </li>
+          <li>
+            <strong>Save to A / B</strong> freezes two prompt variants. <strong>Render A / Render B</strong> queues each snapshot without overwriting the other column.
+            <strong> Compare renders</strong> keeps the last successful image per slot side by side; it is restored after refresh in this tab (<code>sessionStorage</code> key <code>qpb_compare_renders_v1</code>).
+            Use <strong>Clear</strong> per column or <strong>Clear all</strong> to wipe stored previews.
+          </li>
+          <li>
+            <strong>Use A / B</strong> loads that snapshot into the editor as a manual edit so you can keep refining before polish or Comfy.
+          </li>
+        </ul>
+      </details>
 
       {hasContent && (
         <div className={styles.qualityRow}>
@@ -683,7 +1037,7 @@ export default function PromptOutput({
       )}
 
       {/* Prompt display */}
-      {isEditable ? (
+      {isEditable && isManualEditMode ? (
         <textarea
           ref={textareaRef}
           className={`${styles.promptTextarea} ${isAssembled || isPolished ? styles.promptBoxActive : ''} ${hasManualEdit ? styles.promptBoxEdited : isPolished ? styles.promptBoxPolished : ''}`}
@@ -694,9 +1048,13 @@ export default function PromptOutput({
         />
       ) : (
         <div className={`${styles.promptBox} ${isAssembled || isPolished ? styles.promptBoxActive : ''} ${isPolished ? styles.promptBoxPolished : ''}`}>
-          <p className={styles.placeholder}>
-            Configure directors and characters, then add technical chips…
-          </p>
+          {isEditable ? (
+            <p className={styles.promptParts}>{displayText}</p>
+          ) : (
+            <p className={styles.placeholder}>
+              Configure directors and characters, then add technical chips…
+            </p>
+          )}
         </div>
       )}
 
@@ -724,6 +1082,81 @@ export default function PromptOutput({
           ))}
         </div>
       )}
+
+      <div className={styles.renderWrap}>
+        <div className={styles.renderRow}>
+          <button
+            type="button"
+            className={`${styles.renderBtn} ${mainRenderActive ? styles.renderBtnLoading : ''}`}
+            onClick={handleRenderInComfy}
+            disabled={!displayText.trim() || !comfyReady || isRenderBusy}
+            title={comfyReady ? 'Queue this prompt in ComfyUI' : (comfyError || 'ComfyUI is not reachable')}
+          >
+            {renderState === 'queuing' && activeRenderSlot === 'main' ? (
+              <>
+                <span className={styles.spinner} />
+                Queuing…
+              </>
+            ) : renderState === 'rendering' && activeRenderSlot === 'main' ? (
+              <>
+                <span className={styles.spinner} />
+                Rendering…
+              </>
+            ) : (
+              'Render in ComfyUI'
+            )}
+          </button>
+          {(renderImages.length > 0
+            || (renderState === 'rendering' && activeRenderSlot === 'main')
+            || (renderState === 'failed' && renderError)) && (
+            <button
+              type="button"
+              className={styles.revertBtn}
+              onClick={() => setShowRenderResults((value) => !value)}
+            >
+              {showRenderResults ? 'Hide render results' : 'Show render results'}
+            </button>
+          )}
+        </div>
+        {!comfyReady && (
+          <p className={styles.renderHint}>
+            {comfyError || 'Start ComfyUI on localhost:8188 to render from the prompt builder.'}
+          </p>
+        )}
+        <p className={styles.renderHint}>
+          Render always uses the current on-screen prompt text, including manual edits.
+        </p>
+        {renderError && (
+          <p className={styles.renderError}>{renderError}</p>
+        )}
+        {showRenderResults && (renderState === 'rendering' && activeRenderSlot === 'main' || renderImages.length > 0) && (
+          <div className={styles.renderPanel}>
+            {renderState === 'rendering' && activeRenderSlot === 'main' && renderImages.length === 0 && (
+              <p className={styles.renderStatus}>Waiting for ComfyUI to finish this render…</p>
+            )}
+            {renderImages.length > 0 && (
+              <div className={styles.renderGrid}>
+                {renderImages.map((image) => (
+                  <a
+                    key={image.id}
+                    href={`/api/generated-image-view?id=${image.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.renderItem}
+                  >
+                    <img
+                      src={`/api/generated-image-view?id=${image.id}`}
+                      alt="Prompt builder render"
+                      className={styles.renderThumb}
+                      loading="lazy"
+                    />
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Error message */}
       {state === 'error' && error && (
@@ -981,6 +1414,14 @@ export default function PromptOutput({
             )}
           </button>
         )}
+        <button
+          className={styles.repolishBtn}
+          onClick={handlePolishCurrentText}
+          disabled={!displayText.trim() || state === 'loading'}
+          title="Refine the currently displayed prompt text through AI (manual, restored, variant, or polished)"
+        >
+          {state === 'loading' ? 'Polishing…' : 'Polish current text'}
+        </button>
         {isPolished && (
           <button
             className={styles.repolishBtn}
@@ -991,6 +1432,132 @@ export default function PromptOutput({
           </button>
         )}
       </div>
+
+      <div className={styles.variantRow}>
+        <button className={styles.repolishBtn} onClick={() => saveSnapshot('A')} disabled={!displayText.trim()}>
+          Save to A
+        </button>
+        <button className={styles.repolishBtn} onClick={() => saveSnapshot('B')} disabled={!displayText.trim()}>
+          Save to B
+        </button>
+        <button className={styles.repolishBtn} onClick={() => loadSnapshot('A')} disabled={!snapshotA?.text}>
+          Use A
+        </button>
+        <button className={styles.repolishBtn} onClick={() => loadSnapshot('B')} disabled={!snapshotB?.text}>
+          Use B
+        </button>
+        <button
+          className={styles.repolishBtn}
+          onClick={() => renderSnapshot('A')}
+          disabled={!snapshotA?.text || !comfyReady || isRenderBusy}
+        >
+          {compareSlotBusy('A') ? (
+            <>
+              <span className={styles.spinner} />
+              {' '}
+              Rendering…
+            </>
+          ) : (
+            'Render A'
+          )}
+        </button>
+        <button
+          className={styles.repolishBtn}
+          onClick={() => renderSnapshot('B')}
+          disabled={!snapshotB?.text || !comfyReady || isRenderBusy}
+        >
+          {compareSlotBusy('B') ? (
+            <>
+              <span className={styles.spinner} />
+              {' '}
+              Rendering…
+            </>
+          ) : (
+            'Render B'
+          )}
+        </button>
+      </div>
+      {(snapshotA || snapshotB) && (
+        <p className={styles.engineHint}>
+          Snapshots:
+          {snapshotA ? ` A (${snapshotA.source}, ${new Date(snapshotA.timestamp).toLocaleTimeString()})` : ' A (empty)'}
+          {' | '}
+          {snapshotB ? `B (${snapshotB.source}, ${new Date(snapshotB.timestamp).toLocaleTimeString()})` : 'B (empty)'}
+        </p>
+      )}
+
+      {(snapshotA || snapshotB || lastCompareRender.A || lastCompareRender.B || compareSlotError.A || compareSlotError.B) && (
+        <div className={styles.compareWrap}>
+          <div className={styles.compareWrapHeader}>
+            <p className={styles.compareWrapTitle}>Compare renders (last A vs last B)</p>
+            {(lastCompareRender.A || lastCompareRender.B) && (
+              <button
+                type="button"
+                className={styles.diffTinyBtn}
+                onClick={clearAllCompareRenders}
+                title="Remove stored A/B render previews from this tab"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+          <div className={styles.compareRow}>
+            {['A', 'B'].map((slot) => {
+              const data = lastCompareRender[slot]
+              const err = compareSlotError[slot]
+              const busy = compareSlotBusy(slot)
+              return (
+                <div key={slot} className={styles.compareCell}>
+                  <div className={styles.compareCellHeader}>
+                    <span className={styles.compareCellTitle}>Snapshot {slot}</span>
+                    <span className={styles.compareCellHeaderRight}>
+                      {busy ? <span className={styles.spinner} aria-hidden /> : null}
+                      <button
+                        type="button"
+                        className={styles.diffTinyBtn}
+                        onClick={() => clearCompareSlot(slot)}
+                        disabled={busy || (!data && !err)}
+                        title={`Clear ${slot} compare memory and errors`}
+                      >
+                        Clear
+                      </button>
+                    </span>
+                  </div>
+                  {err ? <p className={styles.renderError}>{err}</p> : null}
+                  {data?.timestamp ? (
+                    <p className={styles.compareMeta}>{new Date(data.timestamp).toLocaleString()}</p>
+                  ) : null}
+                  {data?.promptSnippet ? (
+                    <p className={styles.compareSnippet} title={data.promptSnippet}>{data.promptSnippet}</p>
+                  ) : null}
+                  {data?.images?.length > 0 ? (
+                    <div className={styles.compareThumbGrid}>
+                      {data.images.map((image) => (
+                        <a
+                          key={image.id}
+                          href={`/api/generated-image-view?id=${image.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={styles.renderItem}
+                        >
+                          <img
+                            src={`/api/generated-image-view?id=${image.id}`}
+                            alt={`Compare render ${slot}`}
+                            className={styles.renderThumb}
+                            loading="lazy"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  ) : !busy && !err ? (
+                    <p className={styles.compareEmpty}>No render yet for {slot}. Use Render {slot}.</p>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className={styles.variantRow}>
         <button
@@ -1134,7 +1701,7 @@ export default function PromptOutput({
               <p className={styles.galleryEmpty}>Loading…</p>
             )}
             {!galleryLoading && galleryImages.length === 0 && (
-              <p className={styles.galleryEmpty}>No generated images yet. Run the casting pipeline first.</p>
+              <p className={styles.galleryEmpty}>No generated images yet. Render from the prompt above or run the casting pipeline.</p>
             )}
             {!galleryLoading && galleryImages.length > 0 && (
               <div className={styles.galleryGrid}>
@@ -1210,7 +1777,9 @@ export default function PromptOutput({
           <li>Pick a director → set characters → choose a scenario</li>
           <li>Add environment, light, palette, and film chips</li>
           <li>Describe your scene in the field above (optional)</li>
-          <li>Hit <strong>Polish with AI</strong> to fuse fragments into a unified prompt</li>
+          <li>Hit <strong>Polish with AI</strong> to fuse fragments into a unified prompt, or <strong>Polish current text</strong> to refine what you already see</li>
+          <li>Use <strong>Edit prompt</strong> for manual tweaks; <strong>Render in ComfyUI</strong> for a quick visual check of the current text</li>
+          <li>Optional: <strong>Save to A/B</strong> and <strong>Render A/B</strong> to compare two prompt variants side by side</li>
           <li>Copy and paste into Qwen — append aspect ratio</li>
         </ul>
       </div>

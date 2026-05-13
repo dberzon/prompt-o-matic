@@ -10,6 +10,7 @@ import {
   listAvailableWorkflows,
   loadWorkflowMapping,
   loadWorkflowTemplate,
+  resolveDefaultQueueWorkflowId,
   resolveWorkflowSelection,
   validateWorkflowMapping,
 } from './workflowMapping.js'
@@ -106,7 +107,14 @@ async function fetchJsonWithTimeout(url, init = {}, fetchImpl = fetch, timeoutMs
     const response = await fetchImpl(url, { ...init, signal: controller.signal })
     if (!response.ok) {
       const body = await response.text()
-      const err = new Error(`Comfy request failed: ${response.status}`)
+      let detail = body
+      try {
+        const parsed = JSON.parse(body)
+        detail = parsed?.error?.message || parsed?.error || body
+      } catch {
+        // keep raw body
+      }
+      const err = new Error(`Comfy request failed: ${response.status}${detail ? ` — ${detail}` : ''}`)
       err.status = 502
       err.meta = body
       throw err
@@ -374,11 +382,12 @@ export function createComfyService({ env = process.env, fetchImpl = fetch } = {}
       }
     },
     listWorkflows() {
+      const resolvedWorkflowId = resolveDefaultQueueWorkflowId({ env })
       return {
         ok: true,
-        defaultWorkflowId: DEFAULT_WORKFLOW_ID,
+        defaultWorkflowId: resolvedWorkflowId,
         requestedWorkflowId: null,
-        resolvedWorkflowId: DEFAULT_WORKFLOW_ID,
+        resolvedWorkflowId,
         usedFallback: false,
         workflows: listAvailableWorkflows(),
       }

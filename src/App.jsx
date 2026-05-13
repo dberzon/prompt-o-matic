@@ -9,6 +9,7 @@ import { getSceneBankEntry } from './data/sceneBank.js'
 import { validatePromptRules, applyRuleFix } from './utils/promptRules.js'
 import { generatePromptVariants } from './utils/variants.js'
 import { useWorkspaceHistory } from './hooks/useWorkspaceHistory.js'
+import { useComfyHealth } from './hooks/useComfyHealth.js'
 import Header from './components/Header.jsx'
 import SceneInput from './components/SceneInput.jsx'
 import SceneScaffold from './components/SceneScaffold.jsx'
@@ -213,6 +214,7 @@ export default function App() {
     setContinuityEntityId(entityId)
     setActiveTab('continuity')
   }, [])
+  const { comfy: comfyStatus, comfyError } = useComfyHealth()
   const [scene, setScene] = useState('')
   const [selectedDir, setSelectedDir] = useState(null)
   const [charCount, setCharCount] = useState(1)
@@ -925,7 +927,7 @@ export default function App() {
 
   return (
     <div className={styles.app}>
-      <Header onClear={clearAll} />
+      <Header onClear={clearAll} comfyStatus={comfyStatus} comfyError={comfyError} />
       <div className={styles.tabs}>
         <button
           className={`${styles.tabBtn} ${activeTab === 'builder' ? styles.tabBtnActive : ''}`}
@@ -1116,6 +1118,8 @@ export default function App() {
             aiEngine={aiEngine}
             localOnly={localOnly}
             embeddedStatus={embeddedStatus}
+            comfyStatus={comfyStatus}
+            comfyError={comfyError}
           />
           <ReferenceBoard />
         </div>
@@ -1139,6 +1143,8 @@ export default function App() {
           <CastingPipelinePanel
             jumpToCharacterId={castingRoomJumpId}
             onJumpConsumed={() => setCastingRoomJumpId(null)}
+            comfyStatus={comfyStatus}
+            comfyError={comfyError}
           />
         </div>
       ) : activeTab === 'actorBank' ? (
