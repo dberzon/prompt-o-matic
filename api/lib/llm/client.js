@@ -1,3 +1,5 @@
+import { getPrompt } from '../prompts/registry.js'
+import { renderPrompt } from '../prompts/render.js'
 import { resolveProviderSelection, runWithResolvedProvider } from '../polishCore.js'
 
 /**
@@ -41,10 +43,25 @@ export function createLlmClient({
   }
 
   /**
-   * @param {{ promptId: string; version?: string; variables?: Record<string, unknown> }} _opts
+   * @param {{
+   *   promptId: string
+   *   version?: string
+   *   variables?: Record<string, unknown>
+   *   schema?: import('zod').ZodTypeAny
+   *   providerPayload?: Record<string, unknown>
+   * }} opts
    */
-  async function chat(_opts) {
-    throw new Error('createLlmClient().chat is not wired yet; use raw()')
+  async function chat(opts) {
+    const { promptId, version, variables = {}, providerPayload = {} } = opts
+    void opts.schema
+    telemetry.record?.({ kind: 'llm.chat', promptId, version })
+    const rec = getPrompt(promptId, version)
+    const user = renderPrompt(rec.body, variables)
+    return raw({
+      system: 'Return strict JSON only.',
+      user,
+      providerPayload,
+    })
   }
 
   return { raw, chat }

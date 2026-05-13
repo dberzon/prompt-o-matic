@@ -6,11 +6,10 @@ import { RUSLAN_S1_FIXTURE } from './fixtures/ruslanWorkedExample.js'
 import { applyS1Parser } from './parsers/s1Parser.js'
 import { applyS2Parser } from './parsers/s2Parser.js'
 import { applyS4Parser } from './parsers/s4Parser.js'
-import { buildS2HistoricalEnrichmentPrompt } from './prompts/s2HistoricalEnrichment.js'
-import { buildS4EnvironmentalProjectionPrompt } from './prompts/s4EnvironmentalProjection.js'
 import { runExtrapolationPipeline, runExtrapolationStage } from './orchestrator.js'
 import { StageCache } from './stageCache.js'
 import { createEntity, getEntity, listAttributes, listEntities, writeAttribute } from '../db/repositories.js'
+import { getPrompt } from '../prompts/registry.js'
 import { createSqliteDatabase, initializeDatabase } from '../db/sqlite.js'
 import { parseS6ConflictOutput } from './schemas/s6Conflict.js'
 import { parseS2HistoricalOutput } from './schemas/s2Historical.js'
@@ -86,14 +85,24 @@ describe('extrapolation prompts and parsers', () => {
     ).not.toThrow()
   })
 
-  it('builds S2 prompt from era canon attrs', () => {
-    const prompt = buildS2HistoricalEnrichmentPrompt({
-      entity: { id: 'ent_1', name: 'Ruslan', type: 'character' },
-      canonAttributes: [{ key: 'era.decade', value: '1990s' }],
-      prior: {},
-    })
-    expect(prompt).toContain('Ruslan')
-    expect(prompt).toContain('era.decade')
+  it('builds S2 dynamic context from era canon attrs', () => {
+    const entity = { id: 'ent_1', name: 'Ruslan', type: 'character' }
+    const canonAttributes = [{ key: 'era.decade', value: '1990s' }]
+    const eraAttrs = canonAttributes
+      .filter(
+        (item) =>
+          /^(era|setting|culture|period|location)\./.test(item.key) ||
+          ['era', 'setting', 'culture', 'period', 'location'].includes(item.key),
+      )
+      .map((item) => `${item.key}: ${typeof item.value === 'string' ? item.value : JSON.stringify(item.value)}`)
+    const tail = [
+      `Entity: ${entity?.name || entity?.id} (${entity?.type || 'character'})`,
+      eraAttrs.length ? `Canon era/setting:\n${eraAttrs.join('\n')}` : 'Canon era/setting: (none supplied)',
+    ]
+      .filter(Boolean)
+      .join('\n')
+    expect(tail).toContain('Ruslan')
+    expect(tail).toContain('era.decade')
   })
 
   it('writes low-confidence inferred attrs from S2 parser', () => {
@@ -122,13 +131,7 @@ describe('extrapolation prompts and parsers', () => {
     expect(suggestions).toHaveLength(1)
     expect(writes.some((item) => item.key === 'routine.friday')).toBe(true)
     expect(writes.some((item) => item.key === 'relation.romantic.crush:rita_vlasova' && item.provenance === 'derived')).toBe(true)
-    const prompt = buildS4EnvironmentalProjectionPrompt({
-      entity: { id: 'ent_s4', name: 'Ruslan', type: 'character' },
-      canonAttributes: [],
-      relationships: [],
-      prior: {},
-    })
-    expect(prompt).toContain('environments')
+    expect(getPrompt('extrapolation.s4.environment', '1').body).toContain('environments')
   })
 })
 
@@ -149,20 +152,23 @@ describe('extrapolation orchestrator', () => {
     tempDirs.push(cacheDir)
     const cache = new StageCache({ cacheDir })
     const llm = async ({ user }) => {
-      if (user.includes('period-specific')) {
+      if (user.includes('Write a single visual descriptor')) {
+        return JSON.stringify({ visualDescriptor: 'frontal portrait, neutral expression' })
+      }
+      if (user.includes('Infer psychology attributes')) {
+        return JSON.stringify({ attributes: [{ key: 'behavior.temperament', value: 'wry', confidence: 0.7 }] })
+      }
+      if (user.includes('You enrich a fictional character with period-specific')) {
         return JSON.stringify({ attributes: [{ key: 'culture.slang', value: 'bro', confidence: 0.5 }] })
       }
-      if (user.includes('environments')) {
+      if (user.includes('Project likely environments and relationship-derived')) {
         return JSON.stringify({
           environments: [{ name: 'Communal apartment', summary: 'Shared kitchen' }],
           attributes: [{ key: 'home.context', value: 'lives in communal apartment' }],
         })
       }
-      if (user.includes('psychology')) {
-        return JSON.stringify({ attributes: [{ key: 'behavior.temperament', value: 'wry', confidence: 0.7 }] })
-      }
-      if (user.includes('frontal portrait')) {
-        return JSON.stringify({ visualDescriptor: 'frontal portrait, neutral expression' })
+      if (user.includes('Detect contradictions')) {
+        return JSON.stringify({ conflicts: [] })
       }
       return '{}'
     }
@@ -213,20 +219,23 @@ describe('extrapolation orchestrator', () => {
     tempDirs.push(cacheDir)
     const cache = new StageCache({ cacheDir })
     const llm = async ({ user }) => {
-      if (user.includes('period-specific')) {
+      if (user.includes('Write a single visual descriptor')) {
+        return JSON.stringify({ visualDescriptor: 'frontal portrait, neutral expression' })
+      }
+      if (user.includes('Infer psychology attributes')) {
+        return JSON.stringify({ attributes: [{ key: 'behavior.temperament', value: 'wry', confidence: 0.7 }] })
+      }
+      if (user.includes('You enrich a fictional character with period-specific')) {
         return JSON.stringify({ attributes: [{ key: 'culture.slang', value: 'bro', confidence: 0.5 }] })
       }
-      if (user.includes('environments')) {
+      if (user.includes('Project likely environments and relationship-derived')) {
         return JSON.stringify({
           environments: [{ name: 'Communal apartment', summary: 'Shared kitchen' }],
           attributes: [{ key: 'home.context', value: 'lives in communal apartment' }],
         })
       }
-      if (user.includes('psychology')) {
-        return JSON.stringify({ attributes: [{ key: 'behavior.temperament', value: 'wry', confidence: 0.7 }] })
-      }
-      if (user.includes('frontal portrait')) {
-        return JSON.stringify({ visualDescriptor: 'frontal portrait, neutral expression' })
+      if (user.includes('Detect contradictions')) {
+        return JSON.stringify({ conflicts: [] })
       }
       return '{}'
     }

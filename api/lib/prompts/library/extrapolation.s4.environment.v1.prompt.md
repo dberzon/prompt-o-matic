@@ -13,3 +13,5 @@ Return strict JSON only:
 }
 Environment entities should be plausible recurring spaces (home, workplace, social venue).
 Relationship-derived attributes may describe routines such as "spends Fridays at beer hall with friends".
+
+{{dynamicContext}}

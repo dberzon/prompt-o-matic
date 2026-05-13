@@ -8,3 +8,5 @@ Write a single visual descriptor for Qwen image generation and reference portrai
 Return strict JSON only: { "visualDescriptor": "string" }
 Include stable face, body, and wardrobe phrasing suitable for cross-shot continuity.
 Prefer frontal portrait composition with neutral expression.
+
+{{dynamicContext}}

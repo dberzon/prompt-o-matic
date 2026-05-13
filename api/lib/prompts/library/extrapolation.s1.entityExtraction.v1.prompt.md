@@ -13,3 +13,5 @@ Return strict JSON only with this shape:
 Primary entity receives detailed canon attributes (appearance, setting, relationships).
 Secondary entities receive minimal canon attributes (usually name only).
 Use dotted keys such as demographics.gender, appearance.eyes, setting.era, relationship.rita.
+
+{{dynamicContext}}

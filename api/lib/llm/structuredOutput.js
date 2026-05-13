@@ -59,6 +59,7 @@ function parseWithArrayDrops(schema, value, onDrop) {
  *   schema: import('zod').ZodTypeAny
  *   maxRetries?: number
  *   onDrop?: (info: { key: string; reason: string }) => void
+ *   providerPayload?: Record<string, unknown>
  * }} opts
  */
 export async function callWithSchema({
@@ -69,6 +70,7 @@ export async function callWithSchema({
   schema,
   maxRetries = 1,
   onDrop,
+  providerPayload = {},
 }) {
   let rawText = ''
   /** @type {import('zod').ZodIssue[]} */
@@ -81,7 +83,9 @@ export async function callWithSchema({
         ? variables
         : { ...variables, structuredOutputRepair: { rawText, issues: lastIssues } }
 
-    rawText = String(await client.chat({ promptId, version, variables: vars, schema }))
+    rawText = String(
+      await client.chat({ promptId, version, variables: vars, schema, providerPayload }),
+    )
 
     const trimmed = rawText.trim()
     const json = tryJsonParse(trimmed)

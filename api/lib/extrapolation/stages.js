@@ -1,4 +1,6 @@
-import { parseJsonFromLlmText } from '../characters/jsonUtils.js'
+import { callWithSchema } from '../llm/structuredOutput.js'
+import { getPrompt } from '../prompts/registry.js'
+import { renderPrompt } from '../prompts/render.js'
 import { getEntity, listAttributes, listRelationships } from '../db/repositories.js'
 import { applyS1Parser } from './parsers/s1Parser.js'
 import { applyS2Parser } from './parsers/s2Parser.js'
@@ -6,12 +8,12 @@ import { applyS3Parser } from './parsers/s3Parser.js'
 import { applyS4Parser } from './parsers/s4Parser.js'
 import { applyS5Parser } from './parsers/s5Parser.js'
 import { applyS6Parser } from './parsers/s6Parser.js'
-import { buildS1EntityExtractionPrompt } from './prompts/s1EntityExtraction.js'
-import { buildS2HistoricalEnrichmentPrompt } from './prompts/s2HistoricalEnrichment.js'
-import { buildS3PsychologicalInferencePrompt } from './prompts/s3PsychologicalInference.js'
-import { buildS4EnvironmentalProjectionPrompt } from './prompts/s4EnvironmentalProjection.js'
-import { buildS5VisualDescriptorPrompt } from './prompts/s5VisualDescriptor.js'
-import { buildS6ConflictDetectionPrompt } from './prompts/s6ConflictDetection.js'
+import { s1EntityExtractionSchema } from './schemas/s1EntityExtraction.js'
+import { S2HistoricalOutputSchema } from './schemas/s2Historical.js'
+import { S3PsychologyOutputSchema } from './schemas/s3Psychology.js'
+import { S4EnvironmentOutputSchema } from './schemas/s4Environment.js'
+import { S5VisualDescriptorOutputSchema } from './schemas/s5VisualDescriptor.js'
+import { S6ConflictOutputSchema } from './schemas/s6Conflict.js'
 import { buildCanonSnapshot } from './stageCache.js'
 
 function activeCanonAttributes(db, entityId) {
@@ -22,23 +24,123 @@ function activeAttributes(db, entityId) {
   return listAttributes(db, { entityId })
 }
 
-async function runJsonStage({ ctx, system, buildUser, apply }) {
-  const entity = getEntity(ctx.db, ctx.entityId)
-  const canonAttributes = activeCanonAttributes(ctx.db, ctx.entityId)
-  const user = buildUser({ entity, canonAttributes, prior: ctx.prior })
-  const rawText = await ctx.llm({
-    system,
-    user,
+function formatAttrLine(item) {
+  return `${item.key}: ${typeof item.value === 'string' ? item.value : JSON.stringify(item.value)}`
+}
+
+/**
+ * @param {import('./types.js').StageRunContext} ctx
+ * @param {{ promptId: string; schema: import('zod').ZodTypeAny; variables: Record<string, unknown> }} opts
+ */
+async function runStructuredStage(ctx, { promptId, schema, variables }) {
+  const stagePromptId = promptId
+  const client = {
+    /**
+     * @param {{ promptId: string; variables?: Record<string, unknown>; providerPayload?: Record<string, unknown> }} opts
+     */
+    async chat(opts) {
+      const vars = opts.variables || {}
+      const rec = getPrompt(stagePromptId)
+      const user = renderPrompt(rec.body, vars)
+      const pp = opts.providerPayload || {}
+      return ctx.llm({
+        system: 'Return strict JSON only.',
+        user,
+        providerPayload: {
+          ...pp,
+          engine: pp.engine ?? 'auto',
+          responseFormat: 'json',
+          model: pp.model ?? ctx.modelId,
+        },
+      })
+    },
+  }
+  return callWithSchema({
+    client,
+    promptId: stagePromptId,
+    variables,
+    schema,
+    maxRetries: 1,
     providerPayload: { engine: 'auto', responseFormat: 'json', model: ctx.modelId },
   })
-  const raw = parseJsonFromLlmText(rawText)
-  const applied = apply(ctx.db, ctx.entityId, raw)
-  return {
-    writes: Array.isArray(applied) ? applied : applied.writes,
-    suggestions: Array.isArray(applied?.suggestions) ? applied.suggestions : [],
-    conflicts: Array.isArray(applied?.conflicts) ? applied.conflicts : [],
-    raw,
-  }
+}
+
+function buildS1Dynamic({ entity, sourceText }) {
+  return [
+    `Primary entity: ${entity?.name || entity?.id || 'unknown'} (${entity?.type || 'character'})`,
+    'Source text:',
+    sourceText,
+  ].join('\n')
+}
+
+function buildS2Dynamic({ entity, canonAttributes, prior }) {
+  const eraAttrs = canonAttributes
+    .filter(
+      (item) =>
+        /^(era|setting|culture|period|location)\./.test(item.key) ||
+        ['era', 'setting', 'culture', 'period', 'location'].includes(item.key),
+    )
+    .map(formatAttrLine)
+  const s1 = prior?.[1] || {}
+  return [
+    `Entity: ${entity?.name || entity?.id} (${entity?.type || 'character'})`,
+    eraAttrs.length ? `Canon era/setting:\n${eraAttrs.join('\n')}` : 'Canon era/setting: (none supplied)',
+    s1?.raw ? `Stage 1 context:\n${JSON.stringify(s1.raw)}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function buildS3Dynamic({ entity, canonAttributes, prior }) {
+  const canonLines = canonAttributes.map(formatAttrLine)
+  const stageTwo = prior?.[2]?.raw
+  return [
+    `Entity: ${entity?.name || entity?.id} (${entity?.type || 'character'})`,
+    canonLines.length ? `Canon attributes:\n${canonLines.join('\n')}` : 'Canon attributes: (none)',
+    stageTwo ? `Stage 2 context:\n${JSON.stringify(stageTwo)}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function buildS4Dynamic({ entity, canonAttributes, relationships, prior }) {
+  const canonLines = canonAttributes.map(formatAttrLine)
+  const relationshipLines = (relationships || []).map((item) => {
+    const target = item.targetName || item.targetEntityId || 'unknown'
+    return `${item.relationshipType || item.type || 'related_to'} -> ${target}`
+  })
+  return [
+    `Entity: ${entity?.name || entity?.id} (${entity?.type || 'character'})`,
+    canonLines.length ? `Canon attributes:\n${canonLines.join('\n')}` : 'Canon attributes: (none)',
+    relationshipLines.length ? `Relationships:\n${relationshipLines.join('\n')}` : 'Relationships: (none)',
+    prior?.[3] ? `Stage 3 context:\n${JSON.stringify(prior[3].raw)}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function buildS5Dynamic({ entity, attributes, prior }) {
+  const attributeLines = attributes.map(formatAttrLine)
+  return [
+    `Entity: ${entity?.name || entity?.id} (${entity?.type || 'character'})`,
+    attributeLines.length ? `Attributes:\n${attributeLines.join('\n')}` : 'Attributes: (none)',
+    prior?.[4] ? `Stage 4 context:\n${JSON.stringify(prior[4].raw)}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+function buildS6Dynamic({ entity, attributes, prior }) {
+  const attributeLines = attributes.map((item) =>
+    `${item.id} :: ${item.key} :: ${item.provenance} :: ${typeof item.value === 'string' ? item.value : JSON.stringify(item.value)}`,
+  )
+  return [
+    `Entity: ${entity?.name || entity?.id} (${entity?.type || 'character'})`,
+    attributeLines.length ? `Active attributes:\n${attributeLines.join('\n')}` : 'Active attributes: (none)',
+    prior ? `Prior stage outputs:\n${JSON.stringify(prior)}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 export const extrapolationStages = [
@@ -48,15 +150,13 @@ export const extrapolationStages = [
     async run(ctx) {
       const entity = getEntity(ctx.db, ctx.entityId)
       const canonAttributes = activeCanonAttributes(ctx.db, ctx.entityId)
-      const sourceText = canonAttributes.find((item) => item.key === 'description')?.value
-        || entity?.name
-        || ''
-      const rawText = await ctx.llm({
-        system: 'Return strict JSON only.',
-        user: buildS1EntityExtractionPrompt({ entity, sourceText }),
-        providerPayload: { engine: 'auto', responseFormat: 'json', model: ctx.modelId },
+      const sourceText =
+        canonAttributes.find((item) => item.key === 'description')?.value || entity?.name || ''
+      const raw = await runStructuredStage(ctx, {
+        promptId: 'extrapolation.s1.entityExtraction',
+        schema: s1EntityExtractionSchema,
+        variables: { dynamicContext: buildS1Dynamic({ entity, sourceText }) },
       })
-      const raw = parseJsonFromLlmText(rawText)
       const applied = applyS1Parser(ctx.db, ctx.entityId, raw)
       return {
         writes: applied.writes,
@@ -69,24 +169,40 @@ export const extrapolationStages = [
     id: 2,
     name: 'Historical/cultural enrichment',
     async run(ctx) {
-      return runJsonStage({
-        ctx,
-        system: 'Return strict JSON only.',
-        buildUser: ({ entity, canonAttributes, prior }) => buildS2HistoricalEnrichmentPrompt({ entity, canonAttributes, prior }),
-        apply: applyS2Parser,
+      const entity = getEntity(ctx.db, ctx.entityId)
+      const canonAttributes = activeCanonAttributes(ctx.db, ctx.entityId)
+      const raw = await runStructuredStage(ctx, {
+        promptId: 'extrapolation.s2.historical',
+        schema: S2HistoricalOutputSchema,
+        variables: { dynamicContext: buildS2Dynamic({ entity, canonAttributes, prior: ctx.prior }) },
       })
+      const applied = applyS2Parser(ctx.db, ctx.entityId, raw)
+      return {
+        writes: applied,
+        suggestions: [],
+        conflicts: [],
+        raw,
+      }
     },
   },
   {
     id: 3,
     name: 'Psychology enrichment',
     async run(ctx) {
-      return runJsonStage({
-        ctx,
-        system: 'Return strict JSON only.',
-        buildUser: ({ entity, canonAttributes, prior }) => buildS3PsychologicalInferencePrompt({ entity, canonAttributes, prior }),
-        apply: applyS3Parser,
+      const entity = getEntity(ctx.db, ctx.entityId)
+      const canonAttributes = activeCanonAttributes(ctx.db, ctx.entityId)
+      const raw = await runStructuredStage(ctx, {
+        promptId: 'extrapolation.s3.psychology',
+        schema: S3PsychologyOutputSchema,
+        variables: { dynamicContext: buildS3Dynamic({ entity, canonAttributes, prior: ctx.prior }) },
       })
+      const applied = applyS3Parser(ctx.db, ctx.entityId, raw)
+      return {
+        writes: applied,
+        suggestions: [],
+        conflicts: [],
+        raw,
+      }
     },
   },
   {
@@ -96,17 +212,13 @@ export const extrapolationStages = [
       const entity = getEntity(ctx.db, ctx.entityId)
       const canonAttributes = activeCanonAttributes(ctx.db, ctx.entityId)
       const relationships = listRelationships(ctx.db, { fromId: ctx.entityId })
-      const rawText = await ctx.llm({
-        system: 'Return strict JSON only.',
-        user: buildS4EnvironmentalProjectionPrompt({
-          entity,
-          canonAttributes,
-          relationships,
-          prior: ctx.prior,
-        }),
-        providerPayload: { engine: 'auto', responseFormat: 'json', model: ctx.modelId },
+      const raw = await runStructuredStage(ctx, {
+        promptId: 'extrapolation.s4.environment',
+        schema: S4EnvironmentOutputSchema,
+        variables: {
+          dynamicContext: buildS4Dynamic({ entity, canonAttributes, relationships, prior: ctx.prior }),
+        },
       })
-      const raw = parseJsonFromLlmText(rawText)
       const applied = applyS4Parser(ctx.db, ctx.entityId, raw)
       return { writes: applied.writes, suggestions: applied.suggestions, raw }
     },
@@ -117,16 +229,11 @@ export const extrapolationStages = [
     async run(ctx) {
       const entity = getEntity(ctx.db, ctx.entityId)
       const attributes = activeAttributes(ctx.db, ctx.entityId)
-      const rawText = await ctx.llm({
-        system: 'Return strict JSON only.',
-        user: buildS5VisualDescriptorPrompt({
-          entity,
-          attributes,
-          prior: ctx.prior,
-        }),
-        providerPayload: { engine: 'auto', responseFormat: 'json', model: ctx.modelId },
+      const raw = await runStructuredStage(ctx, {
+        promptId: 'extrapolation.s5.visualDescriptor',
+        schema: S5VisualDescriptorOutputSchema,
+        variables: { dynamicContext: buildS5Dynamic({ entity, attributes, prior: ctx.prior }) },
       })
-      const raw = parseJsonFromLlmText(rawText)
       return {
         writes: applyS5Parser(ctx.db, ctx.entityId, raw),
         suggestions: [],
@@ -140,16 +247,11 @@ export const extrapolationStages = [
     async run(ctx) {
       const entity = getEntity(ctx.db, ctx.entityId)
       const attributes = activeAttributes(ctx.db, ctx.entityId)
-      const rawText = await ctx.llm({
-        system: 'Return strict JSON only.',
-        user: buildS6ConflictDetectionPrompt({
-          entity,
-          attributes,
-          prior: ctx.prior,
-        }),
-        providerPayload: { engine: 'auto', responseFormat: 'json', model: ctx.modelId },
+      const raw = await runStructuredStage(ctx, {
+        promptId: 'extrapolation.s6.conflict',
+        schema: S6ConflictOutputSchema,
+        variables: { dynamicContext: buildS6Dynamic({ entity, attributes, prior: ctx.prior }) },
       })
-      const raw = parseJsonFromLlmText(rawText)
       const applied = applyS6Parser(ctx.db, ctx.entityId, raw)
       return {
         writes: applied.writes,

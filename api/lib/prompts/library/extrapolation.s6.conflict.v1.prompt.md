@@ -8,3 +8,5 @@ Detect contradictions across extrapolation stage outputs for this entity.
 Return strict JSON only:
 { "conflicts": [ { "key": "string", "message": "string", "attributeIds": ["id1", "id2"] } ] }
 Only report material contradictions, not benign duplicates.
+
+{{dynamicContext}}

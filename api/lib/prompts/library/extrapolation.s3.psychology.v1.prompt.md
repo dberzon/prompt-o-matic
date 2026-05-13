@@ -8,3 +8,5 @@ Infer psychology attributes from canon and historical/cultural context.
 Return strict JSON only:
 { "attributes": [ { "key": "behavior.*|speech.*|fear.*", "value": "string", "confidence": 0.0-1.0 } ] }
 Use keys prefixed with behavior., speech., or fear.
+
+{{dynamicContext}}
