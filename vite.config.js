@@ -35,19 +35,14 @@ import { generateCharacterPromptDescriptor, setCharacterPromptDescriptor, backfi
 import {
   createActorAudition,
   createActorCandidate,
-  createBankEntry,
   deleteActorAudition,
   deleteActorCandidate,
-  deleteBankEntry,
   getActorAudition,
   getActorCandidate,
-  getBankEntry,
-  getBankEntryBySlug,
   getGeneratedImageRecord,
   getPromptPack,
   listActorAuditions,
   listActorCandidates,
-  listBankEntries,
   createCharacter,
   getCharacter,
   listCharacters,
@@ -55,7 +50,6 @@ import {
   listGeneratedImageRecords,
   updateActorAudition,
   updateActorCandidate,
-  updateBankEntry,
   updateCharacter,
   updateGeneratedImageRecord,
   archiveCharacter,
@@ -103,6 +97,7 @@ import {
   sendJsonMiddleware,
 } from './api/lib/http.js'
 import entitiesHandler from './api/entities.js'
+import characterBankHandler from './api/character-bank.js'
 import entityRelationshipsHandler from './api/entity-relationships.js'
 import entityAnchorsHandler from './api/entity-anchors.js'
 import entityAttributeActionsHandler from './api/entity-attribute-actions.js'
@@ -1103,76 +1098,7 @@ function apiDevPlugin(env) {
       })
 
       server.middlewares.use('/api/character-bank', async (req, res) => {
-        let runtime = null
-        try {
-          const url = new URL(req.url || '', 'http://localhost')
-          runtime = createVectorRuntime({ env })
-          if (req.method === 'GET') {
-            const id = url.searchParams.get('id')
-            const slug = url.searchParams.get('slug')
-            if (id) {
-              const item = getBankEntry(runtime.db, id)
-              if (!item) { sendJsonMiddleware(res, 404, { error: 'Not found' }); return }
-              sendJsonMiddleware(res, 200, { ok: true, item })
-              return
-            }
-            if (slug) {
-              const item = getBankEntryBySlug(runtime.db, slug)
-              if (!item) { sendJsonMiddleware(res, 404, { error: 'Not found' }); return }
-              sendJsonMiddleware(res, 200, { ok: true, item })
-              return
-            }
-            const items = listBankEntries(runtime.db, {})
-            sendJsonMiddleware(res, 200, { ok: true, items })
-            return
-          }
-          if (req.method === 'POST') {
-            const body = await readJsonBody(req)
-            try {
-              const item = createBankEntry(runtime.db, body || {})
-              sendJsonMiddleware(res, 200, { ok: true, item })
-              return
-            } catch (err) {
-              if (err?.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-                sendJsonMiddleware(res, 409, { error: 'Slug already exists', code: 'SLUG_COLLISION' })
-                return
-              }
-              throw err
-            }
-          }
-          if (req.method === 'PUT') {
-            const body = await readJsonBody(req)
-            const id = body?.id
-            if (!id) { sendJsonMiddleware(res, 400, { error: 'Missing id' }); return }
-            const { id: _ignored, ...patch } = body
-            try {
-              const item = updateBankEntry(runtime.db, id, patch)
-              if (!item) { sendJsonMiddleware(res, 404, { error: 'Not found' }); return }
-              sendJsonMiddleware(res, 200, { ok: true, item })
-              return
-            } catch (err) {
-              if (err?.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-                sendJsonMiddleware(res, 409, { error: 'Slug already exists', code: 'SLUG_COLLISION' })
-                return
-              }
-              throw err
-            }
-          }
-          if (req.method === 'DELETE') {
-            const id = url.searchParams.get('id')
-            if (!id) { sendJsonMiddleware(res, 400, { error: 'Missing id' }); return }
-            const deleted = deleteBankEntry(runtime.db, id)
-            if (!deleted) { sendJsonMiddleware(res, 404, { error: 'Not found' }); return }
-            sendJsonMiddleware(res, 200, { ok: true, deleted: true })
-            return
-          }
-          sendJsonMiddleware(res, 405, { error: 'Method not allowed' })
-        } catch (err) {
-          const normalized = normalizeHandlerError(err)
-          sendJsonMiddleware(res, normalized.status, { error: normalized.message, code: err?.code || 'CHARACTER_BANK_ERROR' })
-        } finally {
-          runtime?.close?.()
-        }
+        void characterBankHandler(req, res)
       })
 
       server.middlewares.use('/api/actor-candidates', async (req, res) => {

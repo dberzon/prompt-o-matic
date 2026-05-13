@@ -30,6 +30,7 @@ function splitStatements(sql) {
 export const FILE_MIGRATIONS = [
   { id: '2026-05-add-projects', sql: readSqlFile('2026-05-add-projects') },
   { id: '2026-05-bible-snapshots', sql: readSqlFile('2026-05-bible-snapshots') },
+  { id: '2026-05-character-bank-project', sql: readSqlFile('2026-05-character-bank-project') },
 ]
 
 // Flat ordered list of individual SQL statements across all file migrations.

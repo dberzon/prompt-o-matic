@@ -13,6 +13,7 @@ export class ProjectNotFoundError extends Error {
     super(`Project not found: ${projectId}`)
     this.name = 'ProjectNotFoundError'
     this.code = 'PROJECT_NOT_FOUND'
+    this.status = 404
     /** Resolved id that was looked up */
     this.projectId = projectId
   }
@@ -82,4 +83,61 @@ export function resolveActiveProject(db, opts = {}) {
   const row = getProjectById(db, fallbackId)
   if (!row) throw new ProjectNotFoundError(fallbackId)
   return row
+}
+
+/**
+ * When present, list/read routes should restrict rows to `project_id = id OR project_id IS NULL`.
+ * Unlike {@link resolveActiveProject}, this does **not** fall back to env or `proj_default`:
+ * omitting both query and header means no filter (backward compatible).
+ *
+ * Precedence: `?projectId=` → `x-qpb-project-id`.
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {{ req?: { url?: string; headers?: import('http').IncomingHttpHeaders }; env?: NodeJS.ProcessEnv }} [opts]
+ * @returns {string | null} validated project id, or null when unset
+ */
+export function resolveExplicitProjectIdForFiltering(db, opts = {}) {
+  const fromQuery = queryParam(opts.req, PROJECT_ID_QUERY_PARAM)
+  if (fromQuery) {
+    const row = getProjectById(db, fromQuery)
+    if (!row) throw new ProjectNotFoundError(fromQuery)
+    return fromQuery
+  }
+  const fromHeader = firstHeaderValue(opts.req?.headers, PROJECT_ID_HEADER)
+  if (fromHeader) {
+    const row = getProjectById(db, fromHeader)
+    if (!row) throw new ProjectNotFoundError(fromHeader)
+    return fromHeader
+  }
+  return null
+}
+
+/**
+ * Vite passes `req.url`; some tests use Express-style `req.query` without `url`.
+ * Builds a synthetic URL so {@link queryParam} can read `?projectId=`.
+ *
+ * @param {{ url?: string; query?: Record<string, unknown> }} req
+ */
+export function normalizeRequestUrlForProjectQuery(req) {
+  if (req?.url && String(req.url).trim() !== '') return String(req.url)
+  const q = req?.query
+  if (!q || typeof q !== 'object') return '/'
+  const sp = new URLSearchParams()
+  for (const [k, raw] of Object.entries(q)) {
+    if (raw == null) continue
+    const v = Array.isArray(raw) ? raw[0] : raw
+    if (v === '' || v == null) continue
+    sp.set(k, String(v))
+  }
+  const s = sp.toString()
+  return s ? `/?${s}` : '/'
+}
+
+/**
+ * @param {import('better-sqlite3').Database} db
+ * @param {{ url?: string; query?: Record<string, unknown>; headers?: import('http').IncomingHttpHeaders }} req
+ */
+export function resolveExplicitProjectIdForRequest(db, req) {
+  const url = normalizeRequestUrlForProjectQuery(req)
+  return resolveExplicitProjectIdForFiltering(db, { req: { url, headers: req?.headers } })
 }

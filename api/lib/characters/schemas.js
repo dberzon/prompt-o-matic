@@ -22,7 +22,7 @@ const ageRangeSchema = z.object({
 
 export const CharacterProfileSchema = z.object({
   id: nonEmpty,
-  projectId: nonEmpty.optional(),
+  projectId: nonEmpty.nullish(),
   name: nonEmpty.optional(),
   age: z.number().int().min(16).max(100),
   apparentAgeRange: ageRangeSchema,
@@ -64,7 +64,7 @@ export const CharacterProfileSchema = z.object({
 export const QwenImagePromptPackSchema = z.object({
   id: nonEmpty.optional(),
   characterId: nonEmpty,
-  projectId: nonEmpty.optional(),
+  projectId: nonEmpty.nullish(),
   positivePrompt: nonEmpty,
   negativePrompt: nonEmpty,
   camera: nonEmpty,
@@ -86,7 +86,7 @@ export const QwenImagePromptPackSchema = z.object({
 export const GeneratedImageRecordSchema = z.object({
   id: nonEmpty,
   characterId: nonEmpty.optional(),
-  projectId: nonEmpty.optional(),
+  projectId: nonEmpty.nullish(),
   imagePath: nonEmpty,
   thumbnailPath: nonEmpty.optional(),
   promptPackId: nonEmpty,
@@ -145,6 +145,7 @@ export const CharacterBankEntrySchema = z.object({
   name: nonEmpty,
   description: nonEmpty,
   optimizedDescription: z.string().optional(),
+  projectId: nonEmpty.nullish(),
   createdAt: isoDateTime,
   updatedAt: isoDateTime,
 }).strict()

@@ -6,6 +6,7 @@ import {
   listEntities,
   updateEntity,
 } from './lib/db/repositories.js'
+import { resolveExplicitProjectIdForRequest } from './lib/projects/context.js'
 import { createVectorRuntime } from './lib/vector/runtime.js'
 
 function parseEntityRoute(req) {
@@ -32,14 +33,26 @@ export default async function handler(req, res) {
     const db = runtime.db
 
     if (req.method === 'GET') {
+      const filterProjectId = resolveExplicitProjectIdForRequest(db, req)
       if (id) {
         const item = getEntity(db, id)
         if (!item) return sendJsonNode(res, 404, { error: 'Entity not found' })
+        if (
+          filterProjectId
+          && item.projectId != null
+          && item.projectId !== filterProjectId
+        ) {
+          return sendJsonNode(res, 404, { error: 'Entity not found' })
+        }
         return sendJsonNode(res, 200, { ok: true, item })
       }
       const type = url.searchParams.get('type') || undefined
       const includeArchived = url.searchParams.get('includeArchived') === 'true'
-      const items = listEntities(db, { type, includeArchived })
+      const items = listEntities(db, {
+        type,
+        includeArchived,
+        projectId: filterProjectId || undefined,
+      })
       return sendJsonNode(res, 200, { ok: true, items, total: items.length })
     }
 

@@ -2,6 +2,7 @@ import { normalizeHandlerError, sendJsonNode } from './lib/http.js'
 import { createVectorRuntime } from './lib/vector/runtime.js'
 import { listGeneratedImageRecords } from './lib/db/repositories.js'
 import { assertGeneratedImagesOperationAllowed } from './lib/generatedImages/access.js'
+import { resolveExplicitProjectIdForRequest } from './lib/projects/context.js'
 
 function parseApprovedParam(value) {
   if (value === 'true') return true
@@ -19,12 +20,14 @@ export default async function handler(req, res) {
     runtime = createVectorRuntime({ env: process.env })
     const query = req.query || {}
     const limit = Number.parseInt(query.limit || '', 10)
+    const filterProjectId = resolveExplicitProjectIdForRequest(runtime.db, req)
     const items = listGeneratedImageRecords(runtime.db, {
       characterId: typeof query.characterId === 'string' ? query.characterId : undefined,
       promptPackId: typeof query.promptPackId === 'string' ? query.promptPackId : undefined,
       viewType: typeof query.viewType === 'string' ? query.viewType : undefined,
       approved: parseApprovedParam(query.approved),
       limit: Number.isFinite(limit) ? limit : undefined,
+      projectId: filterProjectId || undefined,
     })
     return sendJsonNode(res, 200, { ok: true, items })
   } catch (error) {

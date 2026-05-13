@@ -29,11 +29,41 @@ export function createSqliteDatabase({ env = process.env, dbPath } = {}) {
   return db
 }
 
+function runLegacyProjectNullBackfillOnce(db) {
+  try {
+    if (
+      db
+        .prepare(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = '__qpb_legacy_project_id_backfill'",
+        )
+        .get()
+    ) {
+      return
+    }
+    const run = db.transaction(() => {
+      db.prepare("UPDATE entities SET project_id = 'proj_default' WHERE project_id IS NULL").run()
+      db.prepare("UPDATE characters SET project_id = 'proj_default' WHERE project_id IS NULL").run()
+      db.prepare("UPDATE prompt_packs SET project_id = 'proj_default' WHERE project_id IS NULL").run()
+      db.prepare("UPDATE generated_images SET project_id = 'proj_default' WHERE project_id IS NULL").run()
+      try {
+        db.prepare("UPDATE character_bank_entries SET project_id = 'proj_default' WHERE project_id IS NULL").run()
+      } catch {
+        /* character_bank_entries.project_id may not exist on very old DBs */
+      }
+      db.exec('CREATE TABLE __qpb_legacy_project_id_backfill (done INTEGER PRIMARY KEY CHECK (done = 1))')
+    })
+    run()
+  } catch {
+    /* ignore — partial schema during first boot */
+  }
+}
+
 export function initializeDatabase(db) {
   db.exec(CREATE_TABLES_SQL)
   for (const migration of MIGRATIONS) {
     try { db.exec(migration) } catch { /* column already exists */ }
   }
+  runLegacyProjectNullBackfillOnce(db)
   runDataBackfills(db)
 }
 

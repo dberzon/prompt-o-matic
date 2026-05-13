@@ -53,6 +53,17 @@ describe('migrations registry (api/lib/db/migrations/index.js)', () => {
     expect(mig.sql).toMatch(/CREATE TABLE IF NOT EXISTS bible_snapshots/i)
   })
 
+  it('FILE_MIGRATIONS includes 2026-05-character-bank-project after bible-snapshots', () => {
+    const ids = FILE_MIGRATIONS.map((m) => m.id)
+    const bibleIdx = ids.indexOf('2026-05-bible-snapshots')
+    const bankIdx = ids.indexOf('2026-05-character-bank-project')
+    expect(bankIdx).toBeGreaterThan(-1)
+    expect(bibleIdx).toBeGreaterThan(-1)
+    expect(bankIdx).toBeGreaterThan(bibleIdx)
+    const mig = FILE_MIGRATIONS.find((m) => m.id === '2026-05-character-bank-project')
+    expect(mig.sql).toMatch(/character_bank_entries/i)
+  })
+
   it('FILE_MIGRATION_STATEMENTS is a non-empty ordered list of statements', () => {
     expect(Array.isArray(FILE_MIGRATION_STATEMENTS)).toBe(true)
     expect(FILE_MIGRATION_STATEMENTS.length).toBeGreaterThan(0)
@@ -91,6 +102,13 @@ describe('2026-05-add-projects migration: schema & seed', () => {
       'slug',
       'updated_at',
     ])
+    db.close()
+  })
+
+  it('character_bank_entries gains project_id after initializeDatabase', () => {
+    const { db } = createTempDb()
+    initializeDatabase(db)
+    expect(columnNames(db, 'character_bank_entries')).toContain('project_id')
     db.close()
   })
 
@@ -137,24 +155,21 @@ describe('2026-05-add-projects migration: schema & seed', () => {
 })
 
 describe('2026-05-add-projects migration: backfill', () => {
-  it('backfills entities.project_id = proj_default for rows with NULL', () => {
+  it('does not rewrite NULL project_id on a second initializeDatabase (one-time legacy backfill)', () => {
     const { db } = createTempDb()
     initializeDatabase(db)
     const now = new Date().toISOString()
     db.prepare(
-      "INSERT INTO entities (id, type, name, created_at, updated_at) VALUES ('e_pre', 'character', 'Elena', ?, ?)",
+      "INSERT INTO entities (id, type, name, created_at, updated_at, project_id) VALUES ('e_pre', 'character', 'Elena', ?, ?, NULL)",
     ).run(now, now)
-    db.prepare("UPDATE entities SET project_id = NULL WHERE id = 'e_pre'").run()
     expect(db.prepare("SELECT project_id FROM entities WHERE id = 'e_pre'").get().project_id).toBeNull()
 
-    // Re-running initializeDatabase re-applies the migration; UPDATE ... WHERE
-    // project_id IS NULL is idempotent and backfills the pre-existing row.
     initializeDatabase(db)
-    expect(db.prepare("SELECT project_id FROM entities WHERE id = 'e_pre'").get().project_id).toBe('proj_default')
+    expect(db.prepare("SELECT project_id FROM entities WHERE id = 'e_pre'").get().project_id).toBeNull()
     db.close()
   })
 
-  it('backfills characters / prompt_packs / generated_images rows with NULL project_id', () => {
+  it('does not rewrite NULL project_id on characters / prompt_packs / generated_images after marker exists', () => {
     const { db } = createTempDb()
     initializeDatabase(db)
     const now = new Date().toISOString()
@@ -173,9 +188,9 @@ describe('2026-05-add-projects migration: backfill', () => {
 
     initializeDatabase(db)
 
-    expect(db.prepare("SELECT project_id FROM characters WHERE id = 'char_pre'").get().project_id).toBe('proj_default')
-    expect(db.prepare("SELECT project_id FROM prompt_packs WHERE id = 'pack_pre'").get().project_id).toBe('proj_default')
-    expect(db.prepare("SELECT project_id FROM generated_images WHERE id = 'img_pre'").get().project_id).toBe('proj_default')
+    expect(db.prepare("SELECT project_id FROM characters WHERE id = 'char_pre'").get().project_id).toBeNull()
+    expect(db.prepare("SELECT project_id FROM prompt_packs WHERE id = 'pack_pre'").get().project_id).toBeNull()
+    expect(db.prepare("SELECT project_id FROM generated_images WHERE id = 'img_pre'").get().project_id).toBeNull()
     db.close()
   })
 })

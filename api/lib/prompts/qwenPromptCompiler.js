@@ -323,7 +323,7 @@ export function compileBatchPromptPacks({ db, input }) {
   }
 }
 
-export function listPromptPacksForCharacter({ db, characterId }) {
+export function listPromptPacksForCharacter({ db, characterId, projectId } = {}) {
   if (!characterId) {
     const err = new Error('Missing characterId')
     err.status = 400
@@ -332,7 +332,7 @@ export function listPromptPacksForCharacter({ db, characterId }) {
   return {
     ok: true,
     characterId,
-    items: listPromptPacks(db, { characterId }),
+    items: listPromptPacks(db, { characterId, projectId: projectId || undefined }),
   }
 }
 

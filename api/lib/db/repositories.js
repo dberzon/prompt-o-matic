@@ -152,7 +152,7 @@ export function listCharacters(db, filters = {}) {
   const clauses = []
   const values = []
   if (filters.projectId) {
-    clauses.push('project_id = ?')
+    clauses.push('(project_id = ? OR project_id IS NULL)')
     values.push(filters.projectId)
   }
   if (filters.embeddingStatus) {
@@ -337,7 +337,7 @@ export function listPromptPacks(db, filters = {}) {
     values.push(filters.characterId)
   }
   if (filters.projectId) {
-    clauses.push('project_id = ?')
+    clauses.push('(project_id = ? OR project_id IS NULL)')
     values.push(filters.projectId)
   }
   const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
@@ -387,6 +387,10 @@ export function listGeneratedImageRecords(db, filters = {}) {
   if (filters.promptPackId) {
     clauses.push('prompt_pack_id = ?')
     values.push(filters.promptPackId)
+  }
+  if (filters.projectId) {
+    clauses.push('(project_id = ? OR project_id IS NULL)')
+    values.push(filters.projectId)
   }
   const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
   const rows = db.prepare(`
@@ -722,8 +726,8 @@ export function createBankEntry(db, payload) {
     updatedAt: payload.updatedAt || createdAt,
   })
   db.prepare(`
-    INSERT INTO character_bank_entries (id, slug, name, description, optimized_description, payload_json, created_at, updated_at)
-    VALUES (@id, @slug, @name, @description, @optimized_description, @payload_json, @created_at, @updated_at)
+    INSERT INTO character_bank_entries (id, slug, name, description, optimized_description, payload_json, project_id, created_at, updated_at)
+    VALUES (@id, @slug, @name, @description, @optimized_description, @payload_json, @project_id, @created_at, @updated_at)
   `).run({
     id: record.id,
     slug: record.slug,
@@ -731,34 +735,50 @@ export function createBankEntry(db, payload) {
     description: record.description,
     optimized_description: record.optimizedDescription ?? null,
     payload_json: JSON.stringify(record),
+    project_id: record.projectId ?? null,
     created_at: record.createdAt,
     updated_at: record.updatedAt,
   })
-  return record
+  return { ...record, projectId: record.projectId ?? null }
+}
+
+function mergeBankEntryRow(row) {
+  if (!row) return null
+  const payload = rowToPayload({ payload_json: row.payload_json })
+  if (!payload) return null
+  const fromColumn = row.project_id ?? null
+  return { ...payload, projectId: fromColumn ?? payload.projectId ?? null }
 }
 
 export function getBankEntry(db, id) {
-  const row = db.prepare('SELECT payload_json FROM character_bank_entries WHERE id = ?').get(id)
-  return rowToPayload(row)
+  const row = db.prepare('SELECT payload_json, project_id FROM character_bank_entries WHERE id = ?').get(id)
+  return mergeBankEntryRow(row)
 }
 
 export function getBankEntryBySlug(db, slug) {
-  const row = db.prepare('SELECT payload_json FROM character_bank_entries WHERE slug = ?').get(slug)
-  return rowToPayload(row)
+  const row = db.prepare('SELECT payload_json, project_id FROM character_bank_entries WHERE slug = ?').get(slug)
+  return mergeBankEntryRow(row)
 }
 
 export function listBankEntries(db, filters = {}) {
+  const clauses = []
+  const values = []
+  if (filters.projectId) {
+    clauses.push('(project_id = ? OR project_id IS NULL)')
+    values.push(filters.projectId)
+  }
+  const whereSql = clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''
   const limit = Number.isInteger(filters.limit) ? filters.limit : null
   const limitSql = limit && limit > 0 ? 'LIMIT ?' : ''
-  const values = []
   if (limitSql) values.push(limit)
   const rows = db.prepare(`
-    SELECT payload_json
+    SELECT payload_json, project_id
     FROM character_bank_entries
+    ${whereSql}
     ORDER BY created_at DESC
     ${limitSql}
   `).all(...values)
-  return rows.map(rowToPayload)
+  return rows.map(mergeBankEntryRow)
 }
 
 export function updateBankEntry(db, id, patch) {
@@ -776,6 +796,7 @@ export function updateBankEntry(db, id, patch) {
         name = @name,
         description = @description,
         optimized_description = @optimized_description,
+        project_id = @project_id,
         payload_json = @payload_json,
         updated_at = @updated_at
     WHERE id = @id
@@ -785,10 +806,11 @@ export function updateBankEntry(db, id, patch) {
     name: merged.name,
     description: merged.description,
     optimized_description: merged.optimizedDescription ?? null,
+    project_id: merged.projectId ?? null,
     payload_json: JSON.stringify(merged),
     updated_at: merged.updatedAt,
   })
-  return merged
+  return getBankEntry(db, id)
 }
 
 export function deleteBankEntry(db, id) {
@@ -1092,13 +1114,14 @@ function mapEntityRow(row) {
     id: row.id,
     type: row.type,
     name: row.name,
+    projectId: row.project_id ?? null,
     archivedAt: row.archived_at ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
 }
 
-export function createEntity(db, { id, type, name, createdAt } = {}) {
+export function createEntity(db, { id, type, name, createdAt, projectId } = {}) {
   if (!type || !ENTITY_TYPES.has(type)) {
     throw new Error(`createEntity: type must be one of ${[...ENTITY_TYPES].join(', ')}`)
   }
@@ -1108,9 +1131,9 @@ export function createEntity(db, { id, type, name, createdAt } = {}) {
   const entityId = id || randomUUID()
   const now = createdAt || nowIso()
   db.prepare(`
-    INSERT INTO entities (id, type, name, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(entityId, type, name, now, now)
+    INSERT INTO entities (id, type, name, created_at, updated_at, project_id)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(entityId, type, name, now, now, projectId ?? null)
   return getEntity(db, entityId)
 }
 
@@ -1119,7 +1142,7 @@ export function getEntity(db, id) {
   return mapEntityRow(row)
 }
 
-export function listEntities(db, { type, includeArchived = false } = {}) {
+export function listEntities(db, { type, includeArchived = false, projectId } = {}) {
   const conditions = []
   const params = []
   if (type) {
@@ -1128,6 +1151,10 @@ export function listEntities(db, { type, includeArchived = false } = {}) {
   }
   if (!includeArchived) {
     conditions.push('archived_at IS NULL')
+  }
+  if (projectId) {
+    conditions.push('(project_id = ? OR project_id IS NULL)')
+    params.push(projectId)
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
   const rows = db.prepare(`SELECT * FROM entities ${where} ORDER BY created_at DESC`).all(...params)

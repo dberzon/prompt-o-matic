@@ -1,6 +1,7 @@
 import { normalizeHandlerError, sendJsonNode } from './lib/http.js'
 import { assertCharacterBatchOperationAllowed } from './lib/characters/access.js'
 import { listCharacters, deleteCharacter } from './lib/db/repositories.js'
+import { resolveExplicitProjectIdForRequest } from './lib/projects/context.js'
 import { createVectorRuntime } from './lib/vector/runtime.js'
 
 export default async function handler(req, res) {
@@ -32,14 +33,14 @@ export default async function handler(req, res) {
     assertCharacterBatchOperationAllowed('list-characters', process.env)
     runtime = createVectorRuntime({ env: process.env })
     const q = req.query ?? {}
-    const projectId = typeof q.projectId === 'string' ? q.projectId : undefined
+    const filterProjectId = resolveExplicitProjectIdForRequest(runtime.db, req)
     const gender = typeof q.gender === 'string' ? q.gender : undefined
     const search = typeof q.search === 'string' ? q.search : undefined
     const ageMin = q.ageMin !== undefined ? Number(q.ageMin) : undefined
     const ageMax = q.ageMax !== undefined ? Number(q.ageMax) : undefined
     const sortBy = typeof q.sortBy === 'string' ? q.sortBy : undefined
     const items = listCharacters(runtime.db, {
-      projectId,
+      projectId: filterProjectId || undefined,
       gender,
       search,
       ageMin: Number.isFinite(ageMin) ? ageMin : undefined,

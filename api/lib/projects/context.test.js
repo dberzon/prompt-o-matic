@@ -9,6 +9,8 @@ import {
   PROJECT_ID_QUERY_PARAM,
   ProjectNotFoundError,
   resolveActiveProject,
+  resolveExplicitProjectIdForFiltering,
+  resolveExplicitProjectIdForRequest,
 } from './context.js'
 
 const tempDirs = []
@@ -98,6 +100,7 @@ describe('resolveActiveProject', () => {
       expect(e).toBeInstanceOf(ProjectNotFoundError)
       expect(e.projectId).toBe('no_such_project')
       expect(e.code).toBe('PROJECT_NOT_FOUND')
+      expect(e.status).toBe(404)
     }
     db.close()
   })
@@ -113,6 +116,36 @@ describe('resolveActiveProject', () => {
     }
 
     expect(resolveActiveProject(db, { req, env: {} })).toEqual(other)
+    db.close()
+  })
+})
+
+describe('resolveExplicitProjectIdForFiltering', () => {
+  it('returns null when query and header are absent (ignores env default)', () => {
+    const db = createTempDb()
+    initializeDatabase(db)
+    const req = { url: '/api/entities', headers: {} }
+    expect(resolveExplicitProjectIdForFiltering(db, { req, env: { QPB_DEFAULT_PROJECT_ID: 'proj_default' } })).toBeNull()
+    db.close()
+  })
+
+  it('returns id from query', () => {
+    const db = createTempDb()
+    initializeDatabase(db)
+    const p = createProject(db, { slug: 'pf_q', name: 'PQ' })
+    const req = { url: `/api/x?${PROJECT_ID_QUERY_PARAM}=${encodeURIComponent(p.id)}`, headers: {} }
+    expect(resolveExplicitProjectIdForFiltering(db, { req, env: {} })).toBe(p.id)
+    db.close()
+  })
+})
+
+describe('resolveExplicitProjectIdForRequest', () => {
+  it('reads projectId from synthetic URL when req.url is missing', () => {
+    const db = createTempDb()
+    initializeDatabase(db)
+    const p = createProject(db, { slug: 'pf_syn', name: 'Syn' })
+    const req = { query: { projectId: p.id } }
+    expect(resolveExplicitProjectIdForRequest(db, req)).toBe(p.id)
     db.close()
   })
 })
