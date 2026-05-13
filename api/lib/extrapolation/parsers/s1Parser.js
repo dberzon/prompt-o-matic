@@ -15,7 +15,9 @@ export function applyS1Parser(db, primaryEntityId, raw) {
   const suggestions = []
 
   for (const item of parsed.primary.attributes) {
-    if (!item?.key) continue
+    if (!item?.key) {
+      continue
+    }
     writes.push(writeAttribute(db, {
       entityId: primaryEntityId,
       key: item.key,
@@ -42,7 +44,9 @@ export function applyS1Parser(db, primaryEntityId, raw) {
       ? entity.attributes
       : [{ key: 'name', value: entity.name }]
     for (const item of attrs) {
-      if (!item?.key) continue
+      if (!item?.key) {
+        continue
+      }
       writes.push(writeAttribute(db, {
         entityId: record.id,
         key: item.key,

@@ -178,7 +178,7 @@ export const extrapolationStages = [
       })
       const applied = applyS2Parser(ctx.db, ctx.entityId, raw)
       return {
-        writes: applied,
+        writes: applied.accepted,
         suggestions: [],
         conflicts: [],
         raw,
@@ -198,7 +198,7 @@ export const extrapolationStages = [
       })
       const applied = applyS3Parser(ctx.db, ctx.entityId, raw)
       return {
-        writes: applied,
+        writes: applied.accepted,
         suggestions: [],
         conflicts: [],
         raw,
@@ -220,7 +220,7 @@ export const extrapolationStages = [
         },
       })
       const applied = applyS4Parser(ctx.db, ctx.entityId, raw)
-      return { writes: applied.writes, suggestions: applied.suggestions, raw }
+      return { writes: applied.accepted, suggestions: applied.suggestions, raw }
     },
   },
   {
@@ -234,8 +234,9 @@ export const extrapolationStages = [
         schema: S5VisualDescriptorOutputSchema,
         variables: { dynamicContext: buildS5Dynamic({ entity, attributes, prior: ctx.prior }) },
       })
+      const s5 = applyS5Parser(ctx.db, ctx.entityId, raw)
       return {
-        writes: applyS5Parser(ctx.db, ctx.entityId, raw),
+        writes: s5.accepted,
         suggestions: [],
         raw,
       }
@@ -254,7 +255,7 @@ export const extrapolationStages = [
       })
       const applied = applyS6Parser(ctx.db, ctx.entityId, raw)
       return {
-        writes: applied.writes,
+        writes: applied.accepted,
         suggestions: [],
         conflicts: applied.conflicts,
         raw,

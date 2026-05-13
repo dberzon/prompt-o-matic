@@ -108,7 +108,7 @@ describe('extrapolation prompts and parsers', () => {
   it('writes low-confidence inferred attrs from S2 parser', () => {
     const db = ensureDb(createTempDbPath())
     createEntity(db, { id: 'ent_s2', type: 'character', name: 'Ruslan' })
-    const writes = applyS2Parser(db, 'ent_s2', {
+    const { accepted: writes } = applyS2Parser(db, 'ent_s2', {
       attributes: [{ key: 'wardrobe.jacket', value: 'worn student jacket', confidence: 0.9 }],
     })
     expect(writes).toHaveLength(1)
@@ -119,7 +119,7 @@ describe('extrapolation prompts and parsers', () => {
   it('creates environment entities from S4 parser', () => {
     const db = ensureDb(createTempDbPath())
     createEntity(db, { id: 'ent_s4', type: 'character', name: 'Ruslan' })
-    const { writes, suggestions } = applyS4Parser(db, 'ent_s4', {
+    const { accepted: writes, suggestions } = applyS4Parser(db, 'ent_s4', {
       environments: [{ name: 'Beer hall', summary: 'Friday hangout' }],
       attributes: [{ key: 'routine.friday', value: 'spends Fridays at beer hall with friends' }],
       relationshipAttributes: [{

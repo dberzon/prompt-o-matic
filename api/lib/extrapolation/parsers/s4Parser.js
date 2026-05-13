@@ -8,13 +8,26 @@ function slugify(name) {
     .replace(/^_+|_+$/g, '')
 }
 
+/**
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} entityId
+ * @param {unknown} parsed
+ * @returns {import('./parserResult.js').ParserResult<ReturnType<typeof writeAttribute>> & { suggestions: unknown[] }}
+ */
 export function applyS4Parser(db, entityId, parsed) {
-  const writes = []
+  /** @type {ReturnType<typeof writeAttribute>[]} */
+  const accepted = []
+  /** @type {import('./parserResult.js').ParserDropped[]} */
+  const dropped = []
+  /** @type {unknown[]} */
   const suggestions = []
   const environments = Array.isArray(parsed?.environments) ? parsed.environments : []
 
   for (const env of environments) {
-    if (!env?.name) continue
+    if (!env?.name) {
+      dropped.push({ key: null, reason: 'environment_missing_name', raw: env })
+      continue
+    }
     const environment = createEntity(db, {
       id: `env_${slugify(env.name)}_${entityId}`.slice(0, 120),
       type: 'environment',
@@ -22,7 +35,7 @@ export function applyS4Parser(db, entityId, parsed) {
     })
     suggestions.push(environment)
     if (env.summary) {
-      writes.push(writeAttribute(db, {
+      accepted.push(writeAttribute(db, {
         entityId: environment.id,
         key: 'summary',
         value: env.summary,
@@ -35,8 +48,11 @@ export function applyS4Parser(db, entityId, parsed) {
 
   const attributes = Array.isArray(parsed?.attributes) ? parsed.attributes : []
   for (const item of attributes) {
-    if (!item?.key) continue
-    writes.push(writeAttribute(db, {
+    if (!item?.key) {
+      dropped.push({ key: null, reason: 'missing_attribute_key', raw: item })
+      continue
+    }
+    accepted.push(writeAttribute(db, {
       entityId,
       key: item.key,
       value: item.value,
@@ -50,10 +66,24 @@ export function applyS4Parser(db, entityId, parsed) {
     ? parsed.relationshipAttributes
     : []
   for (const item of relationshipAttributes) {
-    if (!item?.type || !item?.otherSlug || item?.value === undefined) continue
+    if (!item?.type || !item?.otherSlug || item?.value === undefined) {
+      dropped.push({
+        key: item?.type ? String(item.type) : null,
+        reason: 'relationship_attribute_incomplete',
+        raw: item,
+      })
+      continue
+    }
     const otherSlug = slugify(item.otherSlug)
-    if (!otherSlug) continue
-    writes.push(writeAttribute(db, {
+    if (!otherSlug) {
+      dropped.push({
+        key: item?.type ? String(item.type) : null,
+        reason: 'relationship_other_slug_empty',
+        raw: item,
+      })
+      continue
+    }
+    accepted.push(writeAttribute(db, {
       entityId,
       key: `relation.${item.type}:${otherSlug}`,
       value: item.value,
@@ -63,5 +93,5 @@ export function applyS4Parser(db, entityId, parsed) {
     }))
   }
 
-  return { writes, suggestions }
+  return { accepted, dropped, suggestions }
 }
