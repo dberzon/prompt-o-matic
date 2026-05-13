@@ -161,6 +161,7 @@ export const extrapolationStages = [
       return {
         writes: applied.writes,
         suggestions: applied.suggestions,
+        dropped: [],
         raw,
       }
     },
@@ -181,6 +182,7 @@ export const extrapolationStages = [
         writes: applied.accepted,
         suggestions: [],
         conflicts: [],
+        dropped: applied.dropped,
         raw,
       }
     },
@@ -201,6 +203,7 @@ export const extrapolationStages = [
         writes: applied.accepted,
         suggestions: [],
         conflicts: [],
+        dropped: applied.dropped,
         raw,
       }
     },
@@ -220,7 +223,12 @@ export const extrapolationStages = [
         },
       })
       const applied = applyS4Parser(ctx.db, ctx.entityId, raw)
-      return { writes: applied.accepted, suggestions: applied.suggestions, raw }
+      return {
+        writes: applied.accepted,
+        suggestions: applied.suggestions,
+        dropped: applied.dropped,
+        raw,
+      }
     },
   },
   {
@@ -238,6 +246,7 @@ export const extrapolationStages = [
       return {
         writes: s5.accepted,
         suggestions: [],
+        dropped: s5.dropped,
         raw,
       }
     },
@@ -258,6 +267,7 @@ export const extrapolationStages = [
         writes: applied.accepted,
         suggestions: [],
         conflicts: applied.conflicts,
+        dropped: applied.dropped,
         raw,
       }
     },

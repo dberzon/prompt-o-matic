@@ -46,10 +46,15 @@
 }
 
 .progress,
-.status {
+.status,
+.drops {
   margin: 0;
   font-size: 12px;
   color: var(--text-2);
+}
+
+.drops {
+  color: var(--text);
 }
 
 .error {

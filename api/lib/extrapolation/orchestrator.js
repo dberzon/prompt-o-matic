@@ -51,6 +51,7 @@ export async function runExtrapolationStage({
     writes: result.writes || [],
     suggestions: result.suggestions || [],
     conflicts: result.conflicts || [],
+    dropped: result.dropped || [],
     raw: result.raw,
   }
   cache.set({ snapshot, stageId, modelId, result: payload })
@@ -71,6 +72,10 @@ async function recordStageResult({ prior, stages, onStageComplete }, result) {
   }
 }
 
+/**
+ * @param {object} opts
+ * @param {((r: import('./types.js').StageRunResult & { stageId: number, modelId?: string, cacheHit?: boolean }) => void | Promise<void>)=} opts.onStageComplete
+ */
 export async function runExtrapolationPipeline({
   db,
   entityId,

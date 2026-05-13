@@ -201,6 +201,9 @@ describe('extrapolation orchestrator', () => {
     expect(result.cancelled).toBe(false)
     expect(result.stages).toHaveLength(6)
     expect(result.stages.map((item) => item.stageId)).toEqual([1, 2, 3, 4, 5, 6])
+    for (const st of result.stages) {
+      expect(Array.isArray(st.dropped)).toBe(true)
+    }
   })
 
   it('runs stages 2-5 in parallel when enabled', async () => {
@@ -250,5 +253,8 @@ describe('extrapolation orchestrator', () => {
     expect(result.cancelled).toBe(false)
     expect(result.stages.map((item) => item.stageId)).toEqual([1, 2, 3, 4, 5, 6])
     expect(result.prior[6]).toBeTruthy()
+    for (const st of result.stages) {
+      expect(Array.isArray(st.dropped)).toBe(true)
+    }
   })
 })

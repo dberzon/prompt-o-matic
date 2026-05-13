@@ -13,6 +13,7 @@
  * @property {Array<object>} writes
  * @property {Array<object>} suggestions
  * @property {Array<object>} [conflicts]
+ * @property {Array<{ key: string | null, reason: string, raw?: unknown }>} [dropped]
  * @property {unknown} raw
  */
 
