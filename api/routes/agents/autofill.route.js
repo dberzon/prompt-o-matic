@@ -10,6 +10,10 @@ import {
   registerExtrapolationProgressRun,
   unregisterExtrapolationProgressRun,
 } from '../../lib/extrapolation/progress-bus.js'
+import {
+  attachExtrapolationRunTracking,
+  scheduleDisposeExtrapolationRunTracking,
+} from '../../lib/extrapolation/extrapolationRunStore.js'
 import { normalizeHandlerError, readJsonBody, sendJsonMiddleware } from '../../lib/http.js'
 import { StageCache } from '../../lib/extrapolation/stageCache.js'
 import { createLlmClient } from '../../lib/llm/client.js'
@@ -62,6 +66,7 @@ export default {
       const runId = randomUUID()
       const bus = createProgressBus()
       registerExtrapolationProgressRun(runId, bus)
+      const tracking = attachExtrapolationRunTracking(runId, bus)
 
       const llm = createLlmClient({ env: process.env, fetchImpl: fetch }).raw
       const maxIterations = parsed.data.maxIterations ?? 6
@@ -90,13 +95,18 @@ export default {
           env: process.env,
           cache,
         })
+          .then((result) => {
+            tracking.setSuccess({ ok: true, entityId: parsed.data.entityId, ...result })
+          })
           .catch((err) => {
             console.error('[autofill-bible]', err?.message || err)
+            const normalized = normalizeHandlerError(err)
             bus.emit({
               type: 'run:error',
-              message: err instanceof Error ? err.message : String(err),
+              message: normalized.message,
             })
             bus.emit({ type: 'run:end', cancelled: false, error: true })
+            tracking.setThrown(normalized.message)
           })
           .finally(() => {
             try {
@@ -121,6 +131,7 @@ export default {
                 /* ignore */
               }
             }
+            scheduleDisposeExtrapolationRunTracking(runId, tracking, 120_000)
           })
       }, 15)
     } catch (err) {

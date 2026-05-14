@@ -4,7 +4,9 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEntity } from '../../lib/db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../../lib/db/sqlite.js'
+import { clearExtrapolationRunTrackingForTests } from '../../lib/extrapolation/extrapolationRunStore.js'
 import { clearExtrapolationProgressRunsForTests } from '../../lib/extrapolation/progress-bus.js'
+import statusRoute from '../extrapolation/status.route.js'
 import streamRoute from '../extrapolation/stream.route.js'
 
 const { rawFn } = vi.hoisted(() => ({
@@ -26,6 +28,7 @@ const tempDirs = []
 
 afterEach(() => {
   clearExtrapolationProgressRunsForTests()
+  clearExtrapolationRunTrackingForTests()
   while (tempDirs.length) {
     try {
       fs.rmSync(tempDirs.pop(), { recursive: true, force: true })
@@ -134,6 +137,21 @@ describe('POST /api/agents/autofill-bible', () => {
       expect(w).toContain('event: iter:start')
       expect(w).toContain('event: iter:end')
       expect(w.match(/event: run:end/g)?.length).toBe(1)
+
+      const { res: statusRes, out: statusOut } = mockJsonRes()
+      const statusReq = /** @type {import('http').IncomingMessage} */ ({
+        method: 'GET',
+        url: `/api/extrapolation/${encodeURIComponent(runId)}/status`,
+      })
+      await statusRoute.handler(statusReq, statusRes)
+      expect(statusOut.status).toBe(200)
+      expect(statusOut.body).toMatchObject({
+        runId,
+        done: true,
+        cancelled: false,
+        error: null,
+        result: { ok: true, entityId: 'ent_route_sse' },
+      })
 
       fireClose()
       await streamPromise
