@@ -250,14 +250,18 @@ function requireEntity(db, entityId) {
  * @param {string} entityId
  * @returns {import('zod').infer<typeof CharacterBibleSchema> & { _provenance: Record<string, EntityAttributeProvenance> }}
  */
-export function projectCharacterBible(db, entityId) {
+function buildCharacterBibleLeafMap(db, entityId) {
   requireEntity(db, entityId)
   const attrs = listAttributes(db, { entityId })
   const resolveKey = (key) => {
     const path = resolveBiblePath(CHARACTER_ENTITY_KEY_TO_BIBLE_PATH, key)
     return biblePathOrNull(path, CHARACTER_BIBLE_ROOTS)
   }
-  const leafMap = foldAttributes(attrs, resolveKey)
+  return foldAttributes(attrs, resolveKey)
+}
+
+export function projectCharacterBible(db, entityId) {
+  const leafMap = buildCharacterBibleLeafMap(db, entityId)
   const nested = leafMapToNestedObject(leafMap)
   const parsed = CharacterBibleSchema.parse(nested)
   return { ...parsed, _provenance: leafMapToProvenance(leafMap) }
@@ -268,7 +272,7 @@ export function projectCharacterBible(db, entityId) {
  * @param {string} entityId
  * @returns {import('zod').infer<typeof LocationBibleSchema> & { _provenance: Record<string, EntityAttributeProvenance> }}
  */
-export function projectLocationBible(db, entityId) {
+function buildLocationBibleLeafMap(db, entityId) {
   const entity = requireEntity(db, entityId)
   const attrs = listAttributes(db, { entityId })
   const resolveKey = (key) => {
@@ -279,17 +283,17 @@ export function projectLocationBible(db, entityId) {
   if (!leafMap.has('identity.name') && entity.name) {
     leafMap.set('identity.name', { value: entity.name, provenance: 'canon' })
   }
+  return leafMap
+}
+
+export function projectLocationBible(db, entityId) {
+  const leafMap = buildLocationBibleLeafMap(db, entityId)
   const nested = leafMapToNestedObject(leafMap)
   const parsed = LocationBibleSchema.parse(nested)
   return { ...parsed, _provenance: leafMapToProvenance(leafMap) }
 }
 
-/**
- * @param {import('better-sqlite3').Database} db
- * @param {string} entityId
- * @returns {import('zod').infer<typeof EraBibleSchema> & { _provenance: Record<string, EntityAttributeProvenance> }}
- */
-export function projectEraBible(db, entityId) {
+function buildEraBibleLeafMap(db, entityId) {
   const entity = requireEntity(db, entityId)
   const attrs = listAttributes(db, { entityId })
   const resolveKey = (key) => {
@@ -300,17 +304,17 @@ export function projectEraBible(db, entityId) {
   if (!leafMap.has('identity.label') && entity.name) {
     leafMap.set('identity.label', { value: entity.name, provenance: 'canon' })
   }
+  return leafMap
+}
+
+export function projectEraBible(db, entityId) {
+  const leafMap = buildEraBibleLeafMap(db, entityId)
   const nested = leafMapToNestedObject(leafMap)
   const parsed = EraBibleSchema.parse(nested)
   return { ...parsed, _provenance: leafMapToProvenance(leafMap) }
 }
 
-/**
- * @param {import('better-sqlite3').Database} db
- * @param {string} entityId
- * @returns {import('zod').infer<typeof PropBibleSchema> & { _provenance: Record<string, EntityAttributeProvenance> }}
- */
-export function projectPropBible(db, entityId) {
+function buildPropBibleLeafMap(db, entityId) {
   const entity = requireEntity(db, entityId)
   const attrs = listAttributes(db, { entityId })
   const resolveKey = (key) => {
@@ -321,6 +325,16 @@ export function projectPropBible(db, entityId) {
   if (!leafMap.has('identity.label') && entity.name) {
     leafMap.set('identity.label', { value: entity.name, provenance: 'canon' })
   }
+  return leafMap
+}
+
+/**
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} entityId
+ * @returns {import('zod').infer<typeof PropBibleSchema> & { _provenance: Record<string, EntityAttributeProvenance> }}
+ */
+export function projectPropBible(db, entityId) {
+  const leafMap = buildPropBibleLeafMap(db, entityId)
   const nested = leafMapToNestedObject(leafMap)
   const parsed = PropBibleSchema.parse(nested)
   return { ...parsed, _provenance: leafMapToProvenance(leafMap) }
@@ -348,6 +362,31 @@ export function projectBible(db, entityId) {
       return projectEraBible(db, entityId)
     case 'prop':
       return projectPropBible(db, entityId)
+    default:
+      throw new Error(`projectBible: unsupported entity type: ${entity.type}`)
+  }
+}
+
+/**
+ * Attribute-derived nested Bible object **before** Zod parse (used for completeness when parse would fail).
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} entityId
+ * @returns {Record<string, unknown>}
+ */
+export function projectBibleNested(db, entityId) {
+  const entity = requireEntity(db, entityId)
+  switch (entity.type) {
+    case 'character':
+    case 'environment':
+    case 'institution':
+      return leafMapToNestedObject(buildCharacterBibleLeafMap(db, entityId))
+    case 'location':
+      return leafMapToNestedObject(buildLocationBibleLeafMap(db, entityId))
+    case 'era':
+      return leafMapToNestedObject(buildEraBibleLeafMap(db, entityId))
+    case 'prop':
+      return leafMapToNestedObject(buildPropBibleLeafMap(db, entityId))
     default:
       throw new Error(`projectBible: unsupported entity type: ${entity.type}`)
   }
