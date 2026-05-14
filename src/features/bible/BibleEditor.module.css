@@ -29,6 +29,25 @@
   gap: 16px;
 }
 
+.autofillBtn {
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border-1, #2a2a32);
+  background: var(--surface-2, #1a1a20);
+  color: var(--text-1, #e4e4e8);
+  cursor: pointer;
+}
+
+.autofillBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.autofillBtn:not(:disabled):hover {
+  background: var(--surface-3, #24242c);
+}
+
 .sectionGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

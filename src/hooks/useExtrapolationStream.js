@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { apiGet } from '../lib/api/http.js'
 
-const SSE_EVENT_NAMES = ['run:start', 'stage:start', 'stage:finish', 'run:error', 'run:end']
+const SSE_EVENT_NAMES = [
+  'run:start',
+  'stage:start',
+  'stage:finish',
+  'iter:start',
+  'iter:end',
+  'run:error',
+  'run:end',
+]
 
 /**
  * @param {string | null | undefined} runId

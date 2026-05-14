@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import AutofillStatusToast from '../../components/AutofillStatusToast.jsx'
 import AttributeReviewPanel from '../../components/AttributeReviewPanel.jsx'
 import EntityConflictPanel from '../../components/EntityConflictPanel.jsx'
+import { useExtrapolationStream } from '../../hooks/useExtrapolationStream.js'
+import { startAutofillBible } from '../../lib/api/agentsAutofill.js'
 import { approveBibleSection, fetchBible, fetchBibleCompleteness } from '../../lib/api/bibles.js'
 import { listEntityAttributes } from '../../lib/api/entityAttributes.js'
 import { detectBibleRootSchema, stripProvenance } from '../../../api/lib/bibles/detectRootSchema.js'
@@ -41,6 +44,10 @@ function parseBibleApprovalStates(items) {
 }
 
 /**
+ * @typedef {null | { phase: 'live', runId: string } | { phase: 'summary', events: Array<Record<string, unknown>>, result: unknown, streamError: string, streamWarning: string, streamStatus: string }} AutofillUiState
+ */
+
+/**
  * @param {object} props
  * @param {string} [props.entityId]
  */
@@ -48,6 +55,11 @@ export default function BibleEditor({ entityId }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [bundle, setBundle] = useState(null)
+  /** @type {[AutofillUiState, import('react').Dispatch<import('react').SetStateAction<AutofillUiState>>]} */
+  const [autofillUi, setAutofillUi] = useState(/** @type {AutofillUiState} */ (null))
+
+  const autofillRunId = autofillUi?.phase === 'live' ? autofillUi.runId : null
+  const stream = useExtrapolationStream(autofillRunId)
 
   const load = useCallback(async () => {
     if (!entityId) {
@@ -88,6 +100,43 @@ export default function BibleEditor({ entityId }) {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    setAutofillUi(null)
+  }, [entityId])
+
+  useEffect(() => {
+    if (autofillUi?.phase !== 'live') return
+    if (stream.status !== 'done' && stream.status !== 'error') return
+    void load()
+    setAutofillUi({
+      phase: 'summary',
+      events: stream.events.map((e) => ({ ...e })),
+      result: stream.result,
+      streamError: stream.error,
+      streamWarning: stream.warning,
+      streamStatus: stream.status,
+    })
+  }, [autofillUi, stream.status, stream.events, stream.result, stream.error, stream.warning, load])
+
+  const handleAutofillClick = useCallback(async () => {
+    if (!entityId) return
+    if (autofillUi?.phase === 'live') return
+    setError('')
+    try {
+      const data = await startAutofillBible(entityId)
+      const runId = data?.runId
+      if (typeof runId !== 'string' || !runId) {
+        throw new Error('Autofill did not return a run id')
+      }
+      setAutofillUi({ phase: 'live', runId })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Autofill failed to start')
+    }
+  }, [entityId, autofillUi?.phase])
+
+  const autofillBusy =
+    autofillUi?.phase === 'live' && stream.status !== 'done' && stream.status !== 'error'
 
   const sectionEntries = bundle?.sectionEntries ?? []
   const approvals = bundle?.approvals ?? {}
@@ -179,7 +228,31 @@ export default function BibleEditor({ entityId }) {
 
       <div className={styles.topRow}>
         <CompletenessRing report={bundle.report} />
+        <button
+          type="button"
+          className={styles.autofillBtn}
+          disabled={autofillBusy}
+          onClick={() => {
+            void handleAutofillClick()
+          }}
+          data-testid="T_BIBLE_AUTOFILL"
+        >
+          Auto-fill gaps
+        </button>
       </div>
+
+      <AutofillStatusToast
+        open={autofillUi != null}
+        live={autofillUi?.phase === 'live'}
+        events={autofillUi?.phase === 'live' ? stream.events : autofillUi?.events ?? []}
+        result={autofillUi?.phase === 'live' ? stream.result : autofillUi?.result ?? null}
+        streamStatus={autofillUi?.phase === 'live' ? stream.status : autofillUi?.streamStatus ?? 'idle'}
+        streamError={autofillUi?.phase === 'live' ? stream.error : autofillUi?.streamError ?? ''}
+        streamWarning={autofillUi?.phase === 'live' ? stream.warning : autofillUi?.streamWarning ?? ''}
+        onDismiss={() => {
+          setAutofillUi(null)
+        }}
+      />
 
       {loading ? <p className={styles.status}>Refreshing…</p> : null}
 

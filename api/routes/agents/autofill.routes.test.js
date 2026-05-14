@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEntity } from '../../lib/db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../../lib/db/sqlite.js'
+import { clearExtrapolationRunTrackingForTests } from '../../lib/extrapolation/extrapolationRunStore.js'
 import { clearExtrapolationProgressRunsForTests } from '../../lib/extrapolation/progress-bus.js'
 import streamRoute from '../extrapolation/stream.route.js'
 
@@ -26,6 +27,7 @@ const tempDirs = []
 
 afterEach(() => {
   clearExtrapolationProgressRunsForTests()
+  clearExtrapolationRunTrackingForTests()
   while (tempDirs.length) {
     try {
       fs.rmSync(tempDirs.pop(), { recursive: true, force: true })

@@ -6,6 +6,10 @@ import { z } from 'zod'
 import { runAutofillLoop } from '../../lib/agents/autofill-loop.js'
 import { getEntity } from '../../lib/db/repositories.js'
 import {
+  attachExtrapolationRunTracking,
+  scheduleDisposeExtrapolationRunTracking,
+} from '../../lib/extrapolation/extrapolationRunStore.js'
+import {
   createProgressBus,
   registerExtrapolationProgressRun,
   unregisterExtrapolationProgressRun,
@@ -62,6 +66,7 @@ export default {
       const runId = randomUUID()
       const bus = createProgressBus()
       registerExtrapolationProgressRun(runId, bus)
+      const tracking = attachExtrapolationRunTracking(runId, bus)
 
       const llm = createLlmClient({ env: process.env, fetchImpl: fetch }).raw
       const maxIterations = parsed.data.maxIterations ?? 6
@@ -90,6 +95,9 @@ export default {
           env: process.env,
           cache,
         })
+          .then((r) => {
+            tracking.setSuccess(r)
+          })
           .catch((err) => {
             console.error('[autofill-bible]', err?.message || err)
             bus.emit({
@@ -97,6 +105,7 @@ export default {
               message: err instanceof Error ? err.message : String(err),
             })
             bus.emit({ type: 'run:end', cancelled: false, error: true })
+            tracking.setThrown(err instanceof Error ? err.message : String(err))
           })
           .finally(() => {
             try {
@@ -114,6 +123,7 @@ export default {
             } catch {
               /* ignore */
             }
+            scheduleDisposeExtrapolationRunTracking(runId, tracking, 120_000)
             if (cacheDir) {
               try {
                 fs.rmSync(cacheDir, { recursive: true, force: true })

@@ -46,7 +46,7 @@ export class NotFoundError extends ApiError {
  * @param {Promise<T>} p
  * @returns {Promise<T>}
  */
-async function mapErrors(p) {
+export async function mapErrors(p) {
   try {
     return await p
   } catch (e) {
