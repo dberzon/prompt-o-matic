@@ -1,0 +1,82 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`renderBibleMarkdown > matches snapshot for minimal projected character bible 1`] = `
+"## Demographics
+
+### Gender
+
+nb
+
+### Age Range
+
+40s
+
+### Era Label
+
+Present
+
+### Housing Notes
+
+Unknown.
+
+## Physical
+
+### Height
+
+medium
+
+### Build
+
+stocky
+
+### Face
+
+square
+
+### Eyes
+
+hazel
+
+### Nose
+
+wide
+
+### Lips
+
+thin
+
+### Skin
+
+fair
+
+## Wardrobe
+
+_(not yet specified)_
+
+## Voice
+
+_(not yet specified)_
+
+## Psychology
+
+_(not yet specified)_
+
+## History
+
+_(not yet specified)_
+
+## Relationships
+
+_(not yet specified)_
+
+## Visuals
+
+### Portrait Brief
+
+bust
+
+### Continuity Keywords
+
+_(not yet specified)_
+"
+`;
