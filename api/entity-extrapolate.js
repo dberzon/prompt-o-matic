@@ -1,5 +1,15 @@
+import { randomUUID } from 'node:crypto'
 import { createLlmGenerate } from './lib/extrapolation/llm.js'
+import {
+  attachExtrapolationRunTracking,
+  scheduleDisposeExtrapolationRunTracking,
+} from './lib/extrapolation/extrapolationRunStore.js'
 import { runExtrapolationPipeline, runExtrapolationStage } from './lib/extrapolation/orchestrator.js'
+import {
+  createProgressBus,
+  registerExtrapolationProgressRun,
+  unregisterExtrapolationProgressRun,
+} from './lib/extrapolation/progress-bus.js'
 import { StageCache } from './lib/extrapolation/stageCache.js'
 import { getEntity } from './lib/db/repositories.js'
 import { normalizeHandlerError, readJsonBody, sendJsonNode } from './lib/http.js'
@@ -62,6 +72,54 @@ export default async function handler(req, res) {
         env: process.env,
       })
       return sendJsonNode(res, 200, { ok: true, entityId: route.entityId, ...result })
+    }
+
+    if (body?.stream === true) {
+      const runId = randomUUID()
+      const bus = createProgressBus()
+      registerExtrapolationProgressRun(runId, bus)
+      const tracking = attachExtrapolationRunTracking(runId, bus)
+
+      const rt = runtime
+      runtime = null
+
+      sendJsonNode(res, 202, { ok: true, runId, entityId: route.entityId })
+
+      void (async () => {
+        try {
+          const result = await runExtrapolationPipeline({
+            db: rt.db,
+            entityId: route.entityId,
+            llm,
+            cache,
+            env: process.env,
+            parallelMiddleStages: body?.parallelMiddleStages,
+            progress: bus,
+          })
+          tracking.setSuccess({ ok: true, entityId: route.entityId, ...result })
+        } catch (error) {
+          const normalized = normalizeHandlerError(error)
+          tracking.setThrown(normalized.message)
+        } finally {
+          try {
+            unregisterExtrapolationProgressRun(runId)
+          } catch {
+            /* ignore */
+          }
+          try {
+            bus.close()
+          } catch {
+            /* ignore */
+          }
+          try {
+            rt.close()
+          } catch {
+            /* ignore */
+          }
+          scheduleDisposeExtrapolationRunTracking(runId, tracking, 120_000)
+        }
+      })()
+      return
     }
 
     const result = await runExtrapolationPipeline({

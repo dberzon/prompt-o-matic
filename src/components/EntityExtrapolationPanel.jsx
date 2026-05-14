@@ -2,8 +2,9 @@ import { formatExtrapolationDropSummary, useExtrapolation } from '../hooks/useEx
 import styles from './EntityExtrapolationPanel.module.css'
 
 export default function EntityExtrapolationPanel({ entityId }) {
-  const { run, cancel, running, stage, status, error, result } = useExtrapolation({ entityId })
+  const { run, cancel, running, stage, status, error, result, streamWarning } = useExtrapolation({ entityId })
   const dropSummary = formatExtrapolationDropSummary(result?.stages)
+  const barPct = Math.min(100, (Math.min(Math.max(stage, running ? 1 : 0), 6) / 6) * 100)
 
   if (!entityId) return null
 
@@ -21,8 +22,14 @@ export default function EntityExtrapolationPanel({ entityId }) {
         </div>
       </div>
       {running || stage > 0 ? (
-        <p className={styles.progress}>Stage {stage}/6</p>
+        <>
+          <div className={styles.barTrack} aria-hidden>
+            <div className={styles.barFill} style={{ width: `${barPct}%` }} />
+          </div>
+          <p className={styles.progress}>Stage {stage}/6</p>
+        </>
       ) : null}
+      {streamWarning ? <p className={styles.streamWarning}>{streamWarning}</p> : null}
       {status ? <p className={styles.status}>{status}</p> : null}
       {dropSummary ? <p className={styles.drops}>{dropSummary}</p> : null}
       {error ? <p className={styles.error}>{error}</p> : null}

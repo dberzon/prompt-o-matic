@@ -62,3 +62,22 @@
   font-size: 12px;
   color: var(--color-danger, #c44);
 }
+
+.streamWarning {
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-warning, #a70);
+}
+
+.barTrack {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.barFill {
+  height: 100%;
+  background: var(--accent, #4a8);
+  transition: width 0.2s ease-out;
+}

@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiPost } from '../lib/api/http.js'
+import { useExtrapolationStream } from './useExtrapolationStream.js'
 
 /**
  * Ensures each stage object includes a `dropped` array for UI and tests.
@@ -54,9 +55,47 @@ export function useExtrapolation({ entityId } = {}) {
   const [status, setStatus] = useState('')
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [activeRunId, setActiveRunId] = useState(/** @type {string | null} */ (null))
+
+  const stream = useExtrapolationStream(activeRunId)
+
+  useEffect(() => {
+    if (!activeRunId) return
+    if (stream.status === 'done' && stream.result) {
+      if (cancelledRef.current) {
+        setActiveRunId(null)
+        busyRef.current = false
+        return
+      }
+      const raw = stream.result
+      const stages = normalizeExtrapolationStages(raw?.stages)
+      const next = raw && typeof raw === 'object' ? { ...raw, stages } : { stages }
+      setResult(next)
+      setStage(stages.length || 6)
+      setStatus(
+        raw?.cancelled
+          ? 'Extrapolation cancelled.'
+          : 'Extrapolation complete. Review inferred attributes below.',
+      )
+      setRunning(false)
+      busyRef.current = false
+      setActiveRunId(null)
+      return
+    }
+    if (stream.status === 'error') {
+      if (!cancelledRef.current) {
+        setError(stream.error || 'Extrapolation failed')
+        setStatus('')
+      }
+      setRunning(false)
+      busyRef.current = false
+      setActiveRunId(null)
+    }
+  }, [activeRunId, stream.status, stream.result, stream.error])
 
   const cancel = useCallback(() => {
     cancelledRef.current = true
+    setActiveRunId(null)
     setRunning(false)
     busyRef.current = false
     setStatus('Cancelled')
@@ -71,9 +110,20 @@ export function useExtrapolation({ entityId } = {}) {
     setStage(0)
     setStatus('Starting extrapolation…')
     setResult(null)
+    setActiveRunId(null)
     try {
-      const raw = await apiPost(`/api/extrapolate/character/${encodeURIComponent(entityId)}`, {})
-      if (cancelledRef.current) return null
+      const raw = await apiPost(`/api/extrapolate/character/${encodeURIComponent(entityId)}`, {
+        stream: true,
+      })
+      if (cancelledRef.current) {
+        setRunning(false)
+        busyRef.current = false
+        return null
+      }
+      if (raw && typeof raw === 'object' && typeof raw.runId === 'string' && raw.runId) {
+        setActiveRunId(raw.runId)
+        return null
+      }
       const stages = normalizeExtrapolationStages(raw?.stages)
       const next = raw && typeof raw === 'object' ? { ...raw, stages } : { stages }
       setResult(next)
@@ -83,24 +133,29 @@ export function useExtrapolation({ entityId } = {}) {
           ? 'Extrapolation cancelled.'
           : 'Extrapolation complete. Review inferred attributes below.',
       )
+      setRunning(false)
+      busyRef.current = false
       return next
     } catch (err) {
       setError(err?.message || 'Extrapolation failed')
       setStatus('')
-      return null
-    } finally {
-      busyRef.current = false
       setRunning(false)
+      busyRef.current = false
+      return null
     }
   }, [entityId])
+
+  const progressStage = activeRunId ? Math.max(stream.liveStage, 0) : stage
+  const streamWarning = activeRunId ? stream.warning : ''
 
   return {
     run,
     cancel,
     running,
-    stage,
+    stage: progressStage,
     status,
     error,
     result,
+    streamWarning,
   }
 }
