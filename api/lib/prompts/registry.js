@@ -2,6 +2,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parsePromptFrontmatter } from './frontmatter.js'
+import { tryLoadProjectOverride } from './overrides.js'
+
+export { listOverrides, PromptOverrideIdMismatchError } from './overrides.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -43,6 +46,7 @@ function walkFiles(dir, filter) {
   for (const name of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, name.name)
     if (name.isDirectory()) {
+      if (name.name === '_overrides') continue
       out.push(...walkFiles(full, filter))
     } else if (name.isFile() && filter(name.name)) {
       out.push(full)
@@ -102,19 +106,47 @@ function getDefaultRegistry() {
 }
 
 /**
- * @param {string} id
- * @param {string} [version]
- * @param {Map<string, Map<string, PromptRecord>>} [registry]
+ * @typedef {{ version?: string; projectSlug?: string; libraryDir?: string }} GetPromptOptions
  */
-export function getPrompt(id, version, registry) {
+
+/**
+ * @param {string} id
+ * @param {string | Map<string, Map<string, PromptRecord>> | GetPromptOptions | undefined} [second]
+ * @param {Map<string, Map<string, PromptRecord>> | undefined} [third]
+ */
+export function getPrompt(id, second, third) {
   /** @type {Map<string, Map<string, PromptRecord>> | undefined} */
-  let reg = registry
+  let reg
   /** @type {string | undefined} */
-  let ver = version
-  if (version instanceof Map) {
-    reg = version
+  let ver
+
+  if (second instanceof Map) {
+    reg = second
     ver = undefined
+  } else if (second !== undefined && second !== null && typeof second === 'object' && !Array.isArray(second)) {
+    const opts = /** @type {GetPromptOptions} */ (second)
+    if (opts.version !== undefined && opts.version !== null) {
+      const s = String(opts.version)
+      ver = s.length ? s : undefined
+    }
+    reg = third
+    const slugRaw = opts.projectSlug
+    const projectSlug = typeof slugRaw === 'string' && slugRaw.trim().length > 0 ? slugRaw.trim() : ''
+    if (projectSlug) {
+      const oDir = opts.libraryDir
+      const loaded = tryLoadProjectOverride(projectSlug, id, ver, oDir ? { libraryDir: oDir } : {})
+      if (loaded) {
+        return loaded.record
+      }
+    }
+  } else if (second !== undefined && second !== null) {
+    const s = String(second)
+    ver = s.length ? s : undefined
+    reg = third
+  } else {
+    reg = third
   }
+
   reg ??= getDefaultRegistry()
   const versions = reg.get(id)
   if (!versions || versions.size === 0) {
