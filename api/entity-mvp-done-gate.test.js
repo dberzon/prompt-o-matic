@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import entityMvpDoneGateHandler from './entity-mvp-done-gate.js'
 import { createEntity, createVisualAnchor, writeAttribute } from './lib/db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from './lib/db/sqlite.js'
-import { MVP_DONE_GATE_MIN_CANON_ATTRIBUTES } from './lib/continuity/mvpDoneGate.js'
 
 const tempDirs = []
 const openDbs = []
@@ -34,31 +33,77 @@ function mockRes() {
   }
 }
 
+/**
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} entityId
+ * @param {Record<string, unknown>} fixture
+ */
+function seedFixtureAttributes(db, entityId, fixture) {
+  /**
+   * @param {string} prefix
+   * @param {unknown} value
+   */
+  function walk(prefix, value) {
+    if (Array.isArray(value)) {
+      writeAttribute(db, { entityId, key: prefix, value, provenance: 'canon' })
+      return
+    }
+    if (value && typeof value === 'object') {
+      for (const [k, v] of Object.entries(value)) {
+        const next = prefix ? `${prefix}.${k}` : k
+        walk(next, v)
+      }
+      return
+    }
+    writeAttribute(db, { entityId, key: prefix, value, provenance: 'canon' })
+  }
+  for (const [k, v] of Object.entries(fixture)) {
+    walk(k, v)
+  }
+}
+
 function seedReadyEntity(db) {
-  createEntity(db, { id: 'ruslan_levashov', type: 'character', name: 'Ruslan Levashov' })
+  const entityId = 'ruslan_levashov'
+  createEntity(db, { id: entityId, type: 'character', name: 'Ruslan Levashov' })
   createEntity(db, { id: 'communal_apartment', type: 'environment', name: 'Communal apartment' })
   createVisualAnchor(db, {
     id: 'anchor_primary',
-    entityId: 'ruslan_levashov',
+    entityId,
     type: 'reference_image',
     payload: Buffer.from('png'),
     isPrimary: true,
   })
   writeAttribute(db, {
-    entityId: 'ruslan_levashov',
+    entityId,
     key: 'visual.descriptor',
     value: 'frontal portrait, neutral expression',
     provenance: 'inferred',
     sourceStage: 5,
   })
-  for (let index = 0; index < MVP_DONE_GATE_MIN_CANON_ATTRIBUTES; index += 1) {
-    writeAttribute(db, {
-      entityId: 'ruslan_levashov',
-      key: `canon.${index}`,
-      value: `value-${index}`,
-      provenance: 'canon',
-    })
+  const minimalCharacterBible = {
+    demographics: {
+      gender: 'nb',
+      ageRange: '40s',
+      eraLabel: 'Present',
+      housingNotes: 'Unknown.',
+    },
+    physical: {
+      height: 'medium',
+      build: 'stocky',
+      face: 'square',
+      eyes: 'hazel',
+      nose: 'wide',
+      lips: 'thin',
+      skin: 'fair',
+    },
+    visuals: { portraitBrief: 'bust', continuityKeywords: [] },
   }
+  const aboveThresholdBible = {
+    ...minimalCharacterBible,
+    wardrobe: { everyday: 'jeans' },
+    history: { biographySummary: 'A long enough biography summary for the character.' },
+  }
+  seedFixtureAttributes(db, entityId, aboveThresholdBible)
 }
 
 afterEach(() => {

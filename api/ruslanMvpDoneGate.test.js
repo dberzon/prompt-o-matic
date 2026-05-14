@@ -7,12 +7,13 @@ import { buildContinuityQaScoringSheet } from './lib/continuity/continuityQaHarn
 import {
   assessMvpDoneGateReadiness,
   evaluateMvpDoneGate,
+  MVP_DONE_GATE_MIN_COMPLETENESS_RATIO,
   runMvpDoneGateContinuityQa,
 } from './lib/continuity/mvpDoneGate.js'
+import { getBibleCompleteness } from './lib/bibles/completeness.js'
 import {
   createEntity,
   getEntity,
-  listAttributes,
   listEntities,
   listVisualAnchors,
   writeAttribute,
@@ -144,7 +145,7 @@ describe('Ruslan MVP Done gate (Section 4)', () => {
       sleep: () => Promise.resolve(),
     })
     expect(listVisualAnchors(db, { entityId: ENTITY_ID, type: 'reference_image' }).some((anchor) => anchor.isPrimary)).toBe(true)
-    expect(listAttributes(db, { entityId: ENTITY_ID, provenance: 'canon' }).length).toBeGreaterThanOrEqual(12)
+    expect(getBibleCompleteness(db, ENTITY_ID).ratio).toBeGreaterThanOrEqual(MVP_DONE_GATE_MIN_COMPLETENESS_RATIO)
 
     const readiness = assessMvpDoneGateReadiness(db, ENTITY_ID)
     expect(readiness.ready).toBe(true)
