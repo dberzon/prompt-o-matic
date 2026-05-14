@@ -11,6 +11,7 @@ import { generatePromptVariants } from './utils/variants.js'
 import { useWorkspaceHistory } from './hooks/useWorkspaceHistory.js'
 import { useComfyHealth } from './hooks/useComfyHealth.js'
 import Header from './components/Header.jsx'
+import ProjectSelector from './app/ProjectSelector.jsx'
 import SceneInput from './components/SceneInput.jsx'
 import SceneScaffold from './components/SceneScaffold.jsx'
 import SceneDeck from './components/SceneDeck.jsx'
@@ -927,7 +928,10 @@ export default function App() {
 
   return (
     <div className={styles.app}>
-      <Header onClear={clearAll} comfyStatus={comfyStatus} comfyError={comfyError} />
+      <div className={styles.headerChrome}>
+        <Header onClear={clearAll} comfyStatus={comfyStatus} comfyError={comfyError} />
+        <ProjectSelector />
+      </div>
       <div className={styles.tabs}>
         <button
           className={`${styles.tabBtn} ${activeTab === 'builder' ? styles.tabBtnActive : ''}`}

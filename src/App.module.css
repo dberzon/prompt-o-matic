@@ -4,6 +4,12 @@
   flex-direction: column;
 }
 
+.headerChrome {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
 .layout {
   display: grid;
   grid-template-columns: 1fr 420px;
