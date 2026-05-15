@@ -127,6 +127,7 @@ export function approveBibleSection(db, entityId, section, { actor, note } = {})
     key: approvalAttributeKey(section),
     value,
     provenance: 'canon',
+    supersedes: current?.id,
   })
   return { ok: true, attributeId: row.id }
 }
@@ -145,6 +146,7 @@ export function rejectBibleSection(db, entityId, section, { actor, note } = {}) 
   const trimmedActor = requireActor(actor)
 
   const ts = new Date().toISOString()
+  const current = latestApprovalAttribute(db, entityId, section)
   /** @type {Record<string, unknown>} */
   const value = { state: 'rejected', actor: trimmedActor, ts }
   if (note != null && String(note).trim()) {
@@ -156,6 +158,7 @@ export function rejectBibleSection(db, entityId, section, { actor, note } = {}) 
     key: approvalAttributeKey(section),
     value,
     provenance: 'canon',
+    supersedes: current?.id,
   })
   return { ok: true }
 }
