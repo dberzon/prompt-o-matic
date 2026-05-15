@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { EntityNotFoundError, projectBible } from '../../lib/bibles/projection.js'
+import { EntityNotFoundError, projectBibleDraft } from '../../lib/bibles/projection.js'
 import { renderBibleMarkdown, renderBiblePdf } from '../../lib/bibles/render.js'
 import { getBibleSnapshot } from '../../lib/db/repositories/bibleSnapshots.js'
 import { normalizeHandlerError, sendJsonMiddleware } from '../../lib/http.js'
@@ -37,7 +37,7 @@ function resolveBibleOrError(db, entityId, snapshotId) {
     return { bible: snap.bibleJson }
   }
   try {
-    return { bible: projectBible(db, entityId) }
+    return { bible: projectBibleDraft(db, entityId) }
   } catch (err) {
     if (err instanceof EntityNotFoundError) {
       return { error: { status: 404, message: 'Entity not found' } }

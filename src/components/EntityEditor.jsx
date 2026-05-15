@@ -5,13 +5,16 @@ import EntityConflictPanel from './EntityConflictPanel.jsx'
 import CanonAttributesPanel from './CanonAttributesPanel.jsx'
 import EntityExtrapolationPanel from './EntityExtrapolationPanel.jsx'
 import VisualAnchorPicker from './VisualAnchorPicker.jsx'
+import BibleEditor from '../features/bible/BibleEditor.jsx'
 import styles from './EntityEditor.module.css'
 
 const SECTIONS_BY_TYPE = {
-  character: ['Identity', 'Appearance', 'Wardrobe', 'Relationships', 'Continuity'],
-  environment: ['Location', 'Atmosphere', 'Continuity'],
-  prop: ['Details', 'Continuity'],
-  institution: ['Details', 'Continuity'],
+  character: ['Identity', 'Appearance', 'Wardrobe', 'Relationships', 'Bible', 'Continuity'],
+  environment: ['Location', 'Atmosphere', 'Bible', 'Continuity'],
+  location: ['Identity', 'Geography', 'Function', 'Bible', 'Continuity'],
+  prop: ['Details', 'Bible', 'Continuity'],
+  institution: ['Details', 'Bible', 'Continuity'],
+  era: ['Identity', 'Timeframe', 'Bible', 'Continuity'],
 }
 
 export default function EntityEditor({ entityId, onEntityChange }) {
@@ -95,16 +98,22 @@ export default function EntityEditor({ entityId, onEntityChange }) {
       </nav>
 
       <section className={styles.sectionBody}>
-        {activeSection === 'Continuity' ? (
+        {activeSection === 'Bible' ? (
+          <BibleEditor entityId={entityId} />
+        ) : activeSection === 'Continuity' ? (
           <VisualAnchorPicker entityId={entityId} />
         ) : (
           <CanonAttributesPanel entityId={entityId} sectionPrefix={activeSection.toLowerCase()} />
         )}
       </section>
 
-      <EntityExtrapolationPanel entityId={entityId} />
-      <AttributeReviewPanel entityId={entityId} />
-      <EntityConflictPanel entityId={entityId} />
+      {activeSection !== 'Bible' ? (
+        <>
+          <EntityExtrapolationPanel entityId={entityId} />
+          <AttributeReviewPanel entityId={entityId} />
+          <EntityConflictPanel entityId={entityId} />
+        </>
+      ) : null}
     </div>
   )
 }
