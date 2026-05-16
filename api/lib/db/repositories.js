@@ -1257,31 +1257,37 @@ export function listAttributeSupersedeChain(db, { entityId, attributeId }) {
   if (!requested) return null
   if (entityId && requested.entityId !== entityId) return null
 
-  let current = requested
-  const visited = new Set([current.id])
-  while (current?.supersededBy) {
-    const next = selectAttributeById(db, current.supersededBy)
-    if (!next || visited.has(next.id)) break
-    visited.add(next.id)
-    current = next
-  }
-
-  const items = listAttributes(db, {
+  const rows = listAttributes(db, {
     entityId: requested.entityId,
     key: requested.key,
     includeDismissed: true,
     includeSuperseded: true,
-  }).sort((left, right) => {
-    const leftTime = Date.parse(left.createdAt || '') || 0
-    const rightTime = Date.parse(right.createdAt || '') || 0
-    if (leftTime !== rightTime) return leftTime - rightTime
-    return String(left.id).localeCompare(String(right.id))
   })
+  const byId = new Map(rows.map((row) => [row.id, row]))
+
+  let first = requested
+  const reverseVisited = new Set([first.id])
+  while (true) {
+    const prev = rows.find((row) => row.supersededBy === first.id)
+    if (!prev || reverseVisited.has(prev.id)) break
+    reverseVisited.add(prev.id)
+    first = prev
+  }
+
+  const items = []
+  let current = first
+  const forwardVisited = new Set()
+  while (current && !forwardVisited.has(current.id)) {
+    items.push(current)
+    forwardVisited.add(current.id)
+    current = current.supersededBy ? byId.get(current.supersededBy) : null
+  }
+  const head = items[items.length - 1] ?? requested
 
   return {
     entityId: requested.entityId,
     key: requested.key,
-    currentAttributeId: current.id,
+    currentAttributeId: head.id,
     items,
   }
 }
