@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { getEntity, listAttributes } from '../db/repositories.js'
 import {
   CHARACTER_ENTITY_KEY_TO_BIBLE_PATH,
@@ -177,6 +178,70 @@ function leafMapToProvenance(rootMap) {
     out[path] = /** @type {EntityAttributeProvenance} */ (provenance)
   }
   return out
+}
+
+/**
+ * @param {import('zod').ZodTypeAny} schema
+ * @returns {import('zod').ZodTypeAny}
+ */
+function unwrapOptionalDefault(schema) {
+  let cur = schema
+  while (cur instanceof z.ZodOptional || cur instanceof z.ZodDefault) {
+    cur = cur.unwrap()
+  }
+  return cur
+}
+
+/**
+ * @param {import('zod').ZodTypeAny} schema
+ * @returns {boolean}
+ */
+function hasDefaultEmptyArray(schema) {
+  let cur = schema
+  while (cur instanceof z.ZodOptional) {
+    cur = cur.unwrap()
+  }
+  if (cur instanceof z.ZodDefault) {
+    const dv = cur.def?.defaultValue
+    return Array.isArray(dv) && dv.length === 0
+  }
+  return false
+}
+
+/**
+ * @param {Record<string, unknown>} nested
+ * @param {import('zod').ZodObject<any>} rootSchema
+ * @returns {Record<string, unknown>}
+ */
+function ensureDraftTopLevelShape(nested, rootSchema) {
+  const draft = { ...nested }
+  for (const key of Object.keys(rootSchema.shape)) {
+    const sectionRoot = rootSchema.shape[key]
+    const inner = unwrapOptionalDefault(sectionRoot)
+    const existing = draft[key]
+    if (inner instanceof z.ZodObject) {
+      if (!existing || typeof existing !== 'object' || Array.isArray(existing)) {
+        draft[key] = {}
+      }
+      continue
+    }
+    if (inner instanceof z.ZodArray && hasDefaultEmptyArray(sectionRoot) && !Array.isArray(existing)) {
+      draft[key] = []
+    }
+  }
+  return draft
+}
+
+/**
+ * @param {Map<string, { value: unknown; provenance: string }>} leafMap
+ * @param {import('zod').ZodObject<any>} rootSchema
+ * @returns {Record<string, unknown> & { _provenance: Record<string, EntityAttributeProvenance> }}
+ */
+function parseOrDraftBible(leafMap, rootSchema) {
+  const nested = leafMapToNestedObject(leafMap)
+  const parsed = rootSchema.safeParse(nested)
+  const bible = parsed.success ? parsed.data : ensureDraftTopLevelShape(nested, rootSchema)
+  return { ...bible, _provenance: leafMapToProvenance(leafMap) }
 }
 
 const CHARACTER_BIBLE_ROOTS = new Set(Object.keys(CharacterBibleSchema.shape))
@@ -362,6 +427,37 @@ export function projectBible(db, entityId) {
       return projectEraBible(db, entityId)
     case 'prop':
       return projectPropBible(db, entityId)
+    default:
+      throw new Error(`projectBible: unsupported entity type: ${entity.type}`)
+  }
+}
+
+/**
+ * Project a Bible for read-only editor/export views. Complete valid Bibles keep
+ * the strict parsed shape; incomplete Bibles return a schema-shaped draft so
+ * callers can render missing fields instead of failing the request.
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} entityId
+ * @returns
+ *   | ReturnType<typeof projectCharacterBible>
+ *   | ReturnType<typeof projectLocationBible>
+ *   | ReturnType<typeof projectEraBible>
+ *   | ReturnType<typeof projectPropBible>
+ */
+export function projectBibleDraft(db, entityId) {
+  const entity = requireEntity(db, entityId)
+  switch (entity.type) {
+    case 'character':
+    case 'environment':
+    case 'institution':
+      return parseOrDraftBible(buildCharacterBibleLeafMap(db, entityId), CharacterBibleSchema)
+    case 'location':
+      return parseOrDraftBible(buildLocationBibleLeafMap(db, entityId), LocationBibleSchema)
+    case 'era':
+      return parseOrDraftBible(buildEraBibleLeafMap(db, entityId), EraBibleSchema)
+    case 'prop':
+      return parseOrDraftBible(buildPropBibleLeafMap(db, entityId), PropBibleSchema)
     default:
       throw new Error(`projectBible: unsupported entity type: ${entity.type}`)
   }
