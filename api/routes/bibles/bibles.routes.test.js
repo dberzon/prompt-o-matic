@@ -157,6 +157,27 @@ describe('bibles HTTP routes (ya8d)', () => {
       expect(out.status).toBe(404)
       expect(out.body?.error).toMatch(/not found/i)
     })
+
+    it('returns a draft-shaped bible for an incomplete entity', async () => {
+      const dbPath = tempDbPath()
+      const db = openDb(dbPath)
+      createEntity(db, { id: 'ent_empty', type: 'character', name: 'Empty' })
+
+      const { res, out } = mockRes()
+      const req = /** @type {import('http').IncomingMessage} */ ({
+        method: 'GET',
+        url: '/api/bibles/ent_empty',
+      })
+      await withSqlitePath(dbPath, () => getBibleRoute.handler(req, res))
+
+      expect(out.status).toBe(200)
+      expect(out.body?.bible).toMatchObject({
+        demographics: {},
+        physical: {},
+        visuals: {},
+      })
+      expect(out.body?.provenance).toEqual({})
+    })
   })
 
   describe('GET /api/bibles/:entityId/completeness', () => {
