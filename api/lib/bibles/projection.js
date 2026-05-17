@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { getEntity, listAttributes } from '../db/repositories.js'
 import {
   CHARACTER_ENTITY_KEY_TO_BIBLE_PATH,
@@ -10,6 +11,7 @@ import { CharacterBibleSchema } from './schemas/characterBible.schema.js'
 import { EraBibleSchema } from './schemas/eraBible.schema.js'
 import { LocationBibleSchema } from './schemas/locationBible.schema.js'
 import { PropBibleSchema } from './schemas/propBible.schema.js'
+import { readSectionRequirement } from './schemas/_sectionMarkers.js'
 
 /** @typedef {'canon' | 'inferred' | 'derived' | 'suggested' | 'temporary'} EntityAttributeProvenance */
 
@@ -179,6 +181,57 @@ function leafMapToProvenance(rootMap) {
   return out
 }
 
+/**
+ * @param {import('zod').ZodTypeAny} schema
+ * @returns {import('zod').ZodTypeAny}
+ */
+function unwrapOptionalDefault(schema) {
+  let cur = schema
+  while (cur instanceof z.ZodOptional || cur instanceof z.ZodDefault) {
+    cur = cur.unwrap()
+  }
+  return cur
+}
+
+/**
+ * @param {import('zod').ZodTypeAny} schema
+ * @returns {boolean}
+ */
+function isRequiredTopLevelSection(schema) {
+  const requirement = readSectionRequirement(schema)
+  if (requirement === 'required') return true
+  if (requirement === 'recommended') return false
+  return !(schema instanceof z.ZodOptional) && !(schema instanceof z.ZodDefault)
+}
+
+/**
+ * Full Bibles still parse through the root schema for default coercion. Sparse
+ * entities must also project so the editor can display missing required gaps.
+ *
+ * @param {import('zod').ZodObject<any>} rootSchema
+ * @param {Record<string, unknown>} nested
+ * @param {Map<string, { value: unknown; provenance: string }>} leafMap
+ */
+function finalizeBibleProjection(rootSchema, nested, leafMap) {
+  const parsed = rootSchema.safeParse(nested)
+  if (parsed.success) {
+    return { ...parsed.data, _provenance: leafMapToProvenance(leafMap) }
+  }
+
+  const partial = { ...nested }
+  for (const key of Object.keys(rootSchema.shape)) {
+    if (partial[key] !== undefined && partial[key] !== null) continue
+    if (!isRequiredTopLevelSection(rootSchema.shape[key])) continue
+    const inner = unwrapOptionalDefault(rootSchema.shape[key])
+    if (inner instanceof z.ZodObject) {
+      partial[key] = {}
+    } else if (inner instanceof z.ZodArray) {
+      partial[key] = []
+    }
+  }
+  return { ...partial, _provenance: leafMapToProvenance(leafMap) }
+}
+
 const CHARACTER_BIBLE_ROOTS = new Set(Object.keys(CharacterBibleSchema.shape))
 const LOCATION_BIBLE_ROOTS = new Set(Object.keys(LocationBibleSchema.shape))
 const ERA_BIBLE_ROOTS = new Set(Object.keys(EraBibleSchema.shape))
@@ -263,8 +316,7 @@ function buildCharacterBibleLeafMap(db, entityId) {
 export function projectCharacterBible(db, entityId) {
   const leafMap = buildCharacterBibleLeafMap(db, entityId)
   const nested = leafMapToNestedObject(leafMap)
-  const parsed = CharacterBibleSchema.parse(nested)
-  return { ...parsed, _provenance: leafMapToProvenance(leafMap) }
+  return finalizeBibleProjection(CharacterBibleSchema, nested, leafMap)
 }
 
 /**
@@ -289,8 +341,7 @@ function buildLocationBibleLeafMap(db, entityId) {
 export function projectLocationBible(db, entityId) {
   const leafMap = buildLocationBibleLeafMap(db, entityId)
   const nested = leafMapToNestedObject(leafMap)
-  const parsed = LocationBibleSchema.parse(nested)
-  return { ...parsed, _provenance: leafMapToProvenance(leafMap) }
+  return finalizeBibleProjection(LocationBibleSchema, nested, leafMap)
 }
 
 function buildEraBibleLeafMap(db, entityId) {
@@ -310,8 +361,7 @@ function buildEraBibleLeafMap(db, entityId) {
 export function projectEraBible(db, entityId) {
   const leafMap = buildEraBibleLeafMap(db, entityId)
   const nested = leafMapToNestedObject(leafMap)
-  const parsed = EraBibleSchema.parse(nested)
-  return { ...parsed, _provenance: leafMapToProvenance(leafMap) }
+  return finalizeBibleProjection(EraBibleSchema, nested, leafMap)
 }
 
 function buildPropBibleLeafMap(db, entityId) {
@@ -336,8 +386,7 @@ function buildPropBibleLeafMap(db, entityId) {
 export function projectPropBible(db, entityId) {
   const leafMap = buildPropBibleLeafMap(db, entityId)
   const nested = leafMapToNestedObject(leafMap)
-  const parsed = PropBibleSchema.parse(nested)
-  return { ...parsed, _provenance: leafMapToProvenance(leafMap) }
+  return finalizeBibleProjection(PropBibleSchema, nested, leafMap)
 }
 
 /**
