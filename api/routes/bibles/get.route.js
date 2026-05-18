@@ -1,4 +1,5 @@
-import { EntityNotFoundError, projectBible } from '../../lib/bibles/projection.js'
+import { EntityNotFoundError, projectBibleForRead } from '../../lib/bibles/projection.js'
+import { getEntity } from '../../lib/db/repositories.js'
 import { normalizeHandlerError, sendJsonMiddleware } from '../../lib/http.js'
 import { createVectorRuntime } from '../../lib/vector/runtime.js'
 
@@ -38,7 +39,7 @@ export default {
 
       let projected
       try {
-        projected = projectBible(db, entityId)
+        projected = projectBibleForRead(db, entityId)
       } catch (err) {
         if (err instanceof EntityNotFoundError) {
           sendJsonMiddleware(res, 404, { error: 'Entity not found' })
@@ -47,8 +48,9 @@ export default {
         throw err
       }
 
-      const { _provenance, ...bible } = projected
-      sendJsonMiddleware(res, 200, { bible, provenance: _provenance })
+      const { _provenance, _entityType, ...bible } = projected
+      const entityType = typeof _entityType === 'string' ? _entityType : getEntity(db, entityId)?.type ?? null
+      sendJsonMiddleware(res, 200, { bible, provenance: _provenance, entityType })
     } catch (err) {
       const normalized = normalizeHandlerError(err)
       sendJsonMiddleware(res, normalized.status, { error: normalized.message })

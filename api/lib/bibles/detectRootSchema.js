@@ -9,8 +9,31 @@ import { PropBibleSchema } from './schemas/propBible.schema.js'
  */
 export function stripProvenance(bible) {
   if (!bible || typeof bible !== 'object') return {}
-  const { _provenance: _p, ...rest } = /** @type {Record<string, unknown>} */ (bible)
+  const { _provenance: _p, _entityType: _t, ...rest } = /** @type {Record<string, unknown>} */ (bible)
   return rest
+}
+
+/**
+ * Pick the Zod root schema for an entity type.
+ *
+ * @param {string} entityType
+ * @returns {import('zod').ZodObject<any>}
+ */
+export function bibleRootSchemaForEntityType(entityType) {
+  switch (entityType) {
+    case 'character':
+    case 'environment':
+    case 'institution':
+      return CharacterBibleSchema
+    case 'location':
+      return LocationBibleSchema
+    case 'era':
+      return EraBibleSchema
+    case 'prop':
+      return PropBibleSchema
+    default:
+      throw new Error(`detectBibleRootSchema: unsupported entity type: ${entityType}`)
+  }
 }
 
 /**
@@ -20,7 +43,11 @@ export function stripProvenance(bible) {
  * @returns {import('zod').ZodObject<any>}
  */
 export function detectBibleRootSchema(bible) {
-  const o = stripProvenance(bible)
+  const raw = bible && typeof bible === 'object' ? /** @type {Record<string, unknown>} */ (bible) : {}
+  if (typeof raw._entityType === 'string' && raw._entityType) {
+    return bibleRootSchemaForEntityType(raw._entityType)
+  }
+  const o = stripProvenance(raw)
   if ('demographics' in o) return CharacterBibleSchema
   if ('geography' in o && 'identity' in o) return LocationBibleSchema
   if ('timeframe' in o) return EraBibleSchema

@@ -12,6 +12,7 @@ import { PropBibleSchema } from './schemas/propBible.schema.js'
 import {
   EntityNotFoundError,
   projectBible,
+  projectBibleForRead,
   projectCharacterBible,
   projectEraBible,
   projectLocationBible,
@@ -207,6 +208,21 @@ describe('projectBible / projection', () => {
     CharacterBibleSchema.parse(bible)
     expect(bible.wardrobe).toBeUndefined()
     expect(Object.keys(_provenance).length).toBeGreaterThan(0)
+  })
+
+  it('projectBibleForRead: returns a draft projection when required fields are missing', () => {
+    const dbPath = createTempDbPath()
+    process.env.SQLITE_DB_PATH = dbPath
+    process.env.APP_MODE = 'local-studio'
+    const db = ensureDb(dbPath)
+    createEntity(db, { id: 'ent_draft', type: 'character', name: 'Draft' })
+    writeAttribute(db, { entityId: 'ent_draft', key: 'demographics.gender', value: 'nb', provenance: 'canon' })
+
+    expect(() => projectBible(db, 'ent_draft')).toThrow()
+    const out = projectBibleForRead(db, 'ent_draft')
+    expect(out.demographics).toEqual({ gender: 'nb' })
+    expect(out._provenance).toEqual({ 'demographics.gender': 'canon' })
+    expect(out._entityType).toBe('character')
   })
 
   it('projectLocationBible: happy path + identity.name from entity row', () => {

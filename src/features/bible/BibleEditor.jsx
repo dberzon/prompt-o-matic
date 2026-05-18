@@ -6,7 +6,11 @@ import { useExtrapolationStream } from '../../hooks/useExtrapolationStream.js'
 import { startAutofillBible } from '../../lib/api/agentsAutofill.js'
 import { approveBibleSection, fetchBible, fetchBibleCompleteness } from '../../lib/api/bibles.js'
 import { listEntityAttributes } from '../../lib/api/entityAttributes.js'
-import { detectBibleRootSchema, stripProvenance } from '../../../api/lib/bibles/detectRootSchema.js'
+import {
+  bibleRootSchemaForEntityType,
+  detectBibleRootSchema,
+  stripProvenance,
+} from '../../../api/lib/bibles/detectRootSchema.js'
 import BibleSectionPanel from './BibleSectionPanel.jsx'
 import CompletenessRing from './CompletenessRing.jsx'
 import {
@@ -81,7 +85,9 @@ export default function BibleEditor({ entityId }) {
         throw new Error('Invalid bible response')
       }
       const bible = /** @type {Record<string, unknown>} */ (stripProvenance(bibleRaw))
-      const rootSchema = detectBibleRootSchema(bible)
+      const rootSchema = bibleRes?.entityType
+        ? bibleRootSchemaForEntityType(bibleRes.entityType)
+        : detectBibleRootSchema(bible)
       const sectionEntries = listBibleObjectSectionEntries(rootSchema)
       const flatProv =
         bibleRes?.provenance && typeof bibleRes.provenance === 'object'
