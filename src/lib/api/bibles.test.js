@@ -17,12 +17,12 @@ describe('bibles api', () => {
       'fetch',
       vi.fn(async () => ({
         ok: true,
-        json: async () => ({ bible: { a: 1 }, provenance: { p: 2 } }),
+        json: async () => ({ bible: { a: 1 }, provenance: { p: 2 }, entityType: 'character' }),
       })),
     )
     const out = await fetchBible('ent/x')
     expect(fetch).toHaveBeenCalledWith('/api/bibles/ent%2Fx', expect.objectContaining({ method: 'GET' }))
-    expect(out).toEqual({ bible: { a: 1 }, provenance: { p: 2 } })
+    expect(out).toEqual({ bible: { a: 1 }, provenance: { p: 2 }, entityType: 'character' })
   })
 
   it('fetchBibleCompleteness GETs completeness URL', async () => {

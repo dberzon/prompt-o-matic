@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { EntityNotFoundError, projectBible } from '../../lib/bibles/projection.js'
+import { EntityNotFoundError, projectBibleForRead } from '../../lib/bibles/projection.js'
 import { createBibleSnapshot, getBibleSnapshot } from '../../lib/db/repositories/bibleSnapshots.js'
 import { getEntity } from '../../lib/db/repositories.js'
 import { normalizeHandlerError, readJsonBody, sendJsonMiddleware } from '../../lib/http.js'
@@ -62,7 +62,7 @@ export default {
 
       let bibleJson
       try {
-        bibleJson = projectBible(db, entityId)
+        bibleJson = projectBibleForRead(db, entityId)
       } catch (err) {
         if (err instanceof EntityNotFoundError) {
           sendJsonMiddleware(res, 404, { error: 'Entity not found' })

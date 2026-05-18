@@ -1,3 +1,4 @@
+import { ZodError } from 'zod'
 import { getEntity, listAttributes } from '../db/repositories.js'
 import {
   CHARACTER_ENTITY_KEY_TO_BIBLE_PATH,
@@ -389,5 +390,63 @@ export function projectBibleNested(db, entityId) {
       return leafMapToNestedObject(buildPropBibleLeafMap(db, entityId))
     default:
       throw new Error(`projectBible: unsupported entity type: ${entity.type}`)
+  }
+}
+
+/**
+ * Attribute-derived Bible object for display/export paths that must tolerate
+ * incomplete drafts. Complete Bibles should still use `projectBible`.
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} entityId
+ * @returns {Record<string, unknown> & { _provenance: Record<string, EntityAttributeProvenance>, _entityType: string }}
+ */
+export function projectBibleDraft(db, entityId) {
+  const entity = requireEntity(db, entityId)
+  let leafMap
+  switch (entity.type) {
+    case 'character':
+    case 'environment':
+    case 'institution':
+      leafMap = buildCharacterBibleLeafMap(db, entityId)
+      break
+    case 'location':
+      leafMap = buildLocationBibleLeafMap(db, entityId)
+      break
+    case 'era':
+      leafMap = buildEraBibleLeafMap(db, entityId)
+      break
+    case 'prop':
+      leafMap = buildPropBibleLeafMap(db, entityId)
+      break
+    default:
+      throw new Error(`projectBible: unsupported entity type: ${entity.type}`)
+  }
+  return {
+    ...leafMapToNestedObject(leafMap),
+    _provenance: leafMapToProvenance(leafMap),
+    _entityType: entity.type,
+  }
+}
+
+/**
+ * Strict projection when possible, draft projection when required fields are
+ * still missing. This keeps completed Bibles normalized by Zod defaults while
+ * allowing editor/export surfaces to show gaps instead of failing with 500s.
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} entityId
+ * @returns
+ *   | ReturnType<typeof projectBible>
+ *   | ReturnType<typeof projectBibleDraft>
+ */
+export function projectBibleForRead(db, entityId) {
+  try {
+    return projectBible(db, entityId)
+  } catch (err) {
+    if (err instanceof ZodError) {
+      return projectBibleDraft(db, entityId)
+    }
+    throw err
   }
 }
