@@ -143,6 +143,27 @@ describe('bibles HTTP routes (ya8d)', () => {
       expect(out.body?.bible).toEqual(bibleOnly)
       expect(out.body?.bible).not.toHaveProperty('_provenance')
       expect(out.body?.provenance).toEqual(_provenance)
+      expect(out.body?.entityType).toBe('character')
+    })
+
+    it('returns a draft bible instead of 500 when required fields are missing', async () => {
+      const dbPath = tempDbPath()
+      const db = openDb(dbPath)
+      createEntity(db, { id: 'ent_draft', type: 'character', name: 'Draft' })
+      writeAttribute(db, { entityId: 'ent_draft', key: 'demographics.gender', value: 'nb', provenance: 'canon' })
+
+      const { res, out } = mockRes()
+      const req = /** @type {import('http').IncomingMessage} */ ({
+        method: 'GET',
+        url: '/api/bibles/ent_draft',
+      })
+
+      await withSqlitePath(dbPath, () => getBibleRoute.handler(req, res))
+
+      expect(out.status).toBe(200)
+      expect(out.body?.bible).toEqual({ demographics: { gender: 'nb' } })
+      expect(out.body?.provenance).toEqual({ 'demographics.gender': 'canon' })
+      expect(out.body?.entityType).toBe('character')
     })
 
     it('returns 404 for unknown entity', async () => {

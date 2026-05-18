@@ -130,6 +130,37 @@ describe('Bible export routes', () => {
     expect(String(out.body)).toMatch(/^## Demographics/m)
   })
 
+  it('GET export.md renders missing-field placeholders for incomplete live projections', async () => {
+    const dbPath = tempDbPath()
+    const db = openDb(dbPath)
+    createEntity(db, { id: 'ent_draft_export', type: 'character', name: 'Draft Export' })
+    writeAttribute(db, {
+      entityId: 'ent_draft_export',
+      key: 'demographics.gender',
+      value: 'nb',
+      provenance: 'canon',
+    })
+
+    const { res, out } = mockRes()
+    const req = /** @type {import('http').IncomingMessage} */ ({
+      method: 'GET',
+      url: '/api/bibles/ent_draft_export/export.md',
+    })
+
+    const orig = process.env.SQLITE_DB_PATH
+    process.env.SQLITE_DB_PATH = dbPath
+    try {
+      await exportMdRoute.handler(req, res)
+    } finally {
+      if (orig === undefined) delete process.env.SQLITE_DB_PATH
+      else process.env.SQLITE_DB_PATH = orig
+    }
+
+    expect(out.status).toBe(200)
+    expect(String(out.body)).toMatch(/^## Demographics/m)
+    expect(String(out.body)).toMatch(/Missing required field|Missing required Bible section/)
+  })
+
   it('GET export.pdf returns application/pdf buffer', async () => {
     const dbPath = tempDbPath()
     const db = openDb(dbPath)
