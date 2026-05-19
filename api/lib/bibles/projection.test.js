@@ -12,6 +12,7 @@ import { PropBibleSchema } from './schemas/propBible.schema.js'
 import {
   EntityNotFoundError,
   projectBible,
+  projectBibleForApi,
   projectCharacterBible,
   projectEraBible,
   projectLocationBible,
@@ -315,5 +316,25 @@ describe('projectBible / projection', () => {
     const { _provenance, ...bible } = out
     CharacterBibleSchema.parse(bible)
     expect(_provenance).toBeTruthy()
+  })
+
+  it('projectBibleForApi returns a typed partial shape for incomplete entities', () => {
+    const dbPath = createTempDbPath()
+    process.env.SQLITE_DB_PATH = dbPath
+    process.env.APP_MODE = 'local-studio'
+    const db = ensureDb(dbPath)
+    createEntity(db, { id: 'ent_empty', type: 'character', name: 'Empty' })
+
+    const out = projectBibleForApi(db, 'ent_empty')
+
+    expect(out).toMatchObject({
+      demographics: {},
+      physical: {},
+      relationships: [],
+      visuals: {},
+      _provenance: {},
+    })
+    const { _provenance, ...bible } = out
+    expect(() => CharacterBibleSchema.parse(bible)).toThrow()
   })
 })

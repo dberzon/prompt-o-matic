@@ -139,6 +139,37 @@ describe('POST /api/bibles/:entityId/snapshot', () => {
     expect(snap?.parentSnapshotId).toBeNull()
   })
 
+  it('snapshots incomplete entities instead of returning 500', async () => {
+    const dbPath = tempDbPath()
+    const db = openDb(dbPath)
+    createEntity(db, { id: 'ent_incomplete_snap', type: 'character', name: 'Incomplete' })
+
+    const { res, out } = mockRes()
+    const req = /** @type {import('http').IncomingMessage} */ ({
+      method: 'POST',
+      url: '/api/bibles/ent_incomplete_snap/snapshot',
+      body: { label: 'draft' },
+    })
+
+    const orig = process.env.SQLITE_DB_PATH
+    process.env.SQLITE_DB_PATH = dbPath
+    try {
+      await snapshotRoute.handler(req, res)
+    } finally {
+      if (orig === undefined) delete process.env.SQLITE_DB_PATH
+      else process.env.SQLITE_DB_PATH = orig
+    }
+
+    expect(out.status).toBe(200)
+    expect(out.body?.snapshot?.bibleJson).toMatchObject({
+      demographics: {},
+      physical: {},
+      relationships: [],
+      visuals: {},
+      _provenance: {},
+    })
+  })
+
   it('returns 400 when label is missing', async () => {
     const dbPath = tempDbPath()
     openDb(dbPath)

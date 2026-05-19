@@ -340,6 +340,45 @@ export function projectPropBible(db, entityId) {
   return { ...parsed, _provenance: leafMapToProvenance(leafMap) }
 }
 
+const PARTIAL_CHARACTER_BIBLE_SKELETON = {
+  demographics: {},
+  physical: {},
+  relationships: [],
+  visuals: {},
+}
+
+const PARTIAL_LOCATION_BIBLE_SKELETON = {
+  identity: {},
+  geography: {},
+  function: {},
+  visuals: {},
+  inhabitants: [],
+}
+
+const PARTIAL_ERA_BIBLE_SKELETON = {
+  identity: {},
+  timeframe: {},
+}
+
+const PARTIAL_PROP_BIBLE_SKELETON = {
+  identity: {},
+  function: {},
+  visuals: {},
+}
+
+/**
+ * @param {Map<string, { value: unknown; provenance: string }>} leafMap
+ * @param {import('zod').ZodTypeAny} schema
+ * @param {Record<string, unknown>} skeleton
+ * @returns {Record<string, unknown> & { _provenance: Record<string, EntityAttributeProvenance> }}
+ */
+function projectLeafMapForApi(leafMap, schema, skeleton) {
+  const nested = leafMapToNestedObject(leafMap)
+  const parsed = schema.safeParse(nested)
+  const bible = parsed.success ? parsed.data : { ...skeleton, ...nested }
+  return { ...bible, _provenance: leafMapToProvenance(leafMap) }
+}
+
 /**
  * @param {import('better-sqlite3').Database} db
  * @param {string} entityId
@@ -362,6 +401,42 @@ export function projectBible(db, entityId) {
       return projectEraBible(db, entityId)
     case 'prop':
       return projectPropBible(db, entityId)
+    default:
+      throw new Error(`projectBible: unsupported entity type: ${entity.type}`)
+  }
+}
+
+/**
+ * Attribute-derived Bible object for read/export/snapshot API paths.
+ *
+ * This preserves the strict parsed shape when enough data exists, but incomplete
+ * entities are still valid work-in-progress records and must remain readable.
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} entityId
+ * @returns {Record<string, unknown> & { _provenance: Record<string, EntityAttributeProvenance> }}
+ */
+export function projectBibleForApi(db, entityId) {
+  const entity = requireEntity(db, entityId)
+  switch (entity.type) {
+    case 'character':
+    case 'environment':
+    case 'institution':
+      return projectLeafMapForApi(
+        buildCharacterBibleLeafMap(db, entityId),
+        CharacterBibleSchema,
+        PARTIAL_CHARACTER_BIBLE_SKELETON,
+      )
+    case 'location':
+      return projectLeafMapForApi(
+        buildLocationBibleLeafMap(db, entityId),
+        LocationBibleSchema,
+        PARTIAL_LOCATION_BIBLE_SKELETON,
+      )
+    case 'era':
+      return projectLeafMapForApi(buildEraBibleLeafMap(db, entityId), EraBibleSchema, PARTIAL_ERA_BIBLE_SKELETON)
+    case 'prop':
+      return projectLeafMapForApi(buildPropBibleLeafMap(db, entityId), PropBibleSchema, PARTIAL_PROP_BIBLE_SKELETON)
     default:
       throw new Error(`projectBible: unsupported entity type: ${entity.type}`)
   }
