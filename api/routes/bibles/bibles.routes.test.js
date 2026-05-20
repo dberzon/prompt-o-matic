@@ -145,6 +145,29 @@ describe('bibles HTTP routes (ya8d)', () => {
       expect(out.body?.provenance).toEqual(_provenance)
     })
 
+    it('returns a partial bible for incomplete drafts instead of 500ing', async () => {
+      const dbPath = tempDbPath()
+      const db = openDb(dbPath)
+      createEntity(db, { id: 'ent_draft', type: 'character', name: 'Draft' })
+
+      const { res, out } = mockRes()
+      const req = /** @type {import('http').IncomingMessage} */ ({
+        method: 'GET',
+        url: '/api/bibles/ent_draft',
+      })
+
+      await withSqlitePath(dbPath, () => getBibleRoute.handler(req, res))
+
+      expect(out.status).toBe(200)
+      expect(out.body?.bible).toMatchObject({
+        demographics: {},
+        physical: {},
+        visuals: {},
+      })
+      expect(out.body?.provenance).toEqual({})
+      expect(out.body?.parseIssues?.length).toBeGreaterThan(0)
+    })
+
     it('returns 404 for unknown entity', async () => {
       const dbPath = tempDbPath()
       openDb(dbPath)

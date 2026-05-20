@@ -185,6 +185,79 @@ const ERA_BIBLE_ROOTS = new Set(Object.keys(EraBibleSchema.shape))
 const PROP_BIBLE_ROOTS = new Set(Object.keys(PropBibleSchema.shape))
 
 /**
+ * @param {string} entityType
+ * @returns {import('zod').ZodObject<any>}
+ */
+function bibleSchemaForEntityType(entityType) {
+  switch (entityType) {
+    case 'character':
+    case 'environment':
+    case 'institution':
+      return CharacterBibleSchema
+    case 'location':
+      return LocationBibleSchema
+    case 'era':
+      return EraBibleSchema
+    case 'prop':
+      return PropBibleSchema
+    default:
+      throw new Error(`projectBible: unsupported entity type: ${entityType}`)
+  }
+}
+
+/**
+ * Minimal top-level shape for read paths. Required sections are present so the
+ * editor can select the right schema even before the Bible is complete.
+ *
+ * @param {string} entityType
+ * @returns {Record<string, unknown>}
+ */
+function emptyBibleSkeletonForEntityType(entityType) {
+  switch (entityType) {
+    case 'character':
+    case 'environment':
+    case 'institution':
+      return {
+        demographics: {},
+        physical: {},
+        visuals: {},
+      }
+    case 'location':
+      return {
+        identity: {},
+        geography: {},
+        function: {},
+        visuals: {},
+      }
+    case 'era':
+      return {
+        identity: {},
+        timeframe: {},
+      }
+    case 'prop':
+      return {
+        identity: {},
+        function: {},
+        visuals: {},
+      }
+    default:
+      throw new Error(`projectBible: unsupported entity type: ${entityType}`)
+  }
+}
+
+/**
+ * @param {import('zod').ZodIssue[]} issues
+ * @returns {Array<{ path: string; message: string; code: string }>}
+ */
+function serializeZodIssues(issues) {
+  return issues.map((issue) => ({
+    path: issue.path.join('.'),
+    message: issue.message,
+    code: issue.code,
+  }))
+}
+
+/**
  * @param {string} path
  * @param {Set<string>} allowedRoots
  * @returns {string | null}
@@ -365,6 +438,53 @@ export function projectBible(db, entityId) {
     default:
       throw new Error(`projectBible: unsupported entity type: ${entity.type}`)
   }
+}
+
+/**
+ * Project a Bible for editor read paths. Complete Bibles still return the
+ * schema-parsed shape, while incomplete drafts return a partial schema-shaped
+ * object instead of throwing a Zod validation error.
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} entityId
+ * @returns {Record<string, unknown> & { _provenance: Record<string, EntityAttributeProvenance>; _parseIssues?: Array<{ path: string; message: string; code: string }> }}
+ */
+export function projectBibleForRead(db, entityId) {
+  const entity = requireEntity(db, entityId)
+  let leafMap
+  switch (entity.type) {
+    case 'character':
+    case 'environment':
+    case 'institution':
+      leafMap = buildCharacterBibleLeafMap(db, entityId)
+      break
+    case 'location':
+      leafMap = buildLocationBibleLeafMap(db, entityId)
+      break
+    case 'era':
+      leafMap = buildEraBibleLeafMap(db, entityId)
+      break
+    case 'prop':
+      leafMap = buildPropBibleLeafMap(db, entityId)
+      break
+    default:
+      throw new Error(`projectBible: unsupported entity type: ${entity.type}`)
+  }
+
+  const nested = {
+    ...emptyBibleSkeletonForEntityType(entity.type),
+    ...leafMapToNestedObject(leafMap),
+  }
+  const parsed = bibleSchemaForEntityType(entity.type).safeParse(nested)
+  const bible = parsed.success ? parsed.data : nested
+  const out = {
+    ...bible,
+    _provenance: leafMapToProvenance(leafMap),
+  }
+  if (!parsed.success) {
+    out._parseIssues = serializeZodIssues(parsed.error.issues)
+  }
+  return out
 }
 
 /**
