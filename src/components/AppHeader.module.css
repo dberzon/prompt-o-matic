@@ -1,0 +1,22 @@
+.headerChrome {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.projectGateOverlay {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.projectGateMessage {
+  margin: 0;
+  max-width: 28rem;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--text-2);
+}
