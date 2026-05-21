@@ -10,6 +10,7 @@ import SceneMatcher from './SceneMatcher.jsx'
 import DirectorSection from './DirectorSection.jsx'
 import ChipSection from './ChipSection.jsx'
 import PromptOutput from './PromptOutput.jsx'
+import BibleQuickRef from './BibleQuickRef.jsx'
 import MobilePromptBar from './MobilePromptBar.jsx'
 import layoutStyles from '../App.module.css'
 import styles from './PromptStudioStep.module.css'
@@ -186,6 +187,7 @@ export default function PromptStudioStep({
             comfyError={health.comfyError}
             entityId={activeEntityId || undefined}
           />
+          <BibleQuickRef entityId={activeEntityId} />
         </div>
 
         <MobilePromptBar
