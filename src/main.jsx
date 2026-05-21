@@ -2,6 +2,9 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
 import { ProjectProvider } from './context/ProjectContext.jsx'
+import { WorkspaceProvider } from './context/WorkspaceContext.jsx'
+import { ShareLinkProvider } from './context/ShareLinkContext.jsx'
+import { EmbeddedHealthProvider } from './context/EmbeddedHealthContext.jsx'
 import './index.css'
 
 class ErrorBoundary extends React.Component {
@@ -42,7 +45,13 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
       <ProjectProvider>
-        <App />
+        <WorkspaceProvider>
+          <ShareLinkProvider>
+            <EmbeddedHealthProvider>
+              <App />
+            </EmbeddedHealthProvider>
+          </ShareLinkProvider>
+        </WorkspaceProvider>
       </ProjectProvider>
     </ErrorBoundary>
   </React.StrictMode>,
