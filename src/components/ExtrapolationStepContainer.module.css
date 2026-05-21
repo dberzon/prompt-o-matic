@@ -1,0 +1,135 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.empty p {
+  font-size: 14px;
+  color: var(--text-2);
+  margin: 0;
+}
+
+.linkBtn,
+.navBtn,
+.nextBtn {
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+
+.linkBtn,
+.navBtn {
+  background: transparent;
+  color: var(--text-1);
+}
+
+.nextBtn {
+  font-weight: 600;
+  background: var(--accent, #c9a85c);
+  color: #0b0b0b;
+}
+
+.nextBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 0 24px 16px;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+}
+
+.leftCol,
+.rightCol {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: auto;
+}
+
+.rightCol > * {
+  flex-shrink: 0;
+}
+
+.streamLog {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  min-height: 120px;
+  max-height: 220px;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.15);
+}
+
+.streamLogTitle {
+  font-size: 12px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: var(--text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.streamIdle,
+.streamMeta,
+.streamError,
+.streamWarning {
+  font-size: 12px;
+  margin: 0 0 6px;
+  color: var(--text-2);
+}
+
+.streamError {
+  color: #e57373;
+}
+
+.streamWarning {
+  color: #ffb74d;
+}
+
+.streamList {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 11px;
+  color: var(--text-2);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px 32px;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+@media (max-width: 1000px) {
+  .workspace {
+    grid-template-columns: 1fr;
+  }
+}
