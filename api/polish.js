@@ -1,4 +1,4 @@
-import { runPolish } from './lib/polishCore.js'
+import { runPolish, parsePolishRequest } from './lib/polishCore.js'
 import { normalizeHandlerError, sendJsonNode } from './lib/http.js'
 
 export default async function handler(req, res) {
@@ -7,7 +7,14 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await runPolish({ payload: req.body })
+    const parsed = parsePolishRequest(req.body)
+    if (!parsed.ok) {
+      return sendJsonNode(res, 400, {
+        error: 'Invalid polish request',
+        issues: parsed.error.issues,
+      })
+    }
+    const result = await runPolish({ payload: parsed.data })
     return sendJsonNode(res, 200, result)
   } catch (err) {
     console.error('Polish handler error:', err?.message, err?.meta ?? '')

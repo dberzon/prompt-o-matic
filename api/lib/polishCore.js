@@ -8,18 +8,26 @@ import {
   DEFAULT_OLLAMA_URL,
   envRead,
 } from './llm/providers/shared.js'
-import { getPrompt } from './prompts/registry.js'
-import { renderPrompt } from './prompts/render.js'
+import { buildPolishSystemMessage, getPolishV1RenderedBody } from './polish/polishSystemMessage.js'
+import { parsePolishRequest } from './polish/polishRequestSchema.js'
+import { createSqliteDatabase, initializeDatabase } from './db/sqlite.js'
 
-/** @type {string | null} */
-let polishSystemPromptCache = null
+export { buildPolishSystemMessage, getPolishV1RenderedBody, POLISH_BIBLE_INJECT_PATHS } from './polish/polishSystemMessage.js'
+export { parsePolishRequest, polishRequestSchema } from './polish/polishRequestSchema.js'
 
 function getPolishSystemPromptText() {
-  if (polishSystemPromptCache == null) {
-    const rec = getPrompt('polish.system')
-    polishSystemPromptCache = renderPrompt(rec.body, {})
-  }
-  return polishSystemPromptCache
+  return getPolishV1RenderedBody()
+}
+
+/**
+ * @param {{ entityId?: string, projectId?: string }} payload
+ * @param {import('better-sqlite3').Database | null} [db]
+ */
+function resolvePolishSystemPrompt(payload, db) {
+  return buildPolishSystemMessage({
+    db,
+    entityId: payload?.entityId ?? null,
+  })
 }
 
 function normalizeFrontPrefix(input) {
@@ -259,35 +267,56 @@ export async function runPolish({
   payload,
   fetchImpl = fetch,
   env = process.env,
+  db: dbOverride = null,
 }) {
-  if (!payload?.fragments || !Array.isArray(payload.fragments) || payload.fragments.length === 0) {
-    const err = new Error('No prompt fragments provided')
+  const parsed = parsePolishRequest(payload)
+  if (!parsed.ok) {
+    const err = new Error('Invalid polish request')
     err.status = 400
+    err.issues = parsed.error.issues
     throw err
   }
+  const normalizedPayload = parsed.data
 
-  const userMessage = buildUserMessage(payload)
-  const providerSelection = await resolveProviderSelection({
-    engine: payload.engine,
-    localOnly: payload.localOnly,
-    fetchImpl,
-    env,
-    payload,
-  })
+  let db = dbOverride
+  let openedDb = false
+  if (!db && normalizedPayload.entityId) {
+    db = createSqliteDatabase({ env })
+    initializeDatabase(db)
+    openedDb = true
+  }
 
-  const polished = await runWithResolvedProvider({
-    provider: providerSelection.provider,
-    userMessage,
-    payload,
-    fetchImpl,
-    env,
-  })
+  try {
+    const userMessage = buildUserMessage(normalizedPayload)
+    const providerSelection = await resolveProviderSelection({
+      engine: normalizedPayload.engine,
+      localOnly: normalizedPayload.localOnly,
+      fetchImpl,
+      env,
+      payload: normalizedPayload,
+    })
 
-  return {
-    polished: normalizePolishedText(polished, payload.frontPrefix),
-    provider: providerSelection.provider,
-    engine: providerSelection.resolvedFrom,
-    fallback: providerSelection.fallback ?? null,
+    const systemPrompt = resolvePolishSystemPrompt(normalizedPayload, db)
+
+    const polished = await runWithResolvedProvider({
+      provider: providerSelection.provider,
+      userMessage,
+      payload: normalizedPayload,
+      fetchImpl,
+      env,
+      systemPrompt,
+    })
+
+    return {
+      polished: normalizePolishedText(polished, normalizedPayload.frontPrefix),
+      provider: providerSelection.provider,
+      engine: providerSelection.resolvedFrom,
+      fallback: providerSelection.fallback ?? null,
+    }
+  } finally {
+    if (openedDb && db) {
+      db.close()
+    }
   }
 }
 

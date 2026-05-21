@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const polishCorePath = path.join(__dirname, 'polishCore.js')
+const polishSystemMessagePath = path.join(__dirname, 'polish', 'polishSystemMessage.js')
 
 describe('polishCore registry wiring', () => {
   it('does not embed the legacy inline polish system template literal', () => {
@@ -14,7 +15,7 @@ describe('polishCore registry wiring', () => {
   })
 
   it('loads system instructions via getPrompt and renderPrompt', () => {
-    const src = fs.readFileSync(polishCorePath, 'utf8')
+    const src = fs.readFileSync(polishSystemMessagePath, 'utf8')
     expect(src).toContain("getPrompt('polish.system')")
     expect(src).toContain('renderPrompt(rec.body')
   })
