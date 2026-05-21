@@ -166,6 +166,44 @@ describe('usePolish', () => {
     expect(result.current.debug.lastRequest).toBeNull()
   })
 
+  it('includes entityId in request body when provided', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      polished: 'with entity',
+      provider: 'ollama',
+      fallback: null,
+      engine: 'local',
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => usePolish())
+    await act(async () => {
+      await result.current.polish({ ...baseInput, entityId: 'ruslan_levashov' })
+    })
+
+    const [, init] = fetchMock.mock.calls[0]
+    const body = JSON.parse(String(init?.body || '{}'))
+    expect(body.entityId).toBe('ruslan_levashov')
+  })
+
+  it('omits entityId from request body when not provided', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse({
+      polished: 'no entity',
+      provider: 'ollama',
+      fallback: null,
+      engine: 'local',
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const { result } = renderHook(() => usePolish())
+    await act(async () => {
+      await result.current.polish(baseInput)
+    })
+
+    const [, init] = fetchMock.mock.calls[0]
+    const body = JSON.parse(String(init?.body || '{}'))
+    expect(body).not.toHaveProperty('entityId')
+  })
+
   it('revert(): from polished, returns state to idle and clears polished/error', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
       polished: 'something',

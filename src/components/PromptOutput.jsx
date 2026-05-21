@@ -140,6 +140,7 @@ export default function PromptOutput({
   embeddedStatus = null,
   comfyStatus = null,
   comfyError = '',
+  entityId = null,
 }) {
   const isDev = import.meta.env.DEV
   const [showNeg, setShowNeg] = useState(false)
@@ -414,6 +415,7 @@ export default function PromptOutput({
       lmStudioBaseUrl: localProvider === 'lmstudio' ? lmStudioBaseUrl : null,
       lmStudioModel: localProvider === 'lmstudio' ? lmStudioModel : null,
       cloudProvider: aiEngine === 'cloud' ? 'claude' : null,
+      entityId,
     })
   }
 
@@ -441,12 +443,14 @@ export default function PromptOutput({
       lmStudioBaseUrl: localProvider === 'lmstudio' ? lmStudioBaseUrl : null,
       lmStudioModel: localProvider === 'lmstudio' ? lmStudioModel : null,
       cloudProvider: aiEngine === 'cloud' ? 'claude' : null,
+      entityId,
     })
   }, [
     displayText,
     polish,
     directorName,
     directorNote,
+    entityId,
     useFrontPrefix,
     aiEngine,
     localOnly,

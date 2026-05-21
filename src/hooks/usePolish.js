@@ -30,6 +30,7 @@ export function usePolish() {
     lmStudioBaseUrl = null,
     lmStudioModel = null,
     cloudProvider = null,
+    entityId = null,
   }) => {
     if (!fragments || fragments.length === 0) return
 
@@ -52,6 +53,9 @@ export function usePolish() {
       lmStudioBaseUrl,
       lmStudioModel,
       cloudProvider,
+      ...(typeof entityId === 'string' && entityId.trim()
+        ? { entityId: entityId.trim() }
+        : {}),
     }
 
     if (dryRun) {
