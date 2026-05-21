@@ -106,6 +106,19 @@ describe('bible section approval', () => {
     const a = getBibleApprovals(db, 'ent_c').physical
     expect(a.state).toBe('approved')
     expect(a.actor).toBe('r2')
+    expect(listAttributes(db, { entityId: 'ent_c', key: '_approval.physical' })).toHaveLength(1)
+  })
+
+  it('getBibleApprovals reflects latest reject after approve', () => {
+    const db = ensureDb(createTempDbPath())
+    createEntity(db, { id: 'ent_c', type: 'character', name: 'C' })
+    approveBibleSection(db, 'ent_c', 'visuals', { actor: 'r1' })
+    expect(getBibleApprovals(db, 'ent_c').visuals.state).toBe('approved')
+    rejectBibleSection(db, 'ent_c', 'visuals', { actor: 'r2' })
+    const a = getBibleApprovals(db, 'ent_c').visuals
+    expect(a.state).toBe('rejected')
+    expect(a.actor).toBe('r2')
+    expect(listAttributes(db, { entityId: 'ent_c', key: '_approval.visuals' })).toHaveLength(1)
   })
 
   it('missing entity throws EntityNotFoundError', () => {

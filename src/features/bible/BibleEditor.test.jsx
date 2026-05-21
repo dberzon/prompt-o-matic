@@ -120,6 +120,18 @@ describe('BibleEditor', () => {
     expect(names).not.toContain('demographics')
   })
 
+  it('uses entityType to render sections for an otherwise empty draft bible', async () => {
+    vi.mocked(fetchBible).mockResolvedValue({ bible: {}, provenance: {}, entityType: 'character' })
+    vi.mocked(fetchBibleCompleteness).mockResolvedValue(completenessReport())
+    vi.mocked(listEntityAttributes).mockResolvedValue({ items: [] })
+
+    render(<BibleEditor entityId="ent_empty" />)
+    await waitFor(() => expect(screen.getByTestId('T_BIBLE_EDITOR')).toBeTruthy())
+
+    const names = screen.getAllByTestId('T_BIBLE_SECTION_PANEL').map((p) => p.getAttribute('data-section'))
+    expect(names).toEqual(expect.arrayContaining(['demographics', 'physical', 'visuals']))
+  })
+
   it('refetches bible after section approve', async () => {
     vi.mocked(fetchBible).mockResolvedValue({ bible: characterBible, provenance: {} })
     vi.mocked(fetchBibleCompleteness).mockResolvedValue(completenessReport())
