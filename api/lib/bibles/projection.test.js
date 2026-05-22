@@ -209,6 +209,29 @@ describe('projectBible / projection', () => {
     expect(Object.keys(_provenance).length).toBeGreaterThan(0)
   })
 
+  it('projectCharacterBible: sparse entities return a partial schema-identifiable Bible', () => {
+    const dbPath = createTempDbPath()
+    process.env.SQLITE_DB_PATH = dbPath
+    process.env.APP_MODE = 'local-studio'
+    const db = ensureDb(dbPath)
+    createEntity(db, { id: 'ent_empty', type: 'character', name: 'Empty' })
+
+    const { _provenance, ...bible } = projectCharacterBible(db, 'ent_empty')
+
+    expect(bible).toMatchObject({
+      demographics: {},
+      physical: {},
+      wardrobe: {},
+      voice: {},
+      psychology: {},
+      history: {},
+      relationships: [],
+      visuals: {},
+    })
+    expect(_provenance).toEqual({})
+    expect(() => CharacterBibleSchema.parse(bible)).toThrow()
+  })
+
   it('projectLocationBible: happy path + identity.name from entity row', () => {
     const dbPath = createTempDbPath()
     process.env.SQLITE_DB_PATH = dbPath
