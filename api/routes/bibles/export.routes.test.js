@@ -130,6 +130,31 @@ describe('Bible export routes', () => {
     expect(String(out.body)).toMatch(/^## Demographics/m)
   })
 
+  it('GET export.md renders sparse live projection with missing-field markers', async () => {
+    const dbPath = tempDbPath()
+    const db = openDb(dbPath)
+    createEntity(db, { id: 'ent_sparse_export', type: 'character', name: 'Sparse' })
+
+    const { res, out } = mockRes()
+    const req = /** @type {import('http').IncomingMessage} */ ({
+      method: 'GET',
+      url: '/api/bibles/ent_sparse_export/export.md',
+    })
+
+    const orig = process.env.SQLITE_DB_PATH
+    process.env.SQLITE_DB_PATH = dbPath
+    try {
+      await exportMdRoute.handler(req, res)
+    } finally {
+      if (orig === undefined) delete process.env.SQLITE_DB_PATH
+      else process.env.SQLITE_DB_PATH = orig
+    }
+
+    expect(out.status).toBe(200)
+    expect(String(out.body)).toMatch(/^## Demographics/m)
+    expect(String(out.body)).toMatch(/Missing required field/)
+  })
+
   it('GET export.pdf returns application/pdf buffer', async () => {
     const dbPath = tempDbPath()
     const db = openDb(dbPath)

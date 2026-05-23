@@ -209,6 +209,47 @@ describe('projectBible / projection', () => {
     expect(Object.keys(_provenance).length).toBeGreaterThan(0)
   })
 
+  it('projectCharacterBible: sparse entities return a partial schema-identifiable Bible', () => {
+    const dbPath = createTempDbPath()
+    process.env.SQLITE_DB_PATH = dbPath
+    process.env.APP_MODE = 'local-studio'
+    const db = ensureDb(dbPath)
+    createEntity(db, { id: 'ent_empty', type: 'character', name: 'Empty' })
+
+    const { _provenance, ...bible } = projectCharacterBible(db, 'ent_empty')
+
+    expect(bible).toMatchObject({
+      demographics: {},
+      physical: {},
+      wardrobe: {},
+      voice: {},
+      psychology: {},
+      history: {},
+      relationships: [],
+      visuals: {},
+    })
+    expect(_provenance).toEqual({})
+    expect(() => CharacterBibleSchema.parse(bible)).toThrow()
+  })
+
+  it('projectCharacterBible: same-millisecond same-key writes prefer the newest row', () => {
+    const dbPath = createTempDbPath()
+    process.env.SQLITE_DB_PATH = dbPath
+    process.env.APP_MODE = 'local-studio'
+    const db = ensureDb(dbPath)
+    createEntity(db, { id: 'ent_tie', type: 'character', name: 'Tie' })
+    writeAttribute(db, { entityId: 'ent_tie', key: 'demographics.gender', value: 'first', provenance: 'canon' })
+    writeAttribute(db, { entityId: 'ent_tie', key: 'demographics.gender', value: 'second', provenance: 'canon' })
+    db.prepare('UPDATE entity_attributes SET created_at = ? WHERE entity_id = ? AND key = ?').run(
+      '2026-05-23T11:00:00.000Z',
+      'ent_tie',
+      'demographics.gender',
+    )
+
+    const { _provenance, ...bible } = projectCharacterBible(db, 'ent_tie')
+    expect(bible.demographics.gender).toBe('second')
+  })
+
   it('projectLocationBible: happy path + identity.name from entity row', () => {
     const dbPath = createTempDbPath()
     process.env.SQLITE_DB_PATH = dbPath
