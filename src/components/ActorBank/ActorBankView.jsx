@@ -23,7 +23,7 @@ async function fetchCharacters(params) {
   return data
 }
 
-export default function ActorBankView({ onOpenInCastingRoom }) {
+export default function ActorBankView({ onOpenInCastingRoom, onWorkflowCharacterSelect }) {
   const [state, dispatch] = useReducer(reducer, INIT)
   const filtersRef = useRef({ search: '', gender: '', ageMin: '', ageMax: '', sortBy: 'last_rendered_at' })
   const [detail, setDetail] = useState(null)
@@ -91,12 +91,18 @@ export default function ActorBankView({ onOpenInCastingRoom }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
       setDetail({ character: data.item, images: data.item.images ?? [] })
+      onWorkflowCharacterSelect?.({
+        charId: data.item?.id || id,
+        bankSlug: data.item?.slug || null,
+        entityId: null,
+        source: 'actor-bank',
+      })
     } catch (err) {
       setDetailError(err.message ?? 'Failed to load character')
     } finally {
       setDetailLoading(false)
     }
-  }, [])
+  }, [onWorkflowCharacterSelect])
 
   const handleBack = useCallback(() => {
     setDetail(null)

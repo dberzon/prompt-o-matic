@@ -111,7 +111,7 @@ function RenderStatusBar({ isPollingAudit, isPollingPortfolio, auditionStatuses,
   )
 }
 
-export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed, comfyStatus = null, comfyError = '' }) {
+export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed, comfyStatus = null, comfyError = '', onWorkflowCharacterSelect = null }) {
   // ── Global UI state ───────────────────────────────────────────────────────
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
@@ -220,6 +220,19 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
   const selectableWorkflows = useMemo(() => showInvalidWorkflows ? workflows : workflows.filter((w) => w.valid), [workflows, showInvalidWorkflows])
   const selectedPromptPack = useMemo(() => promptPacks.find((p) => p.id === selectedPromptPackId) || null, [promptPacks, selectedPromptPackId])
   const promptId = lastQueueResponse?.promptId || ''
+
+  const handleBankEntryChange = useCallback((event) => {
+    const nextId = event.target.value
+    setSelectedBankEntryId(nextId)
+    const entry = bankEntries.find((item) => item.id === nextId)
+    if (!entry) return
+    onWorkflowCharacterSelect?.({
+      charId: entry.id,
+      bankSlug: entry.slug,
+      entityId: null,
+      source: 'casting-pipeline',
+    })
+  }, [bankEntries, onWorkflowCharacterSelect])
 
   // ── Audit poll tick (updated every render → always reads latest state) ────
   auditTickRef.current = async () => {
@@ -1033,7 +1046,7 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
         ) : (
           <>
             <div className={styles.row}>
-              <select value={selectedBankEntryId} onChange={(e) => setSelectedBankEntryId(e.target.value)} className={styles.select}>
+              <select value={selectedBankEntryId} onChange={handleBankEntryChange} className={styles.select}>
                 <option value="">Select a character…</option>
                 {bankEntries.map((entry) => <option key={entry.id} value={entry.id}>@{entry.slug} — {entry.name}</option>)}
               </select>

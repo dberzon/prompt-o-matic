@@ -68,16 +68,6 @@ export default function CastingStepContainer({
     }
   }, [setActiveCharId, setActiveEntityId, setActiveBankSlug])
 
-  const handlePipelineSelectCapture = useCallback((event) => {
-    const target = event.target
-    if (!(target instanceof HTMLSelectElement)) return
-    if (!target.value) return
-    applyCharacterSelection({
-      charId: target.value,
-      source: 'casting-pipeline',
-    })
-  }, [applyCharacterSelection])
-
   const relayCharacterSelect = useCallback((payload) => {
     applyCharacterSelection(typeof payload === 'string'
       ? { charId: payload, source: 'actor-bank' }
@@ -106,13 +96,13 @@ export default function CastingStepContainer({
           <div
             className={styles.captureRoot}
             data-subtab="casting-pipeline"
-            onChangeCapture={handlePipelineSelectCapture}
           >
             <CastingPipelinePanel
               jumpToCharacterId={activeSubTab === 'casting-pipeline' ? activeCharId : null}
               onJumpConsumed={() => {}}
               comfyStatus={comfyStatus}
               comfyError={comfyError}
+              onWorkflowCharacterSelect={relayCharacterSelect}
             />
           </div>
         )}
@@ -133,9 +123,7 @@ export default function CastingStepContainer({
         )}
         {activeSubTab === 'actor-bank' && (
           <ActorBankView
-            setActiveCharId={setActiveCharId}
-            setActiveStep={setActiveStep}
-            setActiveSubTab={setActiveSubTab}
+            onWorkflowCharacterSelect={relayCharacterSelect}
           />
         )}
       </div>
