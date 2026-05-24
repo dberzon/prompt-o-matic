@@ -1257,31 +1257,37 @@ export function listAttributeSupersedeChain(db, { entityId, attributeId }) {
   if (!requested) return null
   if (entityId && requested.entityId !== entityId) return null
 
-  let current = requested
-  const visited = new Set([current.id])
-  while (current?.supersededBy) {
-    const next = selectAttributeById(db, current.supersededBy)
-    if (!next || visited.has(next.id)) break
-    visited.add(next.id)
-    current = next
-  }
-
-  const items = listAttributes(db, {
+  const allForKey = listAttributes(db, {
     entityId: requested.entityId,
     key: requested.key,
     includeDismissed: true,
     includeSuperseded: true,
-  }).sort((left, right) => {
-    const leftTime = Date.parse(left.createdAt || '') || 0
-    const rightTime = Date.parse(right.createdAt || '') || 0
-    if (leftTime !== rightTime) return leftTime - rightTime
-    return String(left.id).localeCompare(String(right.id))
   })
+  const byId = new Map(allForKey.map((item) => [item.id, item]))
+
+  let oldest = requested
+  const reverseVisited = new Set([oldest.id])
+  while (true) {
+    const previous = allForKey.find((item) => item.supersededBy === oldest.id)
+    if (!previous || reverseVisited.has(previous.id)) break
+    reverseVisited.add(previous.id)
+    oldest = previous
+  }
+
+  const items = []
+  let current = oldest
+  const forwardVisited = new Set()
+  while (current && !forwardVisited.has(current.id)) {
+    items.push(current)
+    forwardVisited.add(current.id)
+    current = current.supersededBy ? byId.get(current.supersededBy) : null
+  }
+  const currentAttributeId = items.length > 0 ? items[items.length - 1].id : requested.id
 
   return {
     entityId: requested.entityId,
     key: requested.key,
-    currentAttributeId: current.id,
+    currentAttributeId,
     items,
   }
 }
@@ -1308,7 +1314,7 @@ export function listAttributes(db, { entityId, key, provenance, includeDismissed
     conditions.push('superseded_by IS NULL')
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-  const rows = db.prepare(`SELECT * FROM entity_attributes ${where} ORDER BY created_at DESC`).all(...params)
+  const rows = db.prepare(`SELECT * FROM entity_attributes ${where} ORDER BY created_at DESC, rowid DESC`).all(...params)
   return rows.map(mapAttributeRow)
 }
 

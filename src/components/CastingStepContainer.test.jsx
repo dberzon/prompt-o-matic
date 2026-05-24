@@ -18,12 +18,28 @@ function CastingStepHarness(props) {
 }
 
 vi.mock('./CastingPipelinePanel.jsx', () => ({
-  default: () => (
-    <select data-testid="mock-pipeline-select" defaultValue="">
-      <option value="">Select character…</option>
-      <option value="char_pipeline">Pipeline character</option>
-    </select>
-  ),
+  default: ({ onWorkflowCharacterSelect }) => {
+    const handleBankSelect = (event) => {
+      const option = event.target.selectedOptions[0]
+      onWorkflowCharacterSelect?.({
+        charId: event.target.value,
+        bankSlug: option?.dataset.bankSlug || null,
+        source: 'casting-pipeline',
+      })
+    }
+    return (
+      <>
+        <select data-testid="mock-pipeline-select" defaultValue="" onChange={handleBankSelect}>
+          <option value="">Select character…</option>
+          <option value="char_pipeline" data-bank-slug="rita">Pipeline character</option>
+        </select>
+        <select data-testid="mock-workflow-select" defaultValue="">
+          <option value="">Default workflow</option>
+          <option value="workflow-not-character">Workflow preset</option>
+        </select>
+      </>
+    )
+  },
 }))
 
 vi.mock('./CharacterBuilder.jsx', () => ({
@@ -44,11 +60,11 @@ vi.mock('./CharacterBuilder.jsx', () => ({
 }))
 
 vi.mock('./ActorBank/ActorBankView.jsx', () => ({
-  default: ({ setActiveCharId }) => (
+  default: ({ onWorkflowCharacterSelect }) => (
     <button
       type="button"
       data-testid="mock-bank-char"
-      onClick={() => setActiveCharId?.('char_bank')}
+      onClick={() => onWorkflowCharacterSelect?.({ charId: 'char_bank', source: 'actor-bank' })}
     >
       Pick bank character
     </button>
@@ -114,7 +130,17 @@ describe('CastingStepContainer', () => {
       target: { value: 'char_pipeline' },
     })
     expect(setActiveCharId).toHaveBeenCalledWith('char_pipeline')
-    expect(setActiveBankSlug).toHaveBeenCalledWith(null)
+    expect(setActiveBankSlug).toHaveBeenCalledWith('rita')
+
+    setActiveCharId.mockClear()
+    setActiveEntityId.mockClear()
+    setActiveBankSlug.mockClear()
+    fireEvent.change(screen.getByTestId('mock-workflow-select'), {
+      target: { value: 'workflow-not-character' },
+    })
+    expect(setActiveCharId).not.toHaveBeenCalled()
+    expect(setActiveEntityId).not.toHaveBeenCalled()
+    expect(setActiveBankSlug).not.toHaveBeenCalled()
 
     fireEvent.click(screen.getByRole('tab', { name: /Character Builder/i }))
     setActiveCharId.mockClear()
