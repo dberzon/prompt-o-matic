@@ -145,6 +145,7 @@ api/        Vite middleware route handlers (one file = one route)
 - React components: one component per file, PascalCase filename, default export.
 - **Issue tracking:** `bd` only (`bd ready`, `bd update --claim`, `bd close`). Run `bd prime` after context loss. Session handoff ends with `git push`.
 - **Frontend API clients:** `src/lib/api/*.js` wrapping `apiGet` / `apiPost` from `src/lib/api/http.js`.
+- **Prompt library:** Edits to migrated `.prompt.md` templates require updating golden snapshots — see `api/lib/prompts/regression/harness.test.js` (`UPDATE_GOLDENS=1 npm test -- regression`, then review `git diff api/lib/prompts/regression/goldens/`).
 
 ### Entity layer & extrapolation
 - **Entity attributes:** Always `writeAttribute` from `api/lib/db/repositories.js`; never raw `INSERT INTO entity_attributes` outside tests (`entityAttributesProvenanceGuard.test.js`).
