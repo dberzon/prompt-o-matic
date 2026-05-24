@@ -1,0 +1,23 @@
+Write a single visual descriptor for Qwen image generation and reference portrait conditioning.
+Return strict JSON only: { "visualDescriptor": "string" }
+Include stable face, body, and wardrobe phrasing suitable for cross-shot continuity.
+Prefer frontal portrait composition with neutral expression.
+
+Entity: Ruslan Levashov (character)
+Attributes:
+demographics.gender: male
+demographics.age: 20-25
+appearance.height: short
+appearance.build: heavy-built, wide shoulders, slight belly
+appearance.face: rounded childish face
+appearance.eyes: piggy eyes
+appearance.nose: short upturned nose
+appearance.lips: thin lips
+appearance.skin: freckles
+setting.era: Perestroika
+setting.location: outskirts of Moscow
+relationship.rita: in love with Rita Vlasova
+visual.descriptor: stocky young man, rounded face, freckled skin, short dark hair
+behavior.temperament: affable, slightly awkward
+Stage 4 context:
+{"environments":[{"name":"Soviet beer hall","summary":"Friday hangout with classmates"}],"attributes":[{"key":"routine.social","value":"smokes with friends during college breaks"}]}

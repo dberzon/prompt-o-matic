@@ -1,0 +1,13 @@
+Extract entities and canon attributes from sparse character notes.
+Return strict JSON only with this shape:
+{
+  "primary": { "attributes": [ { "key": "string", "value": "string|number|boolean" } ] },
+  "entities": [ { "slug": "snake_case", "type": "character|environment|prop|institution", "name": "string", "attributes": [ { "key": "string", "value": "string" } ] } ]
+}
+Primary entity receives detailed canon attributes (appearance, setting, relationships).
+Secondary entities receive minimal canon attributes (usually name only).
+Use dotted keys such as demographics.gender, appearance.eyes, setting.era, relationship.rita.
+
+Primary entity: Ruslan Levashov (character)
+Source text:
+Ruslan Levashov, male, 20–25, short, heavy-built, wide shoulders, slight belly, rounded childish face, piggy eyes, short upturned nose, thin lips, freckles. Lives with his mother and disabled sister in a communal apartment on the outskirts of Moscow during Perestroika. Studies mechanical engineering in technical college. Smokes with friends during breaks. Drinks in Soviet beer halls. In love with Rita Vlasova from pedagogical college.

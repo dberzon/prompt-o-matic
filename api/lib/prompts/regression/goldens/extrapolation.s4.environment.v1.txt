@@ -1,0 +1,28 @@
+Project likely environments and relationship-derived habits for this character.
+Return strict JSON only:
+{
+  "environments": [ { "name": "string", "summary": "string" } ],
+  "attributes": [ { "key": "string", "value": "string", "confidence": 0.0-1.0 } ],
+  "relationshipAttributes": [ { "type": "string", "otherSlug": "snake_case", "value": "string", "confidence": 0.0-1.0 } ]
+}
+Environment entities should be plausible recurring spaces (home, workplace, social venue).
+Relationship-derived attributes may describe routines such as "spends Fridays at beer hall with friends".
+
+Entity: Ruslan Levashov (character)
+Canon attributes:
+demographics.gender: male
+demographics.age: 20-25
+appearance.height: short
+appearance.build: heavy-built, wide shoulders, slight belly
+appearance.face: rounded childish face
+appearance.eyes: piggy eyes
+appearance.nose: short upturned nose
+appearance.lips: thin lips
+appearance.skin: freckles
+setting.era: Perestroika
+setting.location: outskirts of Moscow
+relationship.rita: in love with Rita Vlasova
+Relationships:
+in_love_with -> Rita Vlasova
+Stage 3 context:
+{"attributes":[{"key":"psychology.temperament","value":"affable, slightly awkward","confidence":0.8},{"key":"psychology.social","value":"seeks approval from peers","confidence":0.75}]}

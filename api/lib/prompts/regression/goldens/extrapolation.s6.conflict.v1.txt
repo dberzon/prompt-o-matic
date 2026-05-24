@@ -1,0 +1,23 @@
+Detect contradictions across extrapolation stage outputs for this entity.
+Return strict JSON only:
+{ "conflicts": [ { "key": "string", "message": "string", "attributeIds": ["id1", "id2"] } ] }
+Only report material contradictions, not benign duplicates.
+
+Entity: Ruslan Levashov (character)
+Active attributes:
+attr_canon_1 :: demographics.gender :: canon :: male
+attr_canon_2 :: demographics.age :: canon :: 20-25
+attr_canon_3 :: appearance.height :: canon :: short
+attr_canon_4 :: appearance.build :: canon :: heavy-built, wide shoulders, slight belly
+attr_canon_5 :: appearance.face :: canon :: rounded childish face
+attr_canon_6 :: appearance.eyes :: canon :: piggy eyes
+attr_canon_7 :: appearance.nose :: canon :: short upturned nose
+attr_canon_8 :: appearance.lips :: canon :: thin lips
+attr_canon_9 :: appearance.skin :: canon :: freckles
+attr_canon_10 :: setting.era :: canon :: Perestroika
+attr_canon_11 :: setting.location :: canon :: outskirts of Moscow
+attr_canon_12 :: relationship.rita :: canon :: in love with Rita Vlasova
+attr_inferred_1 :: visual.descriptor :: inferred :: stocky young man, rounded face, freckled skin, short dark hair
+attr_inferred_2 :: behavior.temperament :: inferred :: affable, slightly awkward
+Prior stage outputs:
+{"1":{"raw":{"primary":{"attributes":[{"key":"demographics.gender","value":"male"},{"key":"demographics.age","value":"20-25"},{"key":"appearance.height","value":"short"},{"key":"appearance.build","value":"heavy-built, wide shoulders, slight belly"},{"key":"appearance.face","value":"rounded childish face"},{"key":"appearance.eyes","value":"piggy eyes"},{"key":"appearance.nose","value":"short upturned nose"},{"key":"appearance.lips","value":"thin lips"},{"key":"appearance.skin","value":"freckles"},{"key":"setting.era","value":"Perestroika"},{"key":"setting.location","value":"outskirts of Moscow"},{"key":"relationship.rita","value":"in love with Rita Vlasova"}]},"entities":[{"slug":"ruslan_mother","type":"character","name":"Ruslan mother","attributes":[{"key":"name","value":"mother"}]},{"slug":"ruslan_sister","type":"character","name":"Ruslan sister","attributes":[{"key":"name","value":"disabled sister"}]},{"slug":"rita_vlasova","type":"character","name":"Rita Vlasova","attributes":[{"key":"name","value":"Rita Vlasova"}]},{"slug":"communal_apartment","type":"environment","name":"Communal apartment","attributes":[{"key":"name","value":"communal apartment"}]},{"slug":"soviet_beer_hall","type":"environment","name":"Soviet beer hall","attributes":[{"key":"name","value":"Soviet beer hall"}]},{"slug":"technical_college","type":"institution","name":"Technical college","attributes":[{"key":"name","value":"technical college"}]}]}},"2":{"raw":{"attributes":[{"key":"culture.period","value":"Perestroika-era Moscow outskirts","confidence":0.9},{"key":"culture.housing","value":"communal apartment block","confidence":0.85}]}},"3":{"raw":{"attributes":[{"key":"psychology.temperament","value":"affable, slightly awkward","confidence":0.8},{"key":"psychology.social","value":"seeks approval from peers","confidence":0.75}]}},"4":{"raw":{"environments":[{"name":"Soviet beer hall","summary":"Friday hangout with classmates"}],"attributes":[{"key":"routine.social","value":"smokes with friends during college breaks"}]}}}

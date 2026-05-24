@@ -65,7 +65,7 @@ async function runStructuredStage(ctx, { promptId, schema, variables }) {
   })
 }
 
-function buildS1Dynamic({ entity, sourceText }) {
+export function buildS1Dynamic({ entity, sourceText }) {
   return [
     `Primary entity: ${entity?.name || entity?.id || 'unknown'} (${entity?.type || 'character'})`,
     'Source text:',
@@ -73,7 +73,7 @@ function buildS1Dynamic({ entity, sourceText }) {
   ].join('\n')
 }
 
-function buildS2Dynamic({ entity, canonAttributes, prior }) {
+export function buildS2Dynamic({ entity, canonAttributes, prior }) {
   const eraAttrs = canonAttributes
     .filter(
       (item) =>
@@ -91,7 +91,7 @@ function buildS2Dynamic({ entity, canonAttributes, prior }) {
     .join('\n')
 }
 
-function buildS3Dynamic({ entity, canonAttributes, prior }) {
+export function buildS3Dynamic({ entity, canonAttributes, prior }) {
   const canonLines = canonAttributes.map(formatAttrLine)
   const stageTwo = prior?.[2]?.raw
   return [
@@ -103,7 +103,7 @@ function buildS3Dynamic({ entity, canonAttributes, prior }) {
     .join('\n')
 }
 
-function buildS4Dynamic({ entity, canonAttributes, relationships, prior }) {
+export function buildS4Dynamic({ entity, canonAttributes, relationships, prior }) {
   const canonLines = canonAttributes.map(formatAttrLine)
   const relationshipLines = (relationships || []).map((item) => {
     const target = item.targetName || item.targetEntityId || 'unknown'
@@ -119,7 +119,7 @@ function buildS4Dynamic({ entity, canonAttributes, relationships, prior }) {
     .join('\n')
 }
 
-function buildS5Dynamic({ entity, attributes, prior }) {
+export function buildS5Dynamic({ entity, attributes, prior }) {
   const attributeLines = attributes.map(formatAttrLine)
   return [
     `Entity: ${entity?.name || entity?.id} (${entity?.type || 'character'})`,
@@ -130,7 +130,7 @@ function buildS5Dynamic({ entity, attributes, prior }) {
     .join('\n')
 }
 
-function buildS6Dynamic({ entity, attributes, prior }) {
+export function buildS6Dynamic({ entity, attributes, prior }) {
   const attributeLines = attributes.map((item) =>
     `${item.id} :: ${item.key} :: ${item.provenance} :: ${typeof item.value === 'string' ? item.value : JSON.stringify(item.value)}`,
   )

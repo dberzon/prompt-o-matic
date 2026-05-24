@@ -1,0 +1,21 @@
+Infer psychology attributes from canon and historical/cultural context.
+Return strict JSON only:
+{ "attributes": [ { "key": "behavior.*|speech.*|fear.*", "value": "string", "confidence": 0.0-1.0 } ] }
+Use keys prefixed with behavior., speech., or fear.
+
+Entity: Ruslan Levashov (character)
+Canon attributes:
+demographics.gender: male
+demographics.age: 20-25
+appearance.height: short
+appearance.build: heavy-built, wide shoulders, slight belly
+appearance.face: rounded childish face
+appearance.eyes: piggy eyes
+appearance.nose: short upturned nose
+appearance.lips: thin lips
+appearance.skin: freckles
+setting.era: Perestroika
+setting.location: outskirts of Moscow
+relationship.rita: in love with Rita Vlasova
+Stage 2 context:
+{"attributes":[{"key":"culture.period","value":"Perestroika-era Moscow outskirts","confidence":0.9},{"key":"culture.housing","value":"communal apartment block","confidence":0.85}]}
