@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createEntity, writeAttribute } from '../db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../db/sqlite.js'
-import { detectEntityBibleGaps } from './detectGaps.js'
+import { detectEntityBibleGaps, suggestedStageForBibleField } from './detectGaps.js'
 
 const tempDirs = []
 const openDbs = []
@@ -29,6 +29,14 @@ function openTempDb() {
   return db
 }
 
+describe('suggestedStageForBibleField', () => {
+  it('maps character demographics and visuals to S1/S2/S5', () => {
+    expect(suggestedStageForBibleField('character', 'demographics', 'gender')).toBe(1)
+    expect(suggestedStageForBibleField('character', 'demographics', 'eraLabel')).toBe(2)
+    expect(suggestedStageForBibleField('character', 'visuals', 'portraitBrief')).toBe(5)
+  })
+})
+
 describe('detectEntityBibleGaps', () => {
   it('returns error gap when entity is missing', () => {
     const db = openTempDb()
@@ -43,9 +51,11 @@ describe('detectEntityBibleGaps', () => {
     createEntity(db, { id: 'e1', type: 'character', name: 'Hero' })
     const gaps = detectEntityBibleGaps(db, 'e1')
     expect(gaps.some((g) => g.field === 'description' && g.suggestedStageId === 1)).toBe(true)
+    expect(gaps.some((g) => g.field === 'demographics.gender' && g.suggestedStageId === 1)).toBe(true)
+    expect(gaps.some((g) => g.field === 'visuals.portraitBrief' && g.suggestedStageId === 5)).toBe(true)
   })
 
-  it('returns empty when description canon exists', () => {
+  it('after bank lift (description only), still reports missing required bible fields', () => {
     const db = openTempDb()
     createEntity(db, { id: 'e2', type: 'character', name: 'Hero' })
     writeAttribute(db, {
@@ -54,9 +64,11 @@ describe('detectEntityBibleGaps', () => {
       value: 'Has text',
       provenance: 'canon',
       confidence: 1,
-      sourceStage: 1,
+      sourceStage: 'lift',
     })
     const gaps = detectEntityBibleGaps(db, 'e2')
-    expect(gaps).toEqual([])
+    expect(gaps.some((g) => g.field === 'description')).toBe(false)
+    expect(gaps.some((g) => g.field === 'demographics.gender')).toBe(true)
+    expect(gaps.length).toBeGreaterThan(5)
   })
 })

@@ -75,13 +75,13 @@ export async function mapErrors(p) {
 
 /**
  * @param {string} entityId
- * @returns {Promise<{ bible: unknown, provenance: unknown }>}
+ * @returns {Promise<{ bible: unknown, provenance: unknown, entityType?: string }>}
  */
 export async function fetchBible(entityId) {
   const id = encodeURIComponent(entityId)
   const data = await mapErrors(apiGet(`/api/bibles/${id}`))
-  const d = /** @type {{ bible?: unknown, provenance?: unknown }} */ (data)
-  return { bible: d.bible, provenance: d.provenance }
+  const d = /** @type {{ bible?: unknown, provenance?: unknown, entityType?: string }} */ (data)
+  return { bible: d.bible, provenance: d.provenance, entityType: d.entityType }
 }
 
 /**

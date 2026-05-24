@@ -4,7 +4,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createEntity, listAttributes, writeAttribute } from '../../lib/db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../../lib/db/sqlite.js'
-import { projectCharacterBible } from '../../lib/bibles/projection.js'
+import { projectBibleView } from '../../lib/bibles/projection.js'
 import { discoverRoutes } from '../../vite-plugin/route-discovery.js'
 import approveSectionRoute from './approve-section.route.js'
 import completenessRoute from './completeness.route.js'
@@ -128,8 +128,7 @@ describe('bibles HTTP routes (ya8d)', () => {
       const db = openDb(dbPath)
       createEntity(db, { id: 'ent_g', type: 'character', name: 'G' })
       seedFixtureAttributes(db, 'ent_g', minimalCharacterFixture)
-      const projected = projectCharacterBible(db, 'ent_g')
-      const { _provenance, ...bibleOnly } = projected
+      const view = projectBibleView(db, 'ent_g')
 
       const { res, out } = mockRes()
       const req = /** @type {import('http').IncomingMessage} */ ({
@@ -140,9 +139,37 @@ describe('bibles HTTP routes (ya8d)', () => {
       await withSqlitePath(dbPath, () => getBibleRoute.handler(req, res))
 
       expect(out.status).toBe(200)
-      expect(out.body?.bible).toEqual(bibleOnly)
+      expect(out.body?.bible).toEqual(view.bible)
       expect(out.body?.bible).not.toHaveProperty('_provenance')
-      expect(out.body?.provenance).toEqual(_provenance)
+      expect(out.body?.provenance).toEqual(view.provenance)
+      expect(out.body?.entityType).toBe('character')
+    })
+
+    it('returns partial bible after bank lift (description only, no Zod error)', async () => {
+      const dbPath = tempDbPath()
+      const db = openDb(dbPath)
+      createEntity(db, { id: 'ent_lift', type: 'character', name: 'Lifted' })
+      writeAttribute(db, {
+        entityId: 'ent_lift',
+        key: 'description',
+        value: 'Weary detective in a wool coat.',
+        provenance: 'canon',
+        confidence: 1,
+        sourceStage: 'lift',
+      })
+
+      const { res, out } = mockRes()
+      const req = /** @type {import('http').IncomingMessage} */ ({
+        method: 'GET',
+        url: '/api/bibles/ent_lift',
+      })
+
+      await withSqlitePath(dbPath, () => getBibleRoute.handler(req, res))
+
+      expect(out.status).toBe(200)
+      expect(out.body?.entityType).toBe('character')
+      expect(out.body?.bible).toEqual({})
+      expect(out.body?.provenance).toEqual({})
     })
 
     it('returns 404 for unknown entity', async () => {

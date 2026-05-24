@@ -81,7 +81,9 @@ export default function BibleEditor({ entityId }) {
         throw new Error('Invalid bible response')
       }
       const bible = /** @type {Record<string, unknown>} */ (stripProvenance(bibleRaw))
-      const rootSchema = detectBibleRootSchema(bible)
+      const entityType =
+        typeof bibleRes?.entityType === 'string' ? bibleRes.entityType : undefined
+      const rootSchema = detectBibleRootSchema(bible, entityType)
       const sectionEntries = listBibleObjectSectionEntries(rootSchema)
       const flatProv =
         bibleRes?.provenance && typeof bibleRes.provenance === 'object'

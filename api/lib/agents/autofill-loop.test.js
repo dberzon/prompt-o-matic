@@ -57,6 +57,12 @@ describe('runAutofillLoop', () => {
       entityId: 'ent_fill',
       llm,
       cache: makeIsolatedCache(),
+      detectGaps: (gapDb, gapEntityId) => {
+        const keys = new Set(listAttributes(gapDb, { entityId: gapEntityId }).map((a) => a.key))
+        return keys.has('description')
+          ? []
+          : [{ field: 'description', severity: 'high', suggestedStageId: 1 }]
+      },
       onEvent: (e) => events.push(e.type),
     })
     expect(out.terminationReason).toBe('complete')
@@ -80,6 +86,12 @@ describe('runAutofillLoop', () => {
       entityId: 'ent_budget',
       llm,
       cache: makeIsolatedCache(),
+      detectGaps: (gapDb, gapEntityId) => {
+        const keys = new Set(listAttributes(gapDb, { entityId: gapEntityId }).map((a) => a.key))
+        return keys.has('description')
+          ? []
+          : [{ field: 'description', severity: 'high', suggestedStageId: 1 }]
+      },
       budgetTokens: 1,
       meterLlmCall: () => 500,
     })
@@ -98,6 +110,7 @@ describe('runAutofillLoop', () => {
       entityId: 'ent_bad',
       llm,
       cache: makeIsolatedCache(),
+      detectGaps: () => [{ field: 'description', severity: 'high', suggestedStageId: 1 }],
       maxIterations: 6,
     })
     expect(out.terminationReason).toBe('complete')
@@ -114,6 +127,7 @@ describe('runAutofillLoop', () => {
       entityId: 'ent_cap',
       llm: vi.fn(async () => s1DescriptionPayload),
       cache: makeIsolatedCache(),
+      detectGaps: () => [{ field: 'description', severity: 'high', suggestedStageId: 1 }],
       maxIterations: 0,
     })
     expect(out.terminationReason).toBe('max-iterations')

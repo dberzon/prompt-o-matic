@@ -12,6 +12,7 @@ import { PropBibleSchema } from './schemas/propBible.schema.js'
 import {
   EntityNotFoundError,
   projectBible,
+  projectBibleView,
   projectCharacterBible,
   projectEraBible,
   projectLocationBible,
@@ -287,6 +288,27 @@ describe('projectBible / projection', () => {
     PropBibleSchema.parse(bible)
     expect(bible.identity.label).toBe('leather jacket')
     expect(_provenance['visuals.continuityNotes']).toBe('derived')
+  })
+
+  it('projectBibleView returns empty bible without parsing required sections', () => {
+    const dbPath = createTempDbPath()
+    process.env.SQLITE_DB_PATH = dbPath
+    process.env.APP_MODE = 'local-studio'
+    const db = ensureDb(dbPath)
+    createEntity(db, { id: 'ent_empty', type: 'character', name: 'Empty' })
+    writeAttribute(db, {
+      entityId: 'ent_empty',
+      key: 'description',
+      value: 'Only a bank description.',
+      provenance: 'canon',
+      confidence: 1,
+      sourceStage: 'lift',
+    })
+    const view = projectBibleView(db, 'ent_empty')
+    expect(view.entityType).toBe('character')
+    expect(view.bible).toEqual({})
+    expect(view.provenance).toEqual({})
+    expect(() => CharacterBibleSchema.parse(view.bible)).toThrow()
   })
 
   it('projectBible dispatches environment to Character Bible', () => {

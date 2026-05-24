@@ -341,6 +341,42 @@ export function projectPropBible(db, entityId) {
 }
 
 /**
+ * Partial bible projection for read/UI paths (no Zod parse — empty sections are omitted).
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {string} entityId
+ * @returns {{ entityType: string, bible: Record<string, unknown>, provenance: Record<string, EntityAttributeProvenance> }}
+ */
+export function projectBibleView(db, entityId) {
+  const entity = requireEntity(db, entityId)
+  /** @type {Map<string, { value: unknown; provenance: string }>} */
+  let leafMap
+  switch (entity.type) {
+    case 'character':
+    case 'environment':
+    case 'institution':
+      leafMap = buildCharacterBibleLeafMap(db, entityId)
+      break
+    case 'location':
+      leafMap = buildLocationBibleLeafMap(db, entityId)
+      break
+    case 'era':
+      leafMap = buildEraBibleLeafMap(db, entityId)
+      break
+    case 'prop':
+      leafMap = buildPropBibleLeafMap(db, entityId)
+      break
+    default:
+      throw new Error(`projectBibleView: unsupported entity type: ${entity.type}`)
+  }
+  return {
+    entityType: entity.type,
+    bible: leafMapToNestedObject(leafMap),
+    provenance: leafMapToProvenance(leafMap),
+  }
+}
+
+/**
  * @param {import('better-sqlite3').Database} db
  * @param {string} entityId
  * @returns
