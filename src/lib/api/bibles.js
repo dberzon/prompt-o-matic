@@ -104,3 +104,40 @@ export function approveBibleSection(entityId, section, note) {
   const body = note !== undefined && note !== null ? { section, note } : { section }
   return mapErrors(apiPost(`/api/bibles/${id}/approve-section`, body))
 }
+
+/**
+ * @typedef {{
+ *   id: string
+ *   entityId: string
+ *   projectId?: string | null
+ *   label: string
+ *   bibleJson: unknown
+ *   parentSnapshotId?: string | null
+ *   createdAt: string
+ * }} SnapshotRecord
+ */
+
+/**
+ * @param {string} entityId
+ * @returns {Promise<SnapshotRecord[]>}
+ */
+export async function listSnapshots(entityId) {
+  const id = encodeURIComponent(entityId)
+  const data = await mapErrors(apiGet(`/api/bibles/${id}/snapshots`))
+  const d = /** @type {{ snapshots?: SnapshotRecord[] }} */ (data)
+  return d.snapshots ?? []
+}
+
+/**
+ * @param {string} snapshotId
+ * @returns {Promise<SnapshotRecord>}
+ */
+export async function getSnapshot(snapshotId) {
+  const id = encodeURIComponent(snapshotId)
+  const data = await mapErrors(apiGet(`/api/bibles/snapshots/${id}`))
+  const d = /** @type {{ snapshot?: SnapshotRecord }} */ (data)
+  if (!d.snapshot) {
+    throw new NotFoundError('Snapshot not found')
+  }
+  return d.snapshot
+}
