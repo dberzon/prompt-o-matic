@@ -116,12 +116,27 @@ import entityExtrapolateStage5Handler from './api/entity-extrapolate-stage5.js'
 // ── Chroma auto-spawn ─────────────────────────────────────────────────────────
 let chromaProcess = null
 
+function chromaProbeBaseUrls(url = 'http://127.0.0.1:8000') {
+  const bases = new Set(['http://127.0.0.1:8000', 'http://localhost:8000'])
+  try {
+    const u = new URL(url.replace(/\/$/, ''))
+    const port = u.port || '8000'
+    const base = `${u.protocol}//${u.hostname}:${port}`
+    bases.add(base)
+    if (u.hostname === '127.0.0.1') bases.add(`${u.protocol}//localhost:${port}`)
+    else if (u.hostname === 'localhost') bases.add(`${u.protocol}//127.0.0.1:${port}`)
+  } catch { /* keep fallbacks */ }
+  return [...bases]
+}
+
 async function isChromaRunning(url = 'http://127.0.0.1:8000') {
-  for (const endpoint of [`${url}/api/v2/heartbeat`, `${url}/api/v1/heartbeat`]) {
-    try {
-      const res = await fetch(endpoint, { signal: AbortSignal.timeout(1500) })
-      if (res.ok) return true
-    } catch { /* try next */ }
+  for (const base of chromaProbeBaseUrls(url)) {
+    for (const endpoint of [`${base}/api/v2/heartbeat`, `${base}/api/v1/heartbeat`]) {
+      try {
+        const res = await fetch(endpoint, { signal: AbortSignal.timeout(1500) })
+        if (res.ok) return true
+      } catch { /* try next */ }
+    }
   }
   return false
 }
@@ -254,7 +269,7 @@ function apiDevPlugin(env) {
   return {
     name: 'api-dev-polish',
     configureServer(server) {
-      const chromaUrl = env.CHROMA_URL || 'http://127.0.0.1:8000'
+      const chromaUrl = env.CHROMA_URL || 'http://localhost:8000'
       const llmGenerate = createLlmClient({ env, fetchImpl: fetch }).raw
 
       const autoStartChroma = env.AUTO_START_CHROMA !== 'false'

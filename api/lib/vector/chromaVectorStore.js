@@ -1,6 +1,6 @@
 import { ChromaClient } from 'chromadb'
 
-const DEFAULT_CHROMA_URL = 'http://127.0.0.1:8000'
+const DEFAULT_CHROMA_URL = 'http://localhost:8000'
 const DEFAULT_CHARACTER_COLLECTION = 'characters'
 
 function normalizeMatches(queryResult) {
