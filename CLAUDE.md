@@ -34,7 +34,7 @@ bd close <id>         # Complete work
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   bd dolt push
+   bd dolt push  # no-op here (no Dolt remote configured); kept for forward-compat
    git push
    git status  # MUST show "up to date with origin"
    ```
