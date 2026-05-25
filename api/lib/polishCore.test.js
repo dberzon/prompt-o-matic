@@ -123,7 +123,36 @@ describe('polish system message bible context', () => {
   })
 })
 
+/** Payload shape sent by usePolish (explicit nulls for absent optional fields). */
+const usePolishStylePayload = {
+  fragments: ['cinematic medium shot', 'warm amber tone'],
+  directorName: null,
+  directorNote: null,
+  scene: 'a quiet street at dusk',
+  scenario: null,
+  frontPrefix: '',
+  narrativeBeat: null,
+  engine: 'auto',
+  localOnly: false,
+  embeddedPort: null,
+  embeddedSecret: null,
+  embeddedModel: null,
+  localProvider: null,
+  lmStudioBaseUrl: null,
+  lmStudioModel: null,
+  cloudProvider: null,
+}
+
 describe('parsePolishRequest', () => {
+  it('accepts usePolish-style payload with null optional fields', () => {
+    const parsed = parsePolishRequest(usePolishStylePayload)
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    expect(parsed.data.fragments).toEqual(usePolishStylePayload.fragments)
+    expect(parsed.data.directorName).toBeNull()
+    expect(parsed.data.scenario).toBeNull()
+  })
+
   it('rejects blank entityId', () => {
     const parsed = parsePolishRequest({
       fragments: ['a'],
@@ -206,6 +235,39 @@ describe('polish route schema', () => {
     )
     expect(res.statusCode).toBe(400)
     expect(res.payload?.error).toMatch(/Invalid polish request/i)
+  })
+
+  it('returns 200 for usePolish-style body with null optionals', async () => {
+    process.env.LLM_PROVIDER = 'mock'
+    const fetchImpl = vi.fn(async (url) => {
+      const s = String(url)
+      if (s.includes('/api/tags')) {
+        return { ok: true, json: async () => ({ models: [] }) }
+      }
+      return { ok: false, text: async () => 'unexpected' }
+    })
+
+    const originalFetch = globalThis.fetch
+    globalThis.fetch = fetchImpl
+    try {
+      const res = mockRes()
+      await polishHandler(
+        {
+          method: 'POST',
+          body: {
+            ...usePolishStylePayload,
+            engine: 'local',
+            mockResponse: 'polished via nullish contract',
+          },
+        },
+        res,
+      )
+      expect(res.statusCode).toBe(200)
+      expect(res.payload?.polished).toContain('polished via nullish contract')
+    } finally {
+      globalThis.fetch = originalFetch
+      delete process.env.LLM_PROVIDER
+    }
   })
 })
 
