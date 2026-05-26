@@ -6,18 +6,19 @@
 
 ## Current State
 
-All four application tabs are operational:
+The UI uses a **6-step workflow stepper** (`NavigationStepper.jsx`). Steps 1–4 are implemented; Steps 5–6 (Render, Portfolio) are placeholders.
 
-- **Prompt Builder** — Full assembly pipeline (61 directors, 29 REWRITES, deduplication, polish, variants, saved prompts/workspace profiles in SQLite). Character slots can be linked to Actor Bank characters; the linked character's description replaces the anonymous demographic descriptor in director scenario templates. Actor Bank characters are also available as `@slug` tokens in the scene input field (full visual description expansion). Includes manual Edit prompt mode, **Polish current text** for human→AI iteration on the displayed prompt, Comfy render from displayed text, and A/B compare snapshots with per-tab `sessionStorage` restore.
-- **Character Builder** — Character bank entry form with AI description optimization, optional identity hints, and guidance strength (`light` / `strict_casting`) plus an in-tab **How this tab works** walkthrough.
-- **Casting Room** — Path A (audition) and Path B (batch + similarity) fully functional; ComfyUI auto-poll/auto-ingest; SSE render events; active character portfolio management
-- **Actor Bank** — Full character management UI: lifecycle status badges, image count, archived-characters toggle, inline rename, archive/restore, image keep/discard curation, sort options (recent renders / recently created / A–Z), portfolio re-queue on failure, and "Open in Casting Room" cross-tab bridge.
+- **Step 1 — Casting** — Three sub-tabs: **Casting Pipeline** (Path A audition + Path B batch, ComfyUI auto-poll/auto-ingest, SSE render events, active character portfolio), **Character Builder** (bank entries with identity hints/guidance strength), **Actor Bank** (full character management UI with lifecycle badges, archive/restore, sort, Open in Casting Room bridge)
+- **Step 2 — Bible** — Entity lift from bank entry; bible editor (`src/features/bible/`); visual anchors
+- **Step 3 — Extrapolation** — Type-aware extrapolation (`stageRegistry.js`), attribute review, S6 conflicts, MVP Done gate continuity QA (`EntityContinuityQaPanel`)
+- **Step 4 — Prompt Studio** — Full assembly pipeline (61 directors, 29 REWRITES, deduplication, polish, variants, saved prompts/workspace profiles in SQLite). Actor Bank slot linking + `@slug` expansion. Manual Edit prompt, Polish current text, Comfy render, A/B compare with `sessionStorage` restore. `BibleQuickRef` sidebar when entity active.
 
 ---
 
 ## Known Gaps
 
-None at this time. All planned milestones through P6 are complete.
+- **Steps 5–6 (Render, Portfolio)** — Placeholder UI only; not yet implemented.
+- **Standalone Continuity tab** — Removed; continuity QA lives in Extrapolation step (Step 3).
 
 ---
 
@@ -30,6 +31,7 @@ None at this time. All planned milestones through P6 are complete.
 - P5 — Prompt storage migration to SQLite, blend fix, display priority fixes, documentation update
 - P6 — Actor Bank full UI (AB1–AB7) + initial Prompt Builder ↔ Actor Bank integration (pv9: bankCharId slot linking + effectiveCharacters @slug merge)
 - P7 — Prompt Builder ↔ Actor Bank integration Phase 1-3: slug + prompt_descriptor columns on characters, LLM descriptor generation endpoint, auto-gen on creation (both paths), slug/descriptor backfill, ActorDetail descriptor UI; ActorBankPicker component + character slot import in DirectorSection, actorBankId state shape, share URL v2; actorBankSlugs cache + @slug expansion reads from Actor Bank, SceneInput @slug autocomplete
+- P8 — Workflow stepper redesign: 6-step navigation (Casting → Bible → Extrapolation → Prompt Studio → Render → Portfolio placeholders); `WorkspaceContext` extraction; Step 1 sub-tabs; projects/bibles API routes; extrapolation streaming endpoints
 
 ---
 

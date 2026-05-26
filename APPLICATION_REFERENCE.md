@@ -1,6 +1,6 @@
 # APPLICATION_REFERENCE.md
 
-*Written from source code — May 2026. Updated after P6 (Actor Bank full UI + pv9). Code wins over any other documentation.*
+*Written from source code — May 2026. Updated after workflow stepper redesign (6 steps) and bible/extrapolation routes. Code wins over any other documentation.*
 
 ---
 
@@ -8,19 +8,23 @@
 
 Qwen Prompt Builder (QPB) is a local-first creative tool for constructing, managing, and rendering cinematic text-to-image prompts, primarily targeting the Qwen image generation model via a locally-running ComfyUI instance. It is intended for photographers, directors, and creative professionals who want structured control over the visual language of AI-generated images, and for casting/character development work that requires generating and evaluating many AI actor portraits.
 
-**Four tabs and their single jobs:**
+**Six-step workflow and their single jobs:**
 
-- **Prompt Builder** — Constructs and refines a single text-to-image prompt from freetext scene input, director style chips, scenario templates, and an optional LLM polish pass. Supports **Edit prompt** (read-only vs textarea), **Polish with AI** (fuse assembled fragments) vs **Polish current text** (refine the on-screen prompt as a single fragment), **Render in ComfyUI** from the displayed text, and **A/B snapshot compare** (two saved prompts, per-slot Comfy results with tab-scoped `sessionStorage` under `qpb_compare_renders_v1` and per-column clear). This is the primary creative composition interface.
-- **Character Builder** — Creates and manages named character bank entries that describe a specific person's appearance. Optional **identity hints** (dropdowns) and **guidance strength** (`light` vs `strict_casting`) merge into the description sent to optimize and save. These entries are the input for the Casting Room's Path A (audition) flow.
-- **Casting Room** — Generates AI actor portfolios through two paths: Path A (audition from bank, LLM generates character variations from a bank entry, then ComfyUI renders them), and Path B (batch generation using vector similarity checking). Also hosts the Active Character section for managing approved characters and queuing portfolio renders.
-- **Actor Bank** — Full character management interface for the `characters` table. Grid view with filters (search, gender, age) and sort options. Per-character detail view with: inline rename, archive/restore, image keep/discard curation, portfolio re-queue on failure, and "Open in Casting Room" cross-tab bridge. All management actions that previously required the Casting Room are now available here.
+The UI uses `NavigationStepper.jsx` with `activeStep` in `App.jsx`. Steps 5–6 are placeholders.
 
-**Dependency relationships between tabs:**
+- **Step 1 — Casting** — Three sub-tabs in `CastingStepContainer.jsx`: **Casting Pipeline** (Path A audition + Path B batch + Active Character + Comfy render system), **Character Builder** (bank entries with identity hints/guidance strength), **Actor Bank** (full `characters` table management).
+- **Step 2 — Bible** — Lift bank entry to entity; edit entity bible (`src/features/bible/BibleEditor.jsx`); visual anchors (`VisualAnchorPicker`).
+- **Step 3 — Extrapolation** — Type-aware LLM extrapolation, attribute review, S6 conflicts, continuity QA (`EntityContinuityQaPanel`). Requires `activeEntityId` from Step 2.
+- **Step 4 — Prompt Studio** — Former Prompt Builder. Constructs/refines prompts from scene, director chips, scenarios, LLM polish. State in `WorkspaceContext.jsx`. Supports Edit prompt, Polish with AI vs Polish current text, Comfy render, A/B compare (`sessionStorage` key `qpb_compare_renders_v1`), and `BibleQuickRef` sidebar.
+- **Steps 5–6 — Render / Portfolio** — Placeholders only.
 
-- Character Builder produces bank entries (SQLite `character_bank_entries` table) that Path A in the Casting Room consumes.
-- Casting Room produces character records (SQLite `characters` table) and generated images that the Actor Bank displays.
-- Prompt Builder reads Actor Bank characters on mount via `GET /api/characters`. These feed two integrations: (1) character slots in DirectorSection can be linked to a named Actor Bank character, replacing the anonymous demographic descriptor in director scenario templates; (2) Actor Bank characters are merged into `effectiveCharacters` so `@slug` tokens in the scene input expand to the character's full `optimizedDescription` from the database (in addition to the existing localStorage Character Builder entries).
-- Actor Bank provides a cross-tab "Open in Casting Room" action that switches the active tab to `pipeline` and sets `selectedCharacterId` in `CastingPipelinePanel` via the `jumpToCharacterId` prop.
+**Dependency relationships between steps:**
+
+- Casting Step 1 selects `activeCharId`; Bible Step 2 lifts to `activeEntityId`; Extrapolation Step 3 and Prompt Studio Step 4 consume that entity context.
+- Character Builder bank entries feed Casting Pipeline Path A.
+- Casting Pipeline produces `characters` records and images that Actor Bank displays.
+- Prompt Studio reads Actor Bank via character slot linking and `@slug` expansion (`effectiveCharacters` in `WorkspaceContext`).
+- Actor Bank **Open in Casting Room →** sets `activeSubTab='casting-pipeline'` within Step 1 (via `setActiveSubTab` in `ActorBankView.jsx`).
 
 **External service dependencies:**
 
@@ -320,7 +324,7 @@ No foreign key constraints are declared in the DDL. Relationships are maintained
 
 ## SECTION 3 — Complete API Reference
 
-All routes are registered as Vite dev-server middleware in `vite.config.js`. There is no separate Express/Fastify server. All routes are prefixed `/api/`.
+All routes are registered as Vite dev-server middleware in `vite.config.js` and/or auto-discovered from `api/routes/**/*.route.js` via `qpbDevServer`. There is no separate Express/Fastify server. All routes are prefixed `/api/`.
 
 ### Environment variables
 
@@ -1045,15 +1049,16 @@ Auth/gating: None
 
 ---
 
-## SECTION 4 — Prompt Builder Tab
+## SECTION 4 — Prompt Studio Step (formerly Prompt Builder)
 
-### 4.1 State variables in App.jsx
+### 4.1 State variables
 
-All state relevant to the Prompt Builder:
+Prompt Studio state lives in `WorkspaceContext.jsx` (provider wraps the app in `main.jsx`). `App.jsx` holds workflow navigation only (`activeStep`, `activeCharId`, `activeEntityId`, `activeSubTab`).
+
+Key workspace state (not exhaustive):
 
 | Variable | Type | Initial value | Controls | Persisted |
 |---|---|---|---|---|
-| `activeTab` | string | `'builder'` | Which tab is shown | No |
 | `scene` | string | `''` | Freetext scene/environment input | No (workspace profile) |
 | `selectedDir` | string\|null | `null` | Active director key | No (workspace profile) |
 | `charCount` | number | `1` | Number of characters (1–3) | No (workspace profile) |
@@ -1079,7 +1084,7 @@ All state relevant to the Prompt Builder:
 | `embeddedSetupOpen` | boolean | `false` | Embedded sidecar setup panel | No |
 | `embeddedStatus` | object\|null | `null` | Embedded sidecar connection state | No |
 | `characters` | object | from localStorage | Character Builder slug→entry map | `CHARACTERS_KEY = 'qpb_characters_v1'` |
-| `actorBankSlugs` | object | `{}` (fetched on mount + tab focus) | Slug → `{ promptDescriptor }` lookup for Actor Bank characters. Fetched via `GET /api/characters/slugs` on mount and whenever the user switches to the Prompt Builder tab. Passed to `assemblePrompt` as the `actorBankSlugs` argument. | No (derived) |
+| `actorBankSlugs` | object | `{}` (fetched when entering Step 4) | Slug → `{ promptDescriptor }` lookup for Actor Bank characters. Fetched via `GET /api/characters/slugs` when `activeStep === 4`. Passed to `assemblePrompt` as the `actorBankSlugs` argument. | No (derived) |
 | `availableSlugs` | array | derived | All slugs available for `@slug` autocomplete — combines Character Builder localStorage keys and Actor Bank slug keys. Each entry: `{ slug, name, source: 'Bank'|'Cast' }`. | No (derived) |
 | `effectiveCharacters` | object | derived | `{ ...bankCharDict, ...characters }` — passed to `assemblePrompt` as the `characters` argument. localStorage entries win on slug collision. Character Builder entries also win over Actor Bank in `rewriteScene` @slug expansion. | No (derived) |
 
@@ -1412,7 +1417,7 @@ This is the last bullet in the DIRECTOR REGISTER section, after 16 named directo
 
 ---
 
-## SECTION 5 — Character Builder Tab
+## SECTION 5 — Character Builder (Step 1 sub-tab)
 
 ### What a "character bank entry" is
 
@@ -1470,9 +1475,9 @@ Path A (`/api/audition/generate`) reads `bankEntryId` from the request. `runAudi
 
 ---
 
-## SECTION 6 — Casting Room Tab
+## SECTION 6 — Casting Pipeline (Step 1 sub-tab)
 
-The entire Casting Room is implemented in `src/components/CastingPipelinePanel.jsx`.
+The Casting Pipeline is implemented in `src/components/CastingPipelinePanel.jsx`, rendered inside `CastingStepContainer.jsx` when `activeSubTab === 'casting-pipeline'`.
 
 ### 6.1 Path A — Cast from Bank (Audition)
 
@@ -1651,7 +1656,9 @@ If active jobs exist in DB, polling is restored. Audit jobs are stored in `dbRes
 
 ---
 
-## SECTION 7 — Actor Bank Tab
+## SECTION 7 — Actor Bank (Step 1 sub-tab)
+
+Actor Bank is `src/components/ActorBank/ActorBankView.jsx`, rendered inside `CastingStepContainer.jsx` when `activeSubTab === 'actor-bank'`.
 
 **Files:** `src/components/ActorBank/ActorBankView.jsx`, `ActorCard.jsx`, `ActorBankFilters.jsx`, `ActorDetail.jsx` and their `.module.css` counterparts.
 
@@ -1681,7 +1688,7 @@ Opened by selecting a card in the grid. Loaded via `GET /api/characters?id=<id>`
 
 **Top bar actions (left to right):**
 - **← Back to Actor Bank** — navigates back to grid (no reload)
-- **Open in Casting Room →** — switches `activeTab` to `'pipeline'` in App.jsx and sets `jumpToCharacterId` → consumed by `CastingPipelinePanel.jumpToCharacterId` useEffect which calls `setSelectedCharacterId(id)` then fires `onJumpConsumed()`.
+- **Open in Casting Room →** — calls `setActiveSubTab('casting-pipeline')` in `ActorBankView.jsx` (stays within Step 1). `CastingPipelinePanel` receives `jumpToCharacterId={activeCharId}` from `CastingStepContainer`.
 - **Archive / Restore** — calls `POST /api/character-archive` or `POST /api/character-restore`; on success calls `onArchive`/`onRestore` in parent (`handleDelete` — navigates back + reloads active grid).
 - **Delete** — two-step confirmation; calls `DELETE /api/characters?id=<id>`.
 
@@ -1795,15 +1802,15 @@ These same thresholds are used at Save to Cast time (`saveCandidateAsCharacter` 
 
 ### 8.4 Navigation and Routing
 
-**Tab navigation:** State-based switching via `activeTab` useState in `App.jsx`. Four tabs: `'builder'`, `'characters'`, `'pipeline'`, `'actorBank'`. No router library (no React Router, no URL-based tab routing).
+**Workflow navigation:** State-based 6-step stepper via `activeStep` useState in `App.jsx`. Step 1 has three sub-tabs (`casting-pipeline`, `character-builder`, `actor-bank`) via `activeSubTab`. Steps 5–6 are placeholders. No router library for main workflow (no React Router paths per step). Dev route: `/dev-dashboard` renders a minimal shell.
 
-**State persistence on tab switch:** State is held in React component state in `App.jsx`. Switching tabs does not clear state — all Prompt Builder state (chips, scene, director, etc.) persists when switching to Casting Room and back.
+**State persistence on step switch:** Workflow selection state (`activeCharId`, `activeEntityId`, `activeBankSlug`) persists in `App.jsx`. Prompt Studio workspace state persists in `WorkspaceContext` (including undo/redo history).
 
-**URL-based routing:** The share URL feature encodes workspace state as a base64 JSON blob in the URL hash (`#state=...`). This is decoded on mount (`useEffect` reads `window.location.hash`). It is not true routing — there are no URL paths for different tabs.
+**URL-based routing:** The share URL feature encodes workspace state as a base64 JSON blob in the URL hash (`#state=...`). This is decoded on mount via `ShareLinkContext`. It is not true routing — there are no URL paths for different steps.
 
 **URL share encoding covers:** `scene`, `dirKey`, `charCount`, `chars`, `scenario`, `chips`, `blendEnabled`, `blendDir`, `blendWeight`, `narrativeBeat`, `useStyleKeyForPolish`, `aiEngine`, `localOnly`.
 
-**Cross-tab imperative bridge (Actor Bank → Casting Room):** `App.jsx` holds `castingRoomJumpId` state (null or a character id). `handleOpenInCastingRoom(id)` sets `activeTab='pipeline'` and `castingRoomJumpId=id`. These are passed to `CastingPipelinePanel` as `jumpToCharacterId` and `onJumpConsumed`. A `useEffect` in `CastingPipelinePanel` calls `setSelectedCharacterId(jumpToCharacterId)` and fires `onJumpConsumed()` when the prop is non-null. `selectedCharacterId` is never lifted to App.jsx — the bridge is one-directional and self-clearing.
+**Actor Bank → Casting Pipeline bridge:** Within Step 1, `ActorBankView` sets `activeSubTab='casting-pipeline'` and `activeCharId` when the user clicks Open in Casting Room. `CastingPipelinePanel` receives `jumpToCharacterId={activeCharId}` from `CastingStepContainer`.
 
 ---
 
@@ -1896,7 +1903,9 @@ See Section 4.1 (state variables), Section 4.3 (director system), and Section 2 
 
 | File | What it does | Section |
 |---|---|---|
-| `src/App.jsx` | Root component; all Prompt Builder state; tab switching; blend, presets, profiles | §4.1 |
+| `src/App.jsx` | Root shell; workflow stepper; project/entity/character selection; delegates Prompt Studio to `WorkspaceContext` | §4.1, §8.4 |
+| `src/context/WorkspaceContext.jsx` | Prompt Studio workspace state, undo/redo, profiles, polish prefs | §4.1 |
+| `src/context/ProjectContext.jsx` | Active project selection | §8.4 |
 | `src/index.css` | Global styles | — |
 
 ### `src/components/`
@@ -1911,7 +1920,13 @@ See Section 4.1 (state variables), Section 4.3 (director system), and Section 2 
 | `SceneDeck.jsx` | Pre-authored scene deck cards | §4.2 |
 | `SceneScaffold.jsx` | Scaffold paragraph/chip suggestions | §4.2 |
 | `CharacterBuilder.jsx` | Character bank entry form and management | §5 |
-| `CastingPipelinePanel.jsx` | Entire Casting Room (Path A + B + Active Character + render system) | §6 |
+| `CastingPipelinePanel.jsx` | Casting Pipeline (Path A + B + Active Character + render system) | §6 |
+| `CastingStepContainer.jsx` | Step 1 shell with three sub-tabs | §6, §7 |
+| `BibleStepContainer.jsx` | Step 2 bible editor + entity lift | §8.4 |
+| `ExtrapolationStepContainer.jsx` | Step 3 extrapolation + continuity QA panels | §8.4 |
+| `PromptStudioStep.jsx` | Step 4 prompt assembly UI | §4 |
+| `NavigationStepper.jsx` | 6-step workflow stepper | §8.4 |
+| `BibleQuickRef.jsx` | Prompt Studio sidebar bible reference | §4 |
 | `BatchExplorer.jsx` | Batch list/management UI helper | §6.2 |
 | `EmbeddedSetup.jsx` | Embedded sidecar configuration panel | §4.10 |
 | `ReferenceBoard.jsx` | Reference image analysis board | — |

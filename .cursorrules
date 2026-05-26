@@ -65,14 +65,14 @@ Configured in `.cursor/mcp.json`. Use them when relevant:
 
 ## Architecture Awareness
 
-Single-process Vite app: React 18 UI plus ~55 `/api/*` middleware routes in `vite.config.js` (no separate API server). Five tabs: Prompt Builder, Character Builder, Casting Room, Actor Bank, and Continuity (entity layer, type-aware extrapolation via `stageRegistry.js`, anchors, MVP Done gate).
+Single-process Vite app: React 18 UI plus **~75+** `/api/*` middleware routes in `vite.config.js` and `api/routes/**/*.route.js` (no separate API server). **Six-step workflow:** Casting (Casting Pipeline + Character Builder + Actor Bank sub-tabs), Bible, Extrapolation (entity layer, type-aware extrapolation via `stageRegistry.js`, anchors, MVP Done gate), Prompt Studio, plus Render/Portfolio placeholders.
 
 **Polish flow (do NOT break):**
-`App.jsx` → `utils/assembler.js` → `PromptOutput.jsx` → `hooks/usePolish.js` → `POST /api/polish` → `api/lib/polishCore.js` → provider
+`PromptStudioStep` → `utils/assembler.js` → `PromptOutput.jsx` → `hooks/usePolish.js` → `POST /api/polish` → `api/lib/polishCore.js` → provider
 
 **Provider resolution in `polishCore.js`:** embedded sidecar → local (LM Studio or Ollama, controlled by `LLM_PROVIDER`) → Claude cloud.
 
-**Data layer:** SQLite at `data/qpb-local.sqlite` is canonical. Legacy casting uses `characters` and prompt packs; the entity layer (`entities`, `entity_attributes`, `entity_relationships`, `visual_anchors`) powers Continuity.
+**Data layer:** SQLite at `data/qpb-local.sqlite` is canonical. Legacy casting uses `characters` and prompt packs; the entity layer (`entities`, `entity_attributes`, `entity_relationships`, `visual_anchors`) powers Bible and Extrapolation steps.
 
 For the full layer diagram, polish chain, runtime modes, and subsystem map, read `CLAUDE.md` and `PROJECT_CONTEXT.md`.
 
@@ -150,5 +150,5 @@ For deeper detail, read these directly rather than guessing:
 
 - `CLAUDE.md` — canonical agent guide (mirrored by `.clinerules`)
 - `PROJECT_CONTEXT.md` — subsystem map, runtime modes, key files
-- `AGENT_HANDOFF.md` — tab map and API domains
+- `AGENT_HANDOFF.md` — workflow step map and API domains
 - `APPLICATION_REFERENCE.md` — full technical reference

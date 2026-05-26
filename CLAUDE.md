@@ -90,16 +90,18 @@ Env config lives in `.env.local` (gitignored). Key vars: `LLM_PROVIDER`, `LMSTUD
 
 ## Architecture Overview
 
-**Three-layer, single-process architecture. There is NO separate API server.** React 18 UI and ~55 `/api/*` routes are Vite dev-server middleware registered in `vite.config.js`. `npm run dev` runs everything.
+**Three-layer, single-process architecture. There is NO separate API server.** React 18 UI and **~75+** `/api/*` routes are Vite dev-server middleware registered in `vite.config.js`, plus auto-discovered handlers under `api/routes/**/*.route.js` via `qpbDevServer`. `npm run dev` runs everything.
 
 ```
 src/        React 18 frontend (Vite)
-  App.jsx               root state, tab switching
-  components/           UI (Prompt Builder, Character Builder, Casting Room, Actor Bank, Continuity)
-  hooks/                React hooks (usePolish, useCharacterOptimize, ...)
-  lib/api/              fetch wrappers per domain (http.js, comfy.js, characterBank.js, ...)
+  App.jsx               workflow shell — 6-step stepper, project/entity/character selection
+  context/              ProjectContext, WorkspaceContext (Prompt Studio state), ShareLinkContext, EmbeddedHealthContext
+  components/           UI (CastingStepContainer, BibleStepContainer, ExtrapolationStepContainer, PromptStudioStep, …)
+  hooks/                React hooks (usePolish, useExtrapolation, useExtrapolationStream, useCharacterOptimize, …)
+  lib/api/              fetch wrappers per domain (http.js, comfy.js, bibles.js, entities.js, projects.js, …)
+  features/bible/       Bible editor UI (Step 2)
   utils/                pure functions — assembler.js is the prompt-fragment assembler
-  data/                 static data (60+ directors, scenarios, chips, scene bank)
+  data/                 static data (61 directors, scenarios, chips, scene bank)
 
 api/        Vite middleware route handlers (one file = one route)
   polish.js, comfy-*.js, character-*.js, entity-*.js, vector-*.js, ...
@@ -117,19 +119,19 @@ api/        Vite middleware route handlers (one file = one route)
 ```
 
 **The polish flow (do NOT break this chain):**
-`App.jsx` → `utils/assembler.js` → `PromptOutput.jsx` → `hooks/usePolish.js` → `POST /api/polish` → `api/lib/polishCore.js` → provider (LM Studio / Claude / Ollama)
+`PromptStudioStep` → `utils/assembler.js` → `PromptOutput.jsx` → `hooks/usePolish.js` → `POST /api/polish` → `api/lib/polishCore.js` → provider (LM Studio / Claude / Ollama)
 
 `PromptOutput.jsx` adds **manual edit mode**, **Polish with AI** (assembler fragments) vs **Polish current text** (what is on screen), Comfy preview from the displayed prompt, and **A/B compare** with last renders in `sessionStorage` (`qpb_compare_renders_v1`). `CharacterBuilder.jsx` merges optional **identity hints** and **guidance strength** into the saved `rawDescription` (see `APPLICATION_REFERENCE.md` §5).
 
 **Provider resolution order in `polishCore.js`:** embedded sidecar → local (LM Studio or Ollama, controlled by `LLM_PROVIDER`) → Claude cloud. Engine selector in UI: `auto | local | cloud | embedded`.
 
-**Data layer:** SQLite (`better-sqlite3`) at `data/qpb-local.sqlite` is canonical. Legacy casting uses `characters`, prompt packs, and batches. The additive **entity layer** (`entities`, provenance-tracked `entity_attributes`, `entity_relationships`, `visual_anchors`) powers the **Continuity** tab: extrapolation chains keyed by entity `type` (see `api/lib/extrapolation/stageRegistry.js`), reference anchors, conflict review where applicable, and MVP Done gate (five-scene continuity QA). localStorage holds UI prefs + custom presets only.
+**Data layer:** SQLite (`better-sqlite3`) at `data/qpb-local.sqlite` is canonical. Legacy casting uses `characters`, prompt packs, and batches. The additive **entity layer** (`entities`, provenance-tracked `entity_attributes`, `entity_relationships`, `visual_anchors`) powers **Step 2 (Bible)** and **Step 3 (Extrapolation)**: extrapolation chains keyed by entity `type` (see `api/lib/extrapolation/stageRegistry.js`), reference anchors, conflict review where applicable, and MVP Done gate (five-scene continuity QA). localStorage holds UI prefs + custom presets only.
 
 **Runtime modes (`APP_MODE`):** `local-studio` (full access, current mode) vs `cloud` (read-only, intended for Vercel polish-only deploy).
 
 **For deeper detail, prefer reading these files over guessing:**
-- `PROJECT_CONTEXT.md` — fuller subsystem map (five tabs, entity layer, extrapolation stages)
-- `AGENT_HANDOFF.md` — tab map and API domains for handoffs
+- `PROJECT_CONTEXT.md` — fuller subsystem map (six-step workflow, entity layer, extrapolation stages)
+- `AGENT_HANDOFF.md` — workflow step map and API domains for handoffs
 - `APPLICATION_REFERENCE.md` — full technical reference
 - `.cursorrules` — Cursor MCP servers and safe-zone / danger-zone breakdown
 

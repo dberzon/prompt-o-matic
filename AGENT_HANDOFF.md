@@ -11,32 +11,32 @@ Qwen Prompt Builder (QPB) is a local-first creative tool for constructing, manag
 
 ---
 
-## Five Tabs and Their Dependency Relationships
+## Six-Step Workflow and Dependencies
 
-**Tab 1 — Prompt Builder** (`activeTab='builder'`)
-Constructs and refines a single text-to-image prompt from freetext scene input, director style chips (61 directors), scenario templates, and an optional LLM polish pass. **Polish with AI** fuses assembled fragments; **Polish current text** re-polishes whatever prompt is on screen (manual edits, restored history, variants, or prior polish) as a single fragment so users can iterate human → AI → human. **Edit prompt** toggles a read-only vs textarea view for direct edits; **Render in ComfyUI** always queues the displayed text. Optional **Save to A/B** plus **Render A/B** stores two prompt snapshots, queues Comfy renders tagged to each slot, and shows last successful outputs side by side (with per-tab `sessionStorage` persistence and clear controls). Expand **Workflow tips** (`<details>`) for a compact on-tab guide. Actor Bank characters are available in two ways: (1) character slots can be linked to a named Actor Bank character — the linked character's description replaces the anonymous demographic descriptor in director scenario templates; (2) `@slug` tokens in scene text expand to the character's full `optimizedDescription` from the Actor Bank database (merged with Character Builder localStorage entries).
+The UI uses a **6-step workflow stepper** (`NavigationStepper.jsx`, `activeStep` in `App.jsx`). Steps 5–6 (Render, Portfolio) are placeholders.
 
-**Tab 2 — Character Builder** (`activeTab='characters'`)
-Creates and manages named character bank entries stored in the `character_bank_entries` SQLite table and mirrored to `localStorage['qpb_characters_v1']`. These entries are the input for the Casting Room's Path A (audition) flow. The `@slug` token system in the Prompt Builder reads from both this localStorage key and from the Actor Bank `characters` table. The form supports **optional identity hints** (gender presentation, regional look, age bracket, build, eyes, hair) merged into the text sent to optimize/save, plus **guidance strength** (`light` vs `strict_casting`) to steer how strongly hints constrain the LLM. Expand **How this tab works** for an on-tab walkthrough.
+**Step 1 — Casting** (`CastingStepContainer.jsx`, three sub-tabs)
+- **Casting Pipeline** (`CastingPipelinePanel.jsx`, formerly Casting Room tab): Path A (audition from bank entry → LLM profiles → ComfyUI renders) and Path B (batch + vector similarity). Active Character section for portfolio management and image gallery.
+- **Character Builder** (`CharacterBuilder.jsx`): Named bank entries in `character_bank_entries` SQLite (localStorage cache). Optional identity hints and guidance strength. Feeds Path A.
+- **Actor Bank** (`ActorBank/ActorBankView.jsx`): Full `characters` table management — search/filter, rename, archive/restore, image curation, portfolio re-queue, prompt descriptor edit. **Open in Casting Room →** sets `activeSubTab='casting-pipeline'` within Step 1.
 
-**Tab 3 — Casting Room** (`activeTab='pipeline'`)
-Generates AI actor portfolios through two paths:
-- **Path A (Audition):** Select a bank entry → LLM generates N character profiles → ComfyUI renders portrait views → user reviews and approves candidates.
-- **Path B (Batch):** Generate diverse character candidates with vector similarity screening → review/approve → save to cast.
-Also hosts the Active Character section for renaming, archiving, compiling prompt packs, queuing portfolio renders, and managing the generated image gallery. Can be launched directly from the Actor Bank via the "Open in Casting Room" button.
+**Step 2 — Bible** (`BibleStepContainer.jsx`)
+Lift selected character to an entity (`POST /api/entities/lift-from-bank-entry`). Edit entity bible in `src/features/bible/BibleEditor.jsx`. Manage visual anchors via `VisualAnchorPicker`. Requires `activeCharId` from Step 1.
 
-**Tab 4 — Actor Bank** (`activeTab='actorBank'`)
-Full character management interface for the `characters` table. Grid view with filters (search, gender, age) and sort options (recent renders / recently created / A–Z). Per-character detail view provides: inline rename, archive/restore, image keep/discard curation, portfolio re-queue when `portfolio_failed`, and an "Open in Casting Room" button that switches tabs and sets the active character in one click.
+**Step 3 — Extrapolation** (`ExtrapolationStepContainer.jsx`)
+Type-aware extrapolation (`stageRegistry.js`), attribute review, Stage 6 conflict resolution, and MVP Done gate continuity QA — all embedded here (no standalone Continuity tab). Requires `activeEntityId` from Step 2. Panels: `EntityExtrapolationPanel`, `AttributeReviewPanel`, `EntityConflictPanel`, `EntityContinuityQaPanel`.
 
-**Tab 5 — Continuity** (`activeTab='continuity'`)
-Entity-centric worldbuilding: select or create entities (`type` includes `character`, `environment`, `prop`, `institution`, `location`, `era`), run extrapolation (stage set depends on `type` — see `api/lib/extrapolation/stageRegistry.js`), review inferred attributes, manage primary reference anchors, resolve Stage 6 conflicts on character-shaped chains, and run the MVP Done gate (five-scene continuity QA with blind reviewer scoring). UI: `EntityContinuityPanel`, `EntityEditor`, `EntityExtrapolationPanel`, `AttributeReviewPanel`, `EntityConflictPanel`, `EntityContinuityQaPanel`, `VisualAnchorPicker`.
+**Step 4 — Prompt Studio** (`PromptStudioStep.jsx`, formerly Prompt Builder)
+Constructs and refines prompts from scene input, director chips (61 directors), scenarios, and LLM polish. State in `WorkspaceContext.jsx`. **Polish with AI** fuses assembled fragments; **Polish current text** re-polishes on-screen text. Actor Bank integration: character slot linking + `@slug` expansion via `effectiveCharacters`. Includes `BibleQuickRef` when an entity is active.
+
+**Steps 5–6 — Render / Portfolio** — placeholders only.
 
 **Dependency chain:**
-- Character Builder → Casting Room Path A (bank entries consumed by audition)
-- Casting Room → Actor Bank (characters table is what Actor Bank displays)
-- Actor Bank → Casting Room (cross-tab "Open in Casting Room" bridge via `jumpToCharacterId` prop)
-- Actor Bank → Prompt Builder (character slot linking + `@slug` expansion via `effectiveCharacters`)
-- Prompt Builder reads `effectiveCharacters` = Actor Bank chars (slugified) merged with Character Builder localStorage; localStorage wins on collision
+- Casting (select `activeCharId`) → Bible (lift to `activeEntityId`) → Extrapolation → Prompt Studio
+- Character Builder → Casting Pipeline Path A (bank entries)
+- Casting Pipeline → Actor Bank (characters table)
+- Actor Bank → Casting Pipeline (Open in Casting Room sets sub-tab within Step 1)
+- Actor Bank → Prompt Studio (slot linking + `@slug` via `effectiveCharacters`)
 
 ---
 
@@ -56,12 +56,17 @@ Entity-centric worldbuilding: select or create entities (`type` includes `charac
 
 ---
 
-## API Surface (11 Domains, 55+ Routes)
+## API Surface (14 Domains, 75+ Routes)
 
-All routes are registered in `vite.config.js` as Vite middleware. Prefix: `/api/`.
+All routes are registered in `vite.config.js` as Vite middleware and/or auto-discovered from `api/routes/**/*.route.js` via `qpbDevServer`. Prefix: `/api/`.
 
 | Domain | Routes | Gating |
 |---|---|---|
+| Projects | `GET/POST /api/projects`, `GET /api/projects/:id` | None |
+| Bibles | `GET /api/bibles/:entityId`, snapshots, export (md/pdf), completeness, approve-section, extrapolate | None |
+| Tools | `GET /api/tools`, `POST /api/tools/:name` | None |
+| Agents | `POST /api/agents/autofill-bible` | None |
+| Extrapolation streaming | `GET /api/extrapolation/:runId/status`, `GET /api/extrapolation/:runId/stream` | None |
 | Polish | `POST /api/polish`, `GET /api/polish-health` | Always available |
 | Characters (CRUD + lifecycle + descriptors) | `GET/DELETE /api/characters`, `POST /api/character-lifecycle`, `POST /api/character-rename`, `POST /api/character-archive`, `POST /api/character-restore`, `GET /api/characters/slugs`, `POST /api/character-prompt-descriptor`, `POST /api/characters-backfill-descriptors` | `ENABLE_CHARACTER_BATCH_API` for list/delete; descriptor endpoints always available |
 | Casting / Audition (Path A) | `POST /api/audition/generate` | None |
@@ -126,12 +131,14 @@ Soft-archive is separate: `archived_at` column (ISO timestamp if archived, NULL 
 
 | File | Role |
 |---|---|
-| `src/App.jsx` | Root component; all Prompt Builder state; tab switching; blend, presets, profiles; `actorBankSlugs` cache (fetched on mount + tab focus) + `effectiveCharacters` memo; `castingRoomJumpId` cross-tab bridge state |
+| `src/App.jsx` | Root shell; `activeStep` workflow navigation; project/entity/character selection state; delegates Prompt Studio state to `WorkspaceContext` |
+| `src/context/WorkspaceContext.jsx` | Prompt Studio workspace state (scene, chips, director, profiles, polish prefs); undo/redo |
+| `src/context/ProjectContext.jsx` | Active project selection |
 | `src/utils/assembler.js` | `rewriteScene(raw, characters, actorBankSlugs)`, `assemblePrompt`, `dedupeFragments`, `getCharDesc(gender, age, promptDescriptor?)` |
 | `src/utils/actorBankMapping.js` | `genderPresentationToG`, `ageToBracket` — derive chars `g`/`a` from Actor Bank character profile |
 | `src/utils/slugify.js` | `toSnakeSlug`, `resolveCharacterSlug` — used by `@slug` expansion and Actor Bank character linking |
 | `api/lib/polishCore.js` | System prompt, provider resolution, `runPolish`, `healthCheck` |
-| `vite.config.js` | All 47+ API route handlers registered as Vite middleware; Chroma auto-spawn; SSE watcher |
+| `vite.config.js` | Legacy API route handlers as Vite middleware; `qpbDevServer` discovers `api/routes/**/*.route.js`; Chroma auto-spawn; SSE watcher |
 | `api/lib/db/schema.js` | All CREATE TABLE SQL + MIGRATIONS array |
 | `api/lib/db/repositories.js` | All DB query functions; entity CRUD, `writeAttribute`, relationship and visual-anchor repos; `listCharacters` and `getCharacter` both SELECT `archived_at` alongside `payload_json` and merge it into the returned object |
 | `api/entities.js` | Entity CRUD route handler |

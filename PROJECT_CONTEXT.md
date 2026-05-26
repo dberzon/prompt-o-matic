@@ -6,15 +6,18 @@ For full technical detail, see `APPLICATION_REFERENCE.md`.
 
 ---
 
-## Five Tabs
+## Six-Step Workflow
 
-| Tab | Job |
-|---|---|
-| **Prompt Builder** | Assemble a prompt from scene input, director chips (61 directors), scenario templates, and optional LLM polish. Supports **manual edit mode** (read-only vs textarea), **Polish current text** (re-polish on-screen prompt as one fragment), Comfy **Render in ComfyUI** from the displayed prompt, and **A/B snapshot compare** (two saved prompts, per-slot Comfy results, `sessionStorage` restore). Independent of the other tabs. |
-| **Character Builder** | Author named character descriptions (bank entries) stored in SQLite and mirrored to localStorage. Optional **identity hints** and **guidance strength** (light vs strict casting) merge into the optimized/saved description. These feed Path A in the Casting Room. |
-| **Casting Room** | Two paths: Path A (audition from bank entry, LLM generates profiles, ComfyUI renders) and Path B (batch generation with vector similarity screening). Shared Active Character section for portfolio management and image gallery. |
-| **Actor Bank** | Full character management interface for the `characters` table. Grid with search/filter. Detail view: inline rename, archive/restore, image curation, portfolio re-queue, prompt descriptor edit/generate. Characters can be imported into Prompt Builder slots. |
-| **Continuity** | Worldbuilding entity editor: type-aware extrapolation (`stageRegistry.js`), attribute review, primary reference anchors, Stage 6 conflict resolution on character-shaped chains, and MVP Done gate (five-scene continuity QA with blind reviewer scoring). |
+The UI uses a **6-step workflow stepper** (`NavigationStepper.jsx`). Steps 5–6 are placeholders.
+
+| Step | Label | Job |
+|---|---|---|
+| **1 — Casting** | Casting Pipeline, Character Builder, Actor Bank | Three sub-tabs in `CastingStepContainer.jsx`. Casting Pipeline hosts Path A/B (formerly Casting Room), Active Character, and Comfy render system. Character selection (`activeCharId`) gates progression to Step 2. |
+| **2 — Bible** | Entity bible editor + visual anchors | `BibleStepContainer.jsx` — lift a bank entry to an entity via `POST /api/entities/lift-from-bank-entry`; edit canon in `src/features/bible/BibleEditor.jsx`. |
+| **3 — Extrapolation** | Type-aware LLM extrapolation + continuity QA | `ExtrapolationStepContainer.jsx` — requires `activeEntityId` from Step 2. Embeds `EntityExtrapolationPanel`, `AttributeReviewPanel`, `EntityConflictPanel`, and `EntityContinuityQaPanel` (MVP Done gate). |
+| **4 — Prompt Studio** | Prompt assembly, polish, Comfy preview | `PromptStudioStep.jsx` (formerly Prompt Builder). Workspace state lives in `WorkspaceContext.jsx`. Supports manual edit mode, **Polish current text**, Comfy render from displayed prompt, and A/B compare (`sessionStorage` key `qpb_compare_renders_v1`). Includes `BibleQuickRef` sidebar when an entity is active. |
+| **5 — Render** | *(placeholder)* | Not yet implemented. |
+| **6 — Portfolio** | *(placeholder)* | Not yet implemented. |
 
 ---
 
@@ -53,6 +56,9 @@ Chroma stores character embeddings. Used for batch deduplication and Save-to-Cas
 
 ### ComfyUI Integration (`api/lib/comfy/comfyService.js`)
 Queues prompt packs to ComfyUI, polls job status, ingests output images into `generated_images` table. SSE endpoint (`GET /api/render-events`) broadcasts render-update events at 2-second polling interval. Frontend subscribes via `EventSource` and falls back to 20-second polling. Job state persisted in `comfy_jobs` SQLite table — survives page reloads.
+
+### Projects and bibles (`api/routes/projects/`, `api/routes/bibles/`, `src/features/bible/`)
+Multi-step workflow scaffolding: projects (`GET/POST /api/projects`, `GET /api/projects/:id`) scope workspace state. Entity bibles (`GET /api/bibles/:entityId`, snapshots, export, completeness, approve-section, extrapolate) and agent autofill (`POST /api/agents/autofill-bible`) power Step 2. Extrapolation streaming: `GET /api/extrapolation/:runId/status` and `.../stream`.
 
 ### Entity layer (`api/entities.js`, `api/entity-*`, `api/lib/db/repositories.js`)
 Additive worldbuilding persistence alongside legacy `characters`: `entities`, provenance-tracked `entity_attributes`, `entity_relationships`, and `visual_anchors`. REST handlers under `/api/entities/*` support CRUD, relationship management, anchor upload, attribute promote/dismiss/edit, and S6 conflict resolve/dismiss. Prompt packs compile from entity canon + inferred/derived attributes via `POST /api/promptpack/from-entity/:id` (relationship-derived attrs use `relation.<type>:<other_slug>` keys and scope gating). Attribute writes outside tests must go through `writeAttribute`; `api/lib/db/entityAttributesProvenanceGuard.test.js` blocks direct `INSERT INTO entity_attributes` elsewhere.
@@ -122,4 +128,4 @@ Five `ENABLE_*` flags gate API domains: `ENABLE_CHARACTER_BATCH_API`, `ENABLE_PR
 
 ## Architecture: No Separate Server
 
-All API routes are Vite dev-server middleware plugins registered in `vite.config.js`. There is no Express or Fastify server. The frontend and all ~55 API routes run from a single `npm run dev` process. Rebuild `better-sqlite3` when the Node major used for `npm run dev` changes.
+All API routes are Vite dev-server middleware plugins registered in `vite.config.js`, plus auto-discovered handlers under `api/routes/**/*.route.js` via `qpbDevServer`. There is no Express or Fastify server. The frontend and all **~75+** API routes run from a single `npm run dev` process. Rebuild `better-sqlite3` when the Node major used for `npm run dev` changes.
