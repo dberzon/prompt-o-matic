@@ -29,7 +29,7 @@ All of these must be in place before you start.
 
 ## Stage 1 — Generate a Batch
 
-Open the **Casting Room** tab. You will see five numbered sections. The first is **Batch Pipeline**.
+Open **Step 1 (Casting) → Casting Pipeline** sub-tab. You will see five numbered sections. The first is **Batch Pipeline**.
 
 1. Click **+ Generate Batch** to expand the generation form.
 2. Fill in the parameters:
@@ -128,7 +128,7 @@ A job list appears under the button showing each view and its current status:
 
 The panel polls ComfyUI automatically every few seconds (the `⟳ checking Comfy…` indicator shows polling is active). Polling stops when all jobs reach a terminal state (completed or failed).
 
-> **Switch tabs freely** — polling state is saved in `sessionStorage`. If you leave and return, the panel resumes polling for any pending jobs.
+> **Switch sub-tabs freely** — polling state is saved in `sessionStorage`. If you leave and return, the panel resumes polling for any pending jobs.
 
 ---
 
@@ -159,7 +159,7 @@ To access a saved character in a future session:
 2. Under **Active Character**, open the dropdown — all previously saved characters appear here.
 3. Select one and click **Recompile Packs** to regenerate prompt packs for that character (needed if the workflow has changed or packs were lost).
 
-To view a character's full profile and their reference images, use the **Actor Bank** tab. Every character saved through the Batch Pipeline appears there.
+To view a character's full profile and their reference images, open **Step 1 (Casting) → Actor Bank** sub-tab. Every character saved through the Batch Pipeline appears there.
 
 **Archive vs Delete:** Clicking **Archive** on a character hides it from the Active Character dropdown without deleting it. The character and all its images remain in the database. To restore an archived character, expand **▸ Archived characters** under the dropdown and click **Restore**.
 

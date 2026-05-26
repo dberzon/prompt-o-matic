@@ -123,18 +123,16 @@ Major route groups:
   - `POST /api/extrapolate/character/:id`, `POST /api/extrapolate/stage/:id/:n`, `POST /api/entities/:id/extrapolate/stage/:n`
   - `GET /api/entities/:id/mvp-done-gate`, continuity QA generate/score routes (see `AGENT_HANDOFF.md`)
 
-For exact payloads and phased behavior, see `README.md` and `APPLICATION_REFERENCE.md`.
+For exact payloads and phased behavior, see `CLAUDE.md`, `_archive/AGENT_HANDOFF.md`, and `_archive/APPLICATION_REFERENCE.md`.
 
 ## 8) Frontend Behavior Notes
 
-- Prompt builder state and profile/preset preferences rely heavily on `localStorage`.
-- `src/App.jsx` coordinates:
-  - scene + director + chips assembly,
-  - rule validation and fix-ups,
-  - workspace history,
-  - operator pipeline panel access,
-  - Continuity tab (`EntityContinuityPanel`) for entity worldbuilding.
-- Pipeline/operator flows are exposed through UI components such as `CastingPipelinePanel.jsx`.
+- Workspace UI prefs and custom presets remain in `localStorage`; saved prompts and workspace profiles persist in SQLite (`saved_prompts`, `workspace_profiles` tables).
+- `src/App.jsx` drives a six-step workflow via `NavigationStepper`: Casting → Bible → Extrapolation → Prompt Studio → Render → Portfolio.
+- Step 1 (Casting) uses `CastingStepContainer` with sub-tabs: **Casting Pipeline** (`CastingPipelinePanel.jsx`), **Character Builder**, and **Actor Bank**.
+- Steps 2–3 use `BibleStepContainer` and `ExtrapolationStepContainer` for entity worldbuilding (replacing the legacy `EntityContinuityPanel` shell).
+- Step 4 uses `PromptStudioStep` for scene/director/chip assembly, rule validation, polish, and export.
+- Steps 5–6 (Render, Portfolio) are placeholder shells until their dedicated step containers land.
 
 ## 9) Comfy Workflow Mapping
 

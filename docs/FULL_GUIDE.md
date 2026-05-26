@@ -1,6 +1,6 @@
 # Qwen Prompt Builder — Full Guide
 
-> **Last updated:** 2026-05-13
+> **Last updated:** 2026-05-26
 > Covers: recently completed work, full interface walkthrough, external services reference.
 
 ---
@@ -9,11 +9,12 @@
 
 1. [What Was Recently Completed](#1-what-was-recently-completed)
 2. [Application Interface](#2-application-interface)
-   - [Tab 1 — Prompt Builder](#tab-1--prompt-builder)
-   - [Tab 2 — Character Builder](#tab-2--character-builder)
-   - [Tab 3 — Casting Room](#tab-3--casting-room)
-   - [Tab 4 — Actor Bank](#tab-4--actor-bank)
-   - [Tab 5 — Continuity](#tab-5--continuity)
+   - [Workflow overview — six steps](#workflow-overview--six-steps)
+   - [Step 1 — Casting (sub-tabs)](#step-1--casting-sub-tabs)
+   - [Step 2 — Bible](#step-2--bible)
+   - [Step 3 — Extrapolation](#step-3--extrapolation)
+   - [Step 4 — Prompt Studio](#step-4--prompt-studio)
+   - [Steps 5–6 — Render & Portfolio](#steps-56--render--portfolio)
 3. [Full Workflow Walkthrough](#3-full-workflow-walkthrough)
    - [Journey A — Cast from Bank](#journey-a--cast-from-bank)
    - [Journey B — Batch Pipeline](#journey-b--batch-pipeline)
@@ -148,19 +149,158 @@ All Approve/Reject language was replaced with clearer, context-specific labels:
 - **Auto-poll + auto-ingest:** Audition and portfolio images now ingest automatically when ComfyUI finishes — no manual "Ingest" click required.
 - **LM Studio timeout fixes:** JSON mode, `enable_thinking` suppression, and configurable `max_tokens` added to prevent silent failures with larger LM Studio models.
 - **Casting Room layout restructure:** Panels reorganized into a clearer top-to-bottom flow matching the actual work sequence.
-- **Actor Bank view added:** A dedicated tab for browsing all saved characters with filters.
+- **Actor Bank view added:** A dedicated Step 1 sub-tab for browsing all saved characters with filters.
 
 ---
 
 ## 2. Application Interface
 
-The app has five main tabs accessible via the top navigation bar.
+The app uses a **six-step workflow stepper** (`NavigationStepper` in `src/App.jsx`):
+
+| Step | Label | Primary UI |
+|---|---|---|
+| 1 | Casting | `CastingStepContainer` — three sub-tabs (see below) |
+| 2 | Bible | `BibleStepContainer` — entity editor for the active project |
+| 3 | Extrapolation | `ExtrapolationStepContainer` — staged LLM inference + attribute review |
+| 4 | Prompt Studio | `PromptStudioStep` — scene/director/chip assembly, polish, export |
+| 5 | Render | Placeholder shell (step panel not yet expanded) |
+| 6 | Portfolio | Placeholder shell (step panel not yet expanded) |
+
+Select a project before any step is usable. Use **Next** / **Previous** on each step panel, or click a step in the stepper to jump.
 
 ---
 
-### Tab 1 — Prompt Builder
+### Workflow overview — six steps
 
-The main workspace. Everything here assembles into a single prompt string.
+```
+Step 1 Casting ──► Step 2 Bible ──► Step 3 Extrapolation ──► Step 4 Prompt Studio ──► Step 5 Render ──► Step 6 Portfolio
+     │                    │                    │
+     └─ sub-tabs          └─ entity canon      └─ S1–S6 (or type-aware chain)
+        Casting Pipeline
+        Character Builder
+        Actor Bank
+```
+
+---
+
+### Step 1 — Casting (sub-tabs)
+
+Step 1 combines the legacy casting-room operator flows. Switch sub-tabs at the top of the step panel:
+
+| Sub-tab | Component | Purpose |
+|---|---|---|
+| **Casting Pipeline** | `CastingPipelinePanel` | Journey A (Cast from Bank), Journey B (Batch Pipeline), Active Character, Portfolio, Gallery |
+| **Character Builder** | `CharacterBuilder` | Create and save casting briefs (`@slug` + description) |
+| **Actor Bank** | `ActorBankView` | Browse saved characters; open one in Casting Pipeline |
+
+> See also: `docs/CASTING_ROOM_HOWTO.md` and `docs/BATCH_PIPELINE_HOWTO.md` for step-by-step casting references.
+
+#### Casting Pipeline sub-tab
+
+Two journeys live here side by side.
+
+**Journey A — Cast from Bank**
+
+Produces audition images for a specific casting brief using ComfyUI.
+
+Steps:
+1. Select a casting brief from the dropdown
+2. Select a ComfyUI workflow
+3. Click **Generate Auditions** — LM Studio generates N character profiles
+4. Two ComfyUI jobs queue per candidate: front-facing and profile portrait
+5. Panel polls ComfyUI automatically; images ingest when ready
+6. Review each candidate: **Select this look** or **Pass**
+7. Optionally click **More Takes** to generate additional views of a selected candidate
+
+**Journey B — Batch Pipeline**
+
+Produces a batch of diverse characters without a pre-existing casting brief.
+
+Steps:
+1. Click `+ Generate Batch` and fill in: age range, count, gender, project tone
+2. The system generates candidates and runs a similarity check
+3. Each candidate is labeled: **unique / needs change / too similar**
+4. Review candidates: click **Cast this character** to approve or **Dismiss** to remove
+5. Approved candidates are saved as characters in the database
+
+**Active Character** (shared section)
+
+Once a character is cast (from either journey), they appear as the Active Character.
+
+- **Prompt packs auto-compile** when an Active Character is first selected
+- Click **Recompile Packs** to regenerate if the character description was edited
+- **Rename**: click the character name inline to rename; press Enter to save
+- **Archive**: hides the character from the dropdown; recoverable via the Archived panel
+
+**Portfolio**
+
+Queue a set of views for the Active Character. Available view types:
+- Front portrait
+- 3/4 portrait
+- Profile portrait
+- Full body
+- Audition (dramatic)
+- Cinematic scene
+
+Click **Queue Portfolio** to send all selected views to ComfyUI as separate jobs. Images ingest automatically as jobs complete.
+
+**Gallery**
+
+All generated images for the Active Character appear here.
+- **Keep** — marks image as approved
+- **Discard** — marks image as rejected
+- Subtitle: *Showing images for: [Character Name]*
+
+#### Character Builder sub-tab
+
+Create and manage casting briefs — reusable character descriptions that feed into Journey A.
+
+**Create a casting brief**
+- Enter a name and a description (physical features, personality notes, references).
+- The description is saved as a `@snake_case` slug (e.g. `@elena_portrait`).
+- Stored in the SQLite database (brief metadata may also mirror to `localStorage` for legacy UI prefs).
+
+**AI optimization**
+Send the description to LM Studio for refinement — the LLM rewrites it into tighter, more visually specific language suitable for image generation prompting.
+
+#### Actor Bank sub-tab
+
+Browse all saved characters with filtering and search.
+
+- Filter by status, gender, age range, project tone
+- View character cards with key metadata
+- Open a character’s detail view for rename, archive/restore, gallery curation, prompt descriptor edit/generate, and **Open in Casting Room** (switches to the Casting Pipeline sub-tab with that character active)
+- Import Actor Bank characters into Prompt Studio character slots (Step 4)
+
+---
+
+### Step 2 — Bible
+
+Entity-centric worldbuilding editor for the active project. Create or select an entity, set `type` (`character`, `environment`, `prop`, `institution`, `location`, or `era`), and author **canon** attributes before extrapolation.
+
+UI: `BibleStepContainer` → `EntityEditor` and related bible panels.
+
+---
+
+### Step 3 — Extrapolation
+
+Run staged LLM inference on the selected entity. The pipeline depends on `type` (see `api/lib/extrapolation/stageRegistry.js`):
+
+- Character-shaped types (`character`, `environment`, `prop`, `institution`): six stages (S1–S6)
+- `location`: three stages (geography → inhabitants → history)
+- `era`: placeholder chain until a dedicated pipeline ships
+
+After extrapolation: review inferred attributes, manage **visual anchors** (including a primary reference image where applicable), resolve **Stage 6 conflicts** on character-shaped runs, and use the **MVP Done gate** plus continuity QA scoring when validating a character through the five-scene harness.
+
+UI: `ExtrapolationStepContainer` → `EntityExtrapolationPanel`, `AttributeReviewPanel`, `EntityConflictPanel`, `EntityContinuityQaPanel`, `VisualAnchorPicker`.
+
+For API detail, see `_archive/APPLICATION_REFERENCE.md` and `_archive/PROJECT_CONTEXT.md`.
+
+---
+
+### Step 4 — Prompt Studio
+
+The main prompt workspace. Everything here assembles into a single prompt string.
 
 #### Left column — Controls
 
@@ -250,98 +390,9 @@ When ComfyUI produces images from your prompt, they appear here inline.
 
 ---
 
-### Tab 2 — Character Builder
+### Steps 5–6 — Render & Portfolio
 
-Create and manage casting briefs — reusable character descriptions that feed into the Casting Room.
-
-**Create a casting brief**
-- Enter a name and a description (physical features, personality notes, references).
-- The description is saved as a `@snake_case` slug (e.g. `@elena_portrait`).
-- Stored in both the SQLite database and `localStorage`.
-
-**AI optimization**
-Send the description to LM Studio for refinement — the LLM rewrites it into tighter, more visually specific language suitable for image generation prompting.
-
----
-
-### Tab 3 — Casting Room
-
-The full character production pipeline. Two journeys live here side by side.
-
-> See also: `docs/CASTING_ROOM_HOWTO.md` for a step-by-step reference.
-
-**Journey A — Cast from Bank** (left column)
-
-Produces audition images for a specific casting brief using ComfyUI.
-
-Steps:
-1. Select a casting brief from the dropdown
-2. Select a ComfyUI workflow
-3. Click **Generate Auditions** — LM Studio generates N character profiles
-4. Two ComfyUI jobs queue per candidate: front-facing and profile portrait
-5. Panel polls ComfyUI automatically; images ingest when ready
-6. Review each candidate: **Select this look** or **Pass**
-7. Optionally click **More Takes** to generate additional views of a selected candidate
-
-**Journey B — Batch Pipeline** (right column)
-
-Produces a batch of diverse characters without a pre-existing casting brief.
-
-Steps:
-1. Click `+ Generate Batch` and fill in: age range, count, gender, project tone
-2. The system generates candidates and runs a similarity check
-3. Each candidate is labeled: **unique / needs change / too similar**
-4. Review candidates: click **Cast this character** to approve or **Dismiss** to remove
-5. Approved candidates are saved as characters in the database
-
-**Active Character** (shared section)
-
-Once a character is cast (from either journey), they appear as the Active Character.
-
-- **Prompt packs auto-compile** when an Active Character is first selected
-- Click **Recompile Packs** to regenerate if the character description was edited
-- **Rename**: click the character name inline to rename; press Enter to save
-- **Archive**: hides the character from the dropdown; recoverable via the Archived panel
-
-**Portfolio**
-
-Queue a set of views for the Active Character. Available view types:
-- Front portrait
-- 3/4 portrait
-- Profile portrait
-- Full body
-- Audition (dramatic)
-- Cinematic scene
-
-Click **Queue Portfolio** to send all selected views to ComfyUI as separate jobs. Images ingest automatically as jobs complete.
-
-**Gallery**
-
-All generated images for the Active Character appear here.
-- **Keep** — marks image as approved
-- **Discard** — marks image as rejected
-- Subtitle: *Showing images for: [Character Name]*
-
----
-
-### Tab 4 — Actor Bank
-
-Browse all saved characters with filtering and search.
-
-- Filter by status, gender, age range, project tone
-- View character cards with key metadata
-- Open a character’s detail view for rename, archive/restore, gallery curation, prompt descriptor edit/generate, and **Open in Casting Room** (switches to Casting Room with that character active)
-- Import Actor Bank characters into Prompt Builder slots from the director section
-
----
-
-### Tab 5 — Continuity
-
-SQLite-backed **entities** for worldbuilding: create or select an entity, choose `type` (`character`, `environment`, `prop`, `institution`, `location`, or `era`), and run **extrapolation**. The stage pipeline depends on `type` (see `api/lib/extrapolation/stageRegistry.js`): character-shaped types use six stages (S1–S6); `location` runs three stages (geography → inhabitants → history); `era` is a placeholder chain until a dedicated pipeline ships.
-
-After extrapolation: review inferred attributes, manage **visual anchors** (including a primary reference image where applicable), resolve **Stage 6 conflicts** on character-shaped runs, and use the **MVP Done gate** plus continuity QA scoring when you are validating a character through the five-scene harness.
-
-For API detail, see `APPLICATION_REFERENCE.md` (Entities + extrapolation routes) and `PROJECT_CONTEXT.md`.
+Steps 5 (**Render**) and 6 (**Portfolio**) appear in the stepper but currently show placeholder copy in `App.jsx` (`STEP_PLACEHOLDER`). Dedicated step containers are planned; casting-gallery and portfolio flows remain on **Step 1 → Casting Pipeline** until those steps ship.
 
 ---
 
@@ -374,10 +425,10 @@ Copy / export / send to ComfyUI
 ### Journey A — Cast from Bank
 
 ```
-Character Builder tab
+Step 1 → Character Builder sub-tab
   └── Create casting brief (@name + description)
 
-Casting Room — Cast from Bank
+Step 1 → Casting Pipeline sub-tab — Cast from Bank
   └── Select casting brief
   └── Select ComfyUI workflow
   └── Generate Auditions
@@ -407,7 +458,7 @@ Gallery
 ### Journey B — Batch Pipeline
 
 ```
-Casting Room — Batch Pipeline
+Step 1 → Casting Pipeline sub-tab — Batch Pipeline
   └── + Generate Batch form
         ├── Age range (e.g. 25–35)
         ├── Count (e.g. 8)
@@ -440,7 +491,7 @@ The following services must be running locally for full functionality. Each has 
 **Role:** Primary local LLM provider + embedding provider  
 **Used for:**
 - Generating character profiles in Journey A auditions
-- Optimizing casting brief descriptions (Character Builder tab)
+- Optimizing casting brief descriptions (Step 1 → Character Builder sub-tab)
 - Polishing prompts in **Local (LM Studio)** engine mode
 - Batch character generation in Journey B
 - Generating text embeddings for Chroma similarity search (replaces Ollama)

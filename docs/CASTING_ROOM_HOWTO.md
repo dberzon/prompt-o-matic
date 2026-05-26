@@ -27,11 +27,11 @@ Both journeys converge at **Active Character → Portfolio → Gallery**.
 
 ## Journey A — Cast from Bank
 
-> Quick cross-link: when shaping a brief, the **Character Builder** tab now includes a **How this tab works** guide plus optional identity hints and guidance strength (`light` / `strict_casting`). For iterative prompt refinement before/after casting, the **Prompt Builder** tab includes **Workflow tips** with Edit prompt, Polish current text, and A/B compare behavior.
+> Quick cross-link: when shaping a brief, open **Step 1 (Casting) → Character Builder** sub-tab — it includes a **How this tab works** guide plus optional identity hints and guidance strength (`light` / `strict_casting`). For iterative prompt refinement before/after casting, **Step 4 (Prompt Studio)** includes **Workflow tips** with Edit prompt, Polish current text, and A/B compare behavior.
 
 ### Step 1: Create a Casting Brief
 
-1. Click the **Character Builder** tab.
+1. Open **Step 1 (Casting) → Character Builder** sub-tab.
 2. Fill in **Name** (e.g. `Lena Sholk`) and a **Description** — the more specific the look, age, energy, and tone, the better the LM Studio output.
 3. Click **Save**. The brief is stored with a `@snake_case` slug (e.g. `@lena_sholk`).
 
@@ -41,7 +41,7 @@ If the brief already exists, skip to Step 2.
 
 ### Step 2: Open the Casting Room
 
-Click the **Casting Room** tab. The panel loads casting briefs, batches, and the ComfyUI workflow list.
+Open **Step 1 (Casting) → Casting Pipeline** sub-tab. The panel loads casting briefs, batches, and the ComfyUI workflow list.
 
 If you see a load error check the dev server logs and verify `.env.local`.
 
@@ -83,7 +83,7 @@ Each candidate pair shows status badges per view:
 
 Images appear inline as jobs complete. Polling stops when all jobs are terminal (success or failed).
 
-> **Tab navigation**: job state is saved in `sessionStorage`. If you switch tabs and return, the panel restores pending jobs and resumes polling automatically.
+> **Sub-tab navigation**: job state is saved in `sessionStorage`. If you switch Casting sub-tabs or workflow steps and return, the panel restores pending jobs and resumes polling automatically.
 
 ---
 
@@ -224,7 +224,7 @@ Expand **▸ Developer Tools** (collapsed by default) for low-level access.
 |---|---|---|
 | "Local LM Studio error: 400" | Older `json_object` response format | Already patched. Restart dev server. |
 | `qwenPromptSeed` validation error | Non-Qwen model returned a number | Already patched. Restart dev server. |
-| "No casting briefs yet" in Cast from Bank | No briefs saved | Go to Character Builder tab and save one. |
+| "No casting briefs yet" in Cast from Bank | No briefs saved | Open Step 1 → Character Builder sub-tab and save one. |
 | Images never appear (stuck at ⟳ pending) | ComfyUI not running or wrong URL | Expand Developer Tools → check Comfy status line. |
 | Generate Batch fails with permissions error | Feature flag missing | Add `ENABLE_CHARACTER_BATCH_API=true` to `.env.local`, restart. |
 | Queue Portfolio button disabled | No character, no workflow, or no views ticked | Check all three. |
