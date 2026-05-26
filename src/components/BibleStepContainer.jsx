@@ -28,25 +28,29 @@ export default function BibleStepContainer({
   const [liftError, setLiftError] = useState('')
 
   const handleLift = useCallback(async () => {
-    const bankEntrySlug = activeBankSlug ?? activeCharId
-    if (!bankEntrySlug || !activeCharId) return
+    if (!activeCharId) return
 
     setLifting(true)
     setLiftError('')
-    let name = bankEntrySlug
+    let bankEntrySlug = activeBankSlug ?? null
+    let name = bankEntrySlug ?? activeCharId
     let description = ''
     try {
       const res = await fetch(`/api/characters?id=${encodeURIComponent(activeCharId)}`)
       const data = await res.json()
       if (res.ok && data?.item) {
+        bankEntrySlug = bankEntrySlug ?? data.item.slug ?? null
         name = data.item.name || name
         description = data.item.rawDescription || data.item.description || ''
       }
     } catch {
-      /* fall back to slug as name */
+      /* fall through to the explicit slug validation below */
     }
 
     try {
+      if (!bankEntrySlug) {
+        throw new Error('Selected character has no bank slug to lift')
+      }
       const result = await liftEntityFromBankEntry({
         slug: bankEntrySlug,
         name,

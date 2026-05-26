@@ -93,6 +93,7 @@ import {
   reindexCharacters,
 } from './api/lib/vector/maintenance.js'
 import {
+  getRequestQueryParam,
   normalizeHandlerError,
   readJsonBody,
   sendJsonMiddleware,
@@ -1636,7 +1637,7 @@ function apiDevPlugin(env) {
         try {
           runtime = createVectorRuntime({ env })
           if (req.method === 'GET') {
-            const jobType = typeof req.query?.jobType === 'string' ? req.query.jobType : undefined
+            const jobType = getRequestQueryParam(req, 'jobType') || undefined
             const jobs = listActiveComfyJobs(runtime.db, jobType)
             return sendJsonMiddleware(res, 200, { ok: true, jobs })
           }

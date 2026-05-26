@@ -124,9 +124,7 @@ export default function CastingStepContainer({
             localOnly={localOnly}
             embeddedStatus={embeddedStatus}
             onOpenEntityEditor={(entityId) => {
-              if (activeCharId) {
-                setActiveEntityId(entityId)
-              }
+              setActiveEntityId(entityId)
             }}
             onWorkflowCharacterSelect={relayCharacterSelect}
           />

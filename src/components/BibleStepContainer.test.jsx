@@ -102,6 +102,53 @@ describe('BibleStepContainer', () => {
     expect(setActiveEntityId).toHaveBeenCalledTimes(1)
   })
 
+  it('resolves the bank slug from the selected character before lifting', async () => {
+    const setActiveEntityId = vi.fn()
+    const fetchMock = vi.fn(async (url, init) => {
+      const u = String(url)
+      if (u.includes('/api/characters?id=')) {
+        return {
+          ok: true,
+          json: async () => ({
+            item: {
+              id: 'char_uuid_1',
+              slug: 'bank_slug_from_character',
+              name: 'Pipeline Actor',
+              rawDescription: 'Pipeline desc',
+            },
+          }),
+        }
+      }
+      if (u.includes('/api/entities/lift-from-bank-entry')) {
+        const body = JSON.parse(init.body)
+        expect(body.slug).toBe('bank_slug_from_character')
+        expect(body.name).toBe('Pipeline Actor')
+        expect(body.description).toBe('Pipeline desc')
+        return {
+          ok: true,
+          json: async () => ({ ok: true, entity: { id: 'ent_pipeline' } }),
+        }
+      }
+      return { ok: false, json: async () => ({ error: 'unexpected' }) }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <BibleStepContainer
+        {...baseProps}
+        activeCharId="char_uuid_1"
+        activeBankSlug={null}
+        setActiveEntityId={setActiveEntityId}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /lift to bible context/i }))
+
+    await waitFor(() => {
+      expect(setActiveEntityId).toHaveBeenCalledWith('ent_pipeline')
+    })
+  })
+
   it('renders BibleEditor and VisualAnchorPicker when activeEntityId is set', () => {
     render(
       <BibleStepContainer
