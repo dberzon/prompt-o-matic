@@ -30,7 +30,12 @@ function SceneProbe({ nextScene, onReady }) {
     if (nextScene != null) ws.setScene(nextScene)
     onReady?.(ws)
   }, [nextScene, onReady, ws])
-  return <div data-testid="scene">{ws.scene}</div>
+  return (
+    <>
+      <div data-testid="scene">{ws.scene}</div>
+      <div data-testid="beat">{ws.narrativeBeat ?? ''}</div>
+    </>
+  )
 }
 
 function renderWorkspace(ui) {
@@ -86,6 +91,7 @@ describe('WorkspaceContext workflow persist', () => {
 
     renderWorkspace(<SceneProbe />)
     expect(screen.getByTestId('scene').textContent).toBe('restored on reload')
+    expect(screen.getByTestId('beat').textContent).toBe('beat-restore')
   })
 
   it('ignores malformed JSON in localStorage on mount without throwing', () => {
@@ -103,6 +109,10 @@ describe('WorkspaceContext workflow persist', () => {
         const unregister = ws.registerWorkflowPersistSource(() => ({
           activeProjectId: 'proj_live',
           activeCharId: 'char_live',
+          activeEntityId: 'entity_live',
+          activeBankSlug: 'slug_live',
+          activeStep: 4,
+          activeSubTab: 'actor-bank',
         }))
         ws.setScene('with workflow ids')
         return unregister
@@ -119,6 +129,10 @@ describe('WorkspaceContext workflow persist', () => {
     const payload = JSON.parse(workflowWrites[workflowWrites.length - 1][1])
     expect(payload.activeProjectId).toBe('proj_live')
     expect(payload.activeCharId).toBe('char_live')
+    expect(payload.activeEntityId).toBe('entity_live')
+    expect(payload.activeBankSlug).toBe('slug_live')
+    expect(payload.activeStep).toBe(4)
+    expect(payload.activeSubTab).toBe('actor-bank')
     expect(payload.scene).toBe('with workflow ids')
   })
 })

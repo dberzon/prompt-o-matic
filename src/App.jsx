@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { useProject } from './context/ProjectContext.jsx'
 import { useWorkspace } from './context/WorkspaceContext.jsx'
 import { useShareLink } from './context/ShareLinkContext.jsx'
@@ -32,24 +32,120 @@ const STEP_PLACEHOLDER = {
   6: 'Portfolio',
 }
 
+const WORKFLOW_SUB_TABS = new Set(['casting-pipeline', 'character-builder', 'actor-bank'])
+
+function normalizeWorkflowStep(value) {
+  return Number.isInteger(value) && value >= 1 && value <= 6 ? value : 1
+}
+
+function normalizeWorkflowSubTab(value) {
+  return WORKFLOW_SUB_TABS.has(value) ? value : 'casting-pipeline'
+}
+
+function normalizeNullableString(value) {
+  return typeof value === 'string' || value === null ? value ?? null : null
+}
+
 export default function App() {
   if (typeof window !== 'undefined' && window.location.pathname === '/dev-dashboard') {
     return <DevDashboard />
   }
 
-  const { active } = useProject()
+  const { active, setActiveById } = useProject()
   const activeProjectId = active?.id ?? null
   const ws = useWorkspace()
-  const { handleShareState } = useShareLink()
+  const {
+    handleShareState,
+    registerWorkflowShareSource,
+    subscribeWorkflowShareApply,
+    workflowBootstrapFields,
+  } = useShareLink()
   const { comfyStatus, comfyError, embeddedStatus, setEmbeddedStatus } = useEmbeddedHealth()
+  const restoredWorkflowIds = ws.restoredWorkflowIds ?? {}
+  const hasWorkflowShareHash = typeof window !== 'undefined' && window.location.hash.startsWith('#state=')
 
-  const [activeStep, setActiveStep] = useState(1)
-  const [activeSubTab, setActiveSubTab] = useState('casting-pipeline')
-  const [activeCharId, setActiveCharId] = useState(null)
-  const [activeEntityId, setActiveEntityId] = useState(null)
-  const [activeBankSlug, setActiveBankSlug] = useState(null)
+  const [activeStep, setActiveStep] = useState(() => normalizeWorkflowStep(restoredWorkflowIds.activeStep))
+  const [activeSubTab, setActiveSubTab] = useState(() => normalizeWorkflowSubTab(restoredWorkflowIds.activeSubTab))
+  const [activeCharId, setActiveCharId] = useState(() => normalizeNullableString(restoredWorkflowIds.activeCharId))
+  const [activeEntityId, setActiveEntityId] = useState(() => normalizeNullableString(restoredWorkflowIds.activeEntityId))
+  const [activeBankSlug, setActiveBankSlug] = useState(() => normalizeNullableString(restoredWorkflowIds.activeBankSlug))
   const [embeddedSetupOpen, setEmbeddedSetupOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+
+  const applyWorkflowFields = useCallback((fields) => {
+    if (!fields || typeof fields !== 'object') return
+    if (Number.isInteger(fields.step)) setActiveStep(normalizeWorkflowStep(fields.step))
+    if (typeof fields.subTab === 'string') setActiveSubTab(normalizeWorkflowSubTab(fields.subTab))
+    if (typeof fields.charId === 'string' || fields.charId === null) {
+      setActiveCharId(fields.charId ?? null)
+    }
+    if (typeof fields.entityId === 'string' || fields.entityId === null) {
+      setActiveEntityId(fields.entityId ?? null)
+    }
+    if (typeof fields.bankSlug === 'string' || fields.bankSlug === null) {
+      setActiveBankSlug(fields.bankSlug ?? null)
+    }
+  }, [])
+
+  useEffect(() => {
+    const unregister = ws.registerWorkflowPersistSource(() => ({
+      activeProjectId,
+      activeCharId,
+      activeEntityId,
+      activeBankSlug,
+      activeStep,
+      activeSubTab,
+    }))
+    return unregister
+  }, [
+    ws.registerWorkflowPersistSource,
+    activeProjectId,
+    activeCharId,
+    activeEntityId,
+    activeBankSlug,
+    activeStep,
+    activeSubTab,
+  ])
+
+  useEffect(() => {
+    const unregister = registerWorkflowShareSource(() => ({
+      step: activeStep,
+      projectId: activeProjectId,
+      charId: activeCharId,
+      entityId: activeEntityId,
+      bankSlug: activeBankSlug,
+    }))
+    return unregister
+  }, [
+    registerWorkflowShareSource,
+    activeProjectId,
+    activeCharId,
+    activeEntityId,
+    activeBankSlug,
+    activeStep,
+  ])
+
+  useEffect(() => {
+    const unregister = subscribeWorkflowShareApply(applyWorkflowFields)
+    return unregister
+  }, [subscribeWorkflowShareApply, applyWorkflowFields])
+
+  useEffect(() => {
+    applyWorkflowFields(workflowBootstrapFields)
+  }, [workflowBootstrapFields, applyWorkflowFields])
+
+  const workflowProjectId = normalizeNullableString(
+    workflowBootstrapFields
+      ? workflowBootstrapFields.projectId
+      : hasWorkflowShareHash
+        ? null
+        : restoredWorkflowIds.activeProjectId,
+  )
+  useEffect(() => {
+    if (workflowProjectId && workflowProjectId !== activeProjectId) {
+      setActiveById(workflowProjectId)
+    }
+  }, [workflowProjectId, activeProjectId, setActiveById])
 
   useEffect(() => {
     if (activeStep === 4) ws.fetchBankSlugs()

@@ -63,9 +63,30 @@ function blendFieldsFromPersist(snapshot) {
   }
 }
 
+const WORKFLOW_SUB_TABS = new Set(['casting-pipeline', 'character-builder', 'actor-bank'])
+
+function normalizeWorkflowStep(value) {
+  return Number.isInteger(value) && value >= 1 && value <= 6 ? value : 1
+}
+
+function normalizeWorkflowSubTab(value) {
+  return WORKFLOW_SUB_TABS.has(value) ? value : 'casting-pipeline'
+}
+
+function normalizeNullableString(value) {
+  return typeof value === 'string' || value === null ? value ?? null : null
+}
+
 /**
  * @param {Record<string, unknown>} workspace
- * @param {{ activeProjectId?: string | null, activeCharId?: string | null }} [extras]
+ * @param {{
+ *   activeProjectId?: string | null,
+ *   activeCharId?: string | null,
+ *   activeEntityId?: string | null,
+ *   activeBankSlug?: string | null,
+ *   activeStep?: number,
+ *   activeSubTab?: string,
+ * }} [extras]
  */
 export function buildWorkflowPersistPayload(workspace, extras = {}) {
   return {
@@ -97,6 +118,10 @@ export function buildWorkflowPersistPayload(workspace, extras = {}) {
       typeof extras.activeCharId === 'string' || extras.activeCharId === null
         ? extras.activeCharId ?? null
         : null,
+    activeEntityId: normalizeNullableString(extras.activeEntityId),
+    activeBankSlug: normalizeNullableString(extras.activeBankSlug),
+    activeStep: normalizeWorkflowStep(extras.activeStep),
+    activeSubTab: normalizeWorkflowSubTab(extras.activeSubTab),
   }
 }
 
@@ -115,6 +140,10 @@ function workspaceSeedFromPersist(snapshot) {
     ...blend,
     activeProjectId: snapshot.activeProjectId ?? null,
     activeCharId: snapshot.activeCharId ?? null,
+    activeEntityId: normalizeNullableString(snapshot.activeEntityId),
+    activeBankSlug: normalizeNullableString(snapshot.activeBankSlug),
+    activeStep: normalizeWorkflowStep(snapshot.activeStep),
+    activeSubTab: normalizeWorkflowSubTab(snapshot.activeSubTab),
   }
 }
 
@@ -259,7 +288,7 @@ export function WorkspaceProvider({ children }) {
   const [customDirectors, setCustomDirectors] = useState(() => readCustomDirectors())
   const [profiles, setProfiles] = useState({})
   const [selectedProfile, setSelectedProfile] = useState('')
-  const [narrativeBeat, setNarrativeBeat] = useState(null)
+  const [narrativeBeat, setNarrativeBeat] = useState(persistSeed?.narrativeBeat ?? null)
   const [useStyleKeyForPolish, setUseStyleKeyForPolish] = useState(false)
   const [applyDiff, setApplyDiff] = useState(null)
   const [isApplyDiffPinned, setIsApplyDiffPinned] = useState(false)
@@ -269,10 +298,21 @@ export function WorkspaceProvider({ children }) {
   const [characters, setCharacters] = useState(() => readCharacters())
   const [bankCharsForSelector, setBankCharsForSelector] = useState([])
   const [persistExtrasRevision, setPersistExtrasRevision] = useState(0)
-  const workflowPersistGetterRef = useRef(/** @type {(() => { activeProjectId?: string | null, activeCharId?: string | null }) | null} */ (null))
+  const workflowPersistGetterRef = useRef(/** @type {(() => {
+    activeProjectId?: string | null,
+    activeCharId?: string | null,
+    activeEntityId?: string | null,
+    activeBankSlug?: string | null,
+    activeStep?: number,
+    activeSubTab?: string,
+  }) | null} */ (null))
   const restoredWorkflowIds = useMemo(() => ({
     activeProjectId: persistSeed?.activeProjectId ?? null,
     activeCharId: persistSeed?.activeCharId ?? null,
+    activeEntityId: persistSeed?.activeEntityId ?? null,
+    activeBankSlug: persistSeed?.activeBankSlug ?? null,
+    activeStep: persistSeed?.activeStep ?? 1,
+    activeSubTab: persistSeed?.activeSubTab ?? 'casting-pipeline',
   }), [persistSeed])
 
   const registerWorkflowPersistSource = useCallback((getter) => {

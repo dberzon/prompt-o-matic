@@ -95,6 +95,7 @@ export default function CharacterBuilder({
   localOnly,
   embeddedStatus,
   onOpenEntityEditor,
+  onWorkflowCharacterSelect,
 }) {
   const [name, setName] = useState('')
   const [slugDraft, setSlugDraft] = useState('')
@@ -348,6 +349,12 @@ export default function CharacterBuilder({
       })
       const entityId = result?.entity?.id
       if (!entityId) throw new Error('Entity lift failed')
+      onWorkflowCharacterSelect?.({
+        charId: entry.slug,
+        entityId,
+        bankSlug: entry.slug,
+        source: 'character-builder',
+      })
       onOpenEntityEditor?.(entityId)
     } catch (err) {
       setFlash(err?.message || 'Failed to open entity editor')

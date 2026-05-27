@@ -159,6 +159,9 @@ describe('ShareLinkContext hash precedence', () => {
         charCount: 2,
         chars: [{ g: 'woman', a: '20s' }, { g: 'man', a: '40s' }],
         activeCharId: 'char_only_ls',
+        activeEntityId: 'entity_only_ls',
+        activeBankSlug: 'slug-only-ls',
+        activeStep: 4,
       }),
     )
     const localDecoded = workflowLocalStorageToCanonical(
@@ -167,6 +170,8 @@ describe('ShareLinkContext hash precedence', () => {
     const resolved = resolveShareBootstrap(null, localDecoded)
     expect(resolved.scene).toBe('stored only')
     expect(resolved.charId).toBe('char_only_ls')
-    expect(resolved.step).toBe(1)
+    expect(resolved.entityId).toBe('entity_only_ls')
+    expect(resolved.bankSlug).toBe('slug-only-ls')
+    expect(resolved.step).toBe(4)
   })
 })
