@@ -103,6 +103,11 @@ describe('bible section approval', () => {
     rejectBibleSection(db, 'ent_c', 'physical', { actor: 'r1' })
     expect(getBibleApprovals(db, 'ent_c').physical.state).toBe('rejected')
     approveBibleSection(db, 'ent_c', 'physical', { actor: 'r2' })
+    db.prepare('UPDATE entity_attributes SET created_at = ? WHERE entity_id = ? AND key = ?').run(
+      '2026-01-01T00:00:00.000Z',
+      'ent_c',
+      '_approval.physical',
+    )
     const a = getBibleApprovals(db, 'ent_c').physical
     expect(a.state).toBe('approved')
     expect(a.actor).toBe('r2')
