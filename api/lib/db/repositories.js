@@ -1266,17 +1266,12 @@ export function listAttributeSupersedeChain(db, { entityId, attributeId }) {
     current = next
   }
 
-  const items = listAttributes(db, {
-    entityId: requested.entityId,
-    key: requested.key,
-    includeDismissed: true,
-    includeSuperseded: true,
-  }).sort((left, right) => {
-    const leftTime = Date.parse(left.createdAt || '') || 0
-    const rightTime = Date.parse(right.createdAt || '') || 0
-    if (leftTime !== rightTime) return leftTime - rightTime
-    return String(left.id).localeCompare(String(right.id))
-  })
+  const items = db.prepare(`
+    SELECT *
+    FROM entity_attributes
+    WHERE entity_id = ? AND key = ?
+    ORDER BY created_at ASC, rowid ASC
+  `).all(requested.entityId, requested.key).map(mapAttributeRow)
 
   return {
     entityId: requested.entityId,
