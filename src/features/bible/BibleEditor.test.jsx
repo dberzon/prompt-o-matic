@@ -105,6 +105,8 @@ describe('BibleEditor', () => {
     expect(screen.getByTestId('completeness-ratio-arc')).toBeTruthy()
     expect(screen.getByText('Attribute review')).toBeTruthy()
     expect(screen.getByText('Stage 6 conflicts')).toBeTruthy()
+    expect(screen.queryByTestId('T_BIBLE_FIELD_INPUT_gender')).toBeNull()
+    expect(screen.getAllByTestId('T_BIBLE_FIELD_READONLY').length).toBeGreaterThan(0)
   })
 
   it('renders location bible with different object sections than character', async () => {

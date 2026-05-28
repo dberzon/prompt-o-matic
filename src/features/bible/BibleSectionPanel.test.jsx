@@ -122,8 +122,8 @@ describe('BibleSectionPanel', () => {
     )
     expect(screen.queryByTestId('T_BIBLE_FIELD_INPUT_gender')).toBeNull()
     expect(screen.getAllByTestId('T_BIBLE_FIELD_READONLY').length).toBeGreaterThan(0)
-    expect(screen.getByTestId('T_BIBLE_APPROVE').disabled).toBe(true)
-    expect(screen.getByTestId('T_BIBLE_REJECT').disabled).toBe(true)
+    expect(screen.getByTestId('T_BIBLE_APPROVE').disabled).toBe(false)
+    expect(screen.getByTestId('T_BIBLE_REJECT').disabled).toBe(false)
   })
 
   it('invokes onChange when editing', () => {

@@ -23,12 +23,22 @@ async function fetchCharacters(params) {
   return data
 }
 
-export default function ActorBankView({ setActiveCharId, setActiveStep, setActiveSubTab }) {
-  const handleOpenInCastingRoom = useCallback((id) => {
+export default function ActorBankView({
+  setActiveCharId,
+  setActiveEntityId,
+  setActiveBankSlug,
+  setActiveStep,
+  setActiveSubTab,
+}) {
+  const handleOpenInCastingRoom = useCallback((characterOrId) => {
+    const id = typeof characterOrId === 'string' ? characterOrId : characterOrId?.id
+    if (!id) return
     setActiveCharId(id)
+    setActiveEntityId?.(null)
+    setActiveBankSlug?.(typeof characterOrId === 'object' && characterOrId?.slug ? characterOrId.slug : null)
     setActiveStep(1)
     setActiveSubTab('casting-pipeline')
-  }, [setActiveCharId, setActiveStep, setActiveSubTab])
+  }, [setActiveCharId, setActiveEntityId, setActiveBankSlug, setActiveStep, setActiveSubTab])
 
   const [state, dispatch] = useReducer(reducer, INIT)
   const filtersRef = useRef({ search: '', gender: '', ageMin: '', ageMax: '', sortBy: 'last_rendered_at' })

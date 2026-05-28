@@ -31,7 +31,6 @@ export default function BibleSectionPanel({
     throw new TypeError('BibleSectionPanel expects sectionSchema to be a ZodObject')
   }
 
-  const readOnly = typeof onChange !== 'function'
   const shape = sectionSchema.shape
   const keys = Object.keys(shape).sort()
 
@@ -69,7 +68,7 @@ export default function BibleSectionPanel({
           type="button"
           className={styles.button}
           data-testid="T_BIBLE_APPROVE"
-          disabled={readOnly || typeof onApprove !== 'function'}
+          disabled={typeof onApprove !== 'function'}
           onClick={() => onApprove?.()}
         >
           Approve
@@ -78,7 +77,7 @@ export default function BibleSectionPanel({
           type="button"
           className={styles.button}
           data-testid="T_BIBLE_REJECT"
-          disabled={readOnly || typeof onReject !== 'function'}
+          disabled={typeof onReject !== 'function'}
           onClick={() => onReject?.()}
         >
           Reject

@@ -20,7 +20,7 @@ function stubCharactersFetch() {
       return {
         ok: true,
         json: async () => ({
-          item: { id: CHAR_ID, name: 'Test Actor', images: [] },
+          item: { id: CHAR_ID, slug: 'test_actor', name: 'Test Actor', images: [] },
         }),
       }
     }
@@ -40,15 +40,19 @@ function stubCharactersFetch() {
 }
 
 describe('ActorBankView', () => {
-  it('Open in Casting Room calls all three setters exactly once', async () => {
+  it('Open in Casting Room selects the character and resets stale entity context', async () => {
     stubCharactersFetch()
     const setActiveCharId = vi.fn()
+    const setActiveEntityId = vi.fn()
+    const setActiveBankSlug = vi.fn()
     const setActiveStep = vi.fn()
     const setActiveSubTab = vi.fn()
 
     render(
       <ActorBankView
         setActiveCharId={setActiveCharId}
+        setActiveEntityId={setActiveEntityId}
+        setActiveBankSlug={setActiveBankSlug}
         setActiveStep={setActiveStep}
         setActiveSubTab={setActiveSubTab}
       />,
@@ -70,6 +74,10 @@ describe('ActorBankView', () => {
 
     expect(setActiveCharId).toHaveBeenCalledTimes(1)
     expect(setActiveCharId).toHaveBeenCalledWith(CHAR_ID)
+    expect(setActiveEntityId).toHaveBeenCalledTimes(1)
+    expect(setActiveEntityId).toHaveBeenCalledWith(null)
+    expect(setActiveBankSlug).toHaveBeenCalledTimes(1)
+    expect(setActiveBankSlug).toHaveBeenCalledWith('test_actor')
     expect(setActiveStep).toHaveBeenCalledTimes(1)
     expect(setActiveStep).toHaveBeenCalledWith(1)
     expect(setActiveSubTab).toHaveBeenCalledTimes(1)

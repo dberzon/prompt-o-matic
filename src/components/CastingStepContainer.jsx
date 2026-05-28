@@ -134,6 +134,8 @@ export default function CastingStepContainer({
         {activeSubTab === 'actor-bank' && (
           <ActorBankView
             setActiveCharId={setActiveCharId}
+            setActiveEntityId={setActiveEntityId}
+            setActiveBankSlug={setActiveBankSlug}
             setActiveStep={setActiveStep}
             setActiveSubTab={setActiveSubTab}
           />
