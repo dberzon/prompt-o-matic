@@ -1,11 +1,12 @@
 // src/hooks/usePolish.js
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 
 // States: idle | loading | polished | dry-run | error
 export function usePolish() {
   const [state, setState] = useState('idle') // 'idle' | 'loading' | 'polished' | 'dry-run' | 'error'
   const [polished, setPolished] = useState(null) // string | null
   const [error, setError] = useState(null) // string | null
+  const requestSeqRef = useRef(0)
   const [debug, setDebug] = useState({
     lastRequest: null,
     lastResponse: null,
@@ -33,6 +34,7 @@ export function usePolish() {
     entityId = null,
   }) => {
     if (!fragments || fragments.length === 0) return
+    const requestId = ++requestSeqRef.current
 
     const requestPayload = {
       fragments,
@@ -103,6 +105,7 @@ export function usePolish() {
         throw new Error(data.error ?? `HTTP ${response.status}`)
       }
 
+      if (requestId !== requestSeqRef.current) return
       setPolished(data.polished)
       setState('polished')
       setDebug((prev) => ({
@@ -114,6 +117,7 @@ export function usePolish() {
         },
       }))
     } catch (err) {
+      if (requestId !== requestSeqRef.current) return
       setError(err.message ?? 'Unknown error')
       setState('error')
       setDebug((prev) => ({
@@ -124,6 +128,7 @@ export function usePolish() {
   }, [])
 
   const revert = useCallback(() => {
+    requestSeqRef.current += 1
     setState('idle')
     setPolished(null)
     setError(null)

@@ -75,4 +75,35 @@ describe('ActorBankView', () => {
     expect(setActiveSubTab).toHaveBeenCalledTimes(1)
     expect(setActiveSubTab).toHaveBeenCalledWith('casting-pipeline')
   })
+
+  it('Open in Casting Room delegates to workflow handler when provided', async () => {
+    stubCharactersFetch()
+    const onOpenInCastingRoom = vi.fn()
+    const setActiveCharId = vi.fn()
+
+    render(
+      <ActorBankView
+        setActiveCharId={setActiveCharId}
+        onOpenInCastingRoom={onOpenInCastingRoom}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /test actor/i })).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: /test actor/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /open in casting room/i })).toBeTruthy()
+    })
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /open in casting room/i }))
+    })
+
+    expect(onOpenInCastingRoom).toHaveBeenCalledTimes(1)
+    expect(onOpenInCastingRoom).toHaveBeenCalledWith(CHAR_ID)
+    expect(setActiveCharId).not.toHaveBeenCalled()
+  })
 })
