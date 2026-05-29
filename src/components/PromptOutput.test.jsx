@@ -56,7 +56,7 @@ describe('PromptOutput polish state', () => {
     )
 
     expect(screen.queryByText('polished prompt')).toBeNull()
-    expect(screen.getByText('updated prompt')).toBeTruthy()
+    expect(screen.getByText('updated prompt', { selector: 'p' })).toBeTruthy()
   })
 
   it('preserves manual text when polishing the current text fails', async () => {
@@ -75,8 +75,8 @@ describe('PromptOutput polish state', () => {
     fireEvent.click(screen.getByRole('button', { name: /polish current text/i }))
 
     await waitFor(() => {
-      expect(screen.getByText(/provider down/i)).toBeTruthy()
+      expect(screen.getAllByText(/provider down/i).length).toBeGreaterThan(0)
     })
-    expect(screen.getByText('manual prompt')).toBeTruthy()
+    expect(screen.getByText('manual prompt', { selector: 'p' })).toBeTruthy()
   })
 })
