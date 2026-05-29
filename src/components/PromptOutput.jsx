@@ -388,16 +388,23 @@ export default function PromptOutput({
     }
   }, [displayText, isManualEditMode])
 
-  // Clear selected variant when assembled prompt changes so stale variant text is never shown.
-  useEffect(() => { setSelectedVariant(null) }, [assembledText])
+  // Reset transient AI output when chips/scene rebuild the assembled prompt.
+  useEffect(() => {
+    setSelectedVariant(null)
+    revert()
+  }, [assembledText, revert])
 
+  useEffect(() => {
+    if (state !== 'polished' || !polished) return
+    setManualEdit(null)
+    setIsManualEditMode(false)
+    setRestoredText(null)
+    setSelectedVariant(null)
+  }, [state, polished])
 
 
   const handlePolish = () => {
-    setRestoredText(null)
-    setManualEdit(null)
     setIsManualEditMode(false)
-    setSelectedVariant(null)
     polish({
       fragments: prompt,
       directorName,
@@ -422,8 +429,8 @@ export default function PromptOutput({
   const handlePolishCurrentText = useCallback(() => {
     const sourceText = displayText.trim()
     if (!sourceText) return
+    setManualEdit(sourceText)
     setRestoredText(null)
-    setManualEdit(null)
     setIsManualEditMode(false)
     setSelectedVariant(null)
     polish({
