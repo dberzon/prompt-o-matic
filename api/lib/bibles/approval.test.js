@@ -106,6 +106,8 @@ describe('bible section approval', () => {
     const a = getBibleApprovals(db, 'ent_c').physical
     expect(a.state).toBe('approved')
     expect(a.actor).toBe('r2')
+    expect(listAttributes(db, { entityId: 'ent_c', key: '_approval.physical' })).toHaveLength(1)
+    expect(listAttributes(db, { entityId: 'ent_c', key: '_approval.physical', includeSuperseded: true })).toHaveLength(2)
   })
 
   it('missing entity throws EntityNotFoundError', () => {
