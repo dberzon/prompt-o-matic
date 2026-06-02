@@ -23,12 +23,20 @@ async function fetchCharacters(params) {
   return data
 }
 
-export default function ActorBankView({ setActiveCharId, setActiveStep, setActiveSubTab }) {
-  const handleOpenInCastingRoom = useCallback((id) => {
-    setActiveCharId(id)
+export default function ActorBankView({ activeProjectId, onWorkflowCharacterSelect, setActiveStep, setActiveSubTab }) {
+  const handleOpenInCastingRoom = useCallback((character) => {
+    const charId = typeof character === 'string' ? character : character?.id
+    if (!charId) return
+    onWorkflowCharacterSelect({
+      charId,
+      bankSlug: typeof character?.slug === 'string' && character.slug.trim()
+        ? character.slug.trim()
+        : null,
+      source: 'actor-bank',
+    })
     setActiveStep(1)
     setActiveSubTab('casting-pipeline')
-  }, [setActiveCharId, setActiveStep, setActiveSubTab])
+  }, [onWorkflowCharacterSelect, setActiveStep, setActiveSubTab])
 
   const [state, dispatch] = useReducer(reducer, INIT)
   const filtersRef = useRef({ search: '', gender: '', ageMin: '', ageMax: '', sortBy: 'last_rendered_at' })
@@ -41,6 +49,7 @@ export default function ActorBankView({ setActiveCharId, setActiveStep, setActiv
 
   const buildParams = useCallback((f = filtersRef.current, extra = {}) => {
     const params = new URLSearchParams()
+    if (activeProjectId) params.set('projectId', activeProjectId)
     if (f.search) params.set('search', f.search)
     if (f.gender) params.set('gender', f.gender)
     if (f.ageMin !== '' && f.ageMin != null) params.set('ageMin', String(f.ageMin))
@@ -48,7 +57,7 @@ export default function ActorBankView({ setActiveCharId, setActiveStep, setActiv
     params.set('sortBy', f.sortBy || 'last_rendered_at')
     for (const [k, v] of Object.entries(extra)) params.set(k, v)
     return params
-  }, [])
+  }, [activeProjectId])
 
   const load = useCallback(async (f = filtersRef.current) => {
     dispatch({ type: 'LOADING' })
@@ -93,7 +102,9 @@ export default function ActorBankView({ setActiveCharId, setActiveStep, setActiv
     setDetailError(null)
     setDetailLoading(true)
     try {
-      const res = await fetch(`/api/characters?id=${encodeURIComponent(id)}`)
+      const params = new URLSearchParams({ id })
+      if (activeProjectId) params.set('projectId', activeProjectId)
+      const res = await fetch(`/api/characters?${params.toString()}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
       setDetail({ character: data.item, images: data.item.images ?? [] })
@@ -102,7 +113,7 @@ export default function ActorBankView({ setActiveCharId, setActiveStep, setActiv
     } finally {
       setDetailLoading(false)
     }
-  }, [])
+  }, [activeProjectId])
 
   const handleBack = useCallback(() => {
     setDetail(null)

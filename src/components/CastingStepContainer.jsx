@@ -133,7 +133,8 @@ export default function CastingStepContainer({
         )}
         {activeSubTab === 'actor-bank' && (
           <ActorBankView
-            setActiveCharId={setActiveCharId}
+            activeProjectId={activeProjectId}
+            onWorkflowCharacterSelect={relayCharacterSelect}
             setActiveStep={setActiveStep}
             setActiveSubTab={setActiveSubTab}
           />

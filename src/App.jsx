@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useProject } from './context/ProjectContext.jsx'
 import { useWorkspace } from './context/WorkspaceContext.jsx'
 import { useShareLink } from './context/ShareLinkContext.jsx'
@@ -50,6 +50,18 @@ export default function App() {
   const [activeBankSlug, setActiveBankSlug] = useState(null)
   const [embeddedSetupOpen, setEmbeddedSetupOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const previousProjectIdRef = useRef(activeProjectId)
+
+  useEffect(() => {
+    const previousProjectId = previousProjectIdRef.current
+    previousProjectIdRef.current = activeProjectId
+    if (!previousProjectId || previousProjectId === activeProjectId) return
+    setActiveStep(1)
+    setActiveSubTab('casting-pipeline')
+    setActiveCharId(null)
+    setActiveEntityId(null)
+    setActiveBankSlug(null)
+  }, [activeProjectId])
 
   useEffect(() => {
     if (activeStep === 4) ws.fetchBankSlugs()
