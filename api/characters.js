@@ -1,6 +1,11 @@
 import { normalizeHandlerError, sendJsonNode } from './lib/http.js'
 import { assertCharacterBatchOperationAllowed } from './lib/characters/access.js'
-import { listCharacters, deleteCharacter } from './lib/db/repositories.js'
+import {
+  deleteCharacter,
+  getCharacter,
+  listCharacters,
+  listGeneratedImageRecords,
+} from './lib/db/repositories.js'
 import { resolveExplicitProjectIdForRequest } from './lib/projects/context.js'
 import { createVectorRuntime } from './lib/vector/runtime.js'
 
@@ -39,6 +44,24 @@ export default async function handler(req, res) {
     const ageMin = q.ageMin !== undefined ? Number(q.ageMin) : undefined
     const ageMax = q.ageMax !== undefined ? Number(q.ageMax) : undefined
     const sortBy = typeof q.sortBy === 'string' ? q.sortBy : undefined
+    const id = typeof q.id === 'string' ? q.id : undefined
+    if (id) {
+      const character = getCharacter(runtime.db, id)
+      if (!character) {
+        return sendJsonNode(res, 404, { error: 'Character not found' })
+      }
+      if (filterProjectId && character.projectId != null && character.projectId !== filterProjectId) {
+        return sendJsonNode(res, 404, { error: 'Character not found' })
+      }
+      const images = listGeneratedImageRecords(runtime.db, {
+        characterId: id,
+        projectId: filterProjectId || undefined,
+      }).map((img) => ({
+        ...img,
+        imageUrl: `/api/generated-image-view?id=${encodeURIComponent(img.id)}`,
+      }))
+      return sendJsonNode(res, 200, { ok: true, item: { ...character, images } })
+    }
     const items = listCharacters(runtime.db, {
       projectId: filterProjectId || undefined,
       gender,

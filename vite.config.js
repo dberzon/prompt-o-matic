@@ -486,7 +486,14 @@ function apiDevPlugin(env) {
               sendJsonMiddleware(res, 404, { error: 'Character not found' })
               return
             }
-            const images = listGeneratedImageRecords(runtime.db, { characterId: singleId }).map((img) => ({
+            if (projectId && character.projectId != null && character.projectId !== projectId) {
+              sendJsonMiddleware(res, 404, { error: 'Character not found' })
+              return
+            }
+            const images = listGeneratedImageRecords(runtime.db, {
+              characterId: singleId,
+              projectId: projectId || undefined,
+            }).map((img) => ({
               ...img,
               imageUrl: `/api/generated-image-view?id=${encodeURIComponent(img.id)}`,
             }))

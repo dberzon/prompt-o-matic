@@ -205,6 +205,23 @@ describe('routes project filter (?projectId=)', () => {
     expect(imgRes.statusCode).toBe(200)
     expect(new Set(imgRes.payload.items.map((x) => x.id))).toEqual(new Set(['img_a', 'img_null']))
 
+    const charDetailRes = mockRes()
+    await charactersHandler({
+      method: 'GET',
+      query: { id: charShared, projectId: projA.id },
+    }, charDetailRes)
+    expect(charDetailRes.statusCode).toBe(200)
+    expect(charDetailRes.payload.item.id).toBe(charShared)
+    expect(charDetailRes.payload.item.slug).toBe('char_rt_shared')
+    expect(new Set(charDetailRes.payload.item.images.map((x) => x.id))).toEqual(new Set(['img_a', 'img_null']))
+
+    const charDetailWrongProject = mockRes()
+    await charactersHandler({
+      method: 'GET',
+      query: { id: 'char_only_b', projectId: projA.id },
+    }, charDetailWrongProject)
+    expect(charDetailWrongProject.statusCode).toBe(404)
+
     const bankRes = mockRes()
     await characterBankHandler({ method: 'GET', url: `/api/character-bank?${qA}` }, bankRes)
     expect(bankRes.statusCode).toBe(200)

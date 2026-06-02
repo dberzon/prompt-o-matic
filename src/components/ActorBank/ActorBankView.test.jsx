@@ -6,6 +6,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import ActorBankView from './ActorBankView.jsx'
 
 const CHAR_ID = 'char_test_1'
+const CHAR_SLUG = 'test_actor_slug'
 
 afterEach(() => {
   cleanup()
@@ -20,7 +21,7 @@ function stubCharactersFetch() {
       return {
         ok: true,
         json: async () => ({
-          item: { id: CHAR_ID, name: 'Test Actor', images: [] },
+          item: { id: CHAR_ID, slug: CHAR_SLUG, name: 'Test Actor', images: [] },
         }),
       }
     }
@@ -40,15 +41,16 @@ function stubCharactersFetch() {
 }
 
 describe('ActorBankView', () => {
-  it('Open in Casting Room calls all three setters exactly once', async () => {
-    stubCharactersFetch()
-    const setActiveCharId = vi.fn()
+  it('Open in Casting Room relays the character id and bank slug before switching tabs', async () => {
+    const fetchMock = stubCharactersFetch()
+    const onWorkflowCharacterSelect = vi.fn()
     const setActiveStep = vi.fn()
     const setActiveSubTab = vi.fn()
 
     render(
       <ActorBankView
-        setActiveCharId={setActiveCharId}
+        activeProjectId="proj_actor_bank"
+        onWorkflowCharacterSelect={onWorkflowCharacterSelect}
         setActiveStep={setActiveStep}
         setActiveSubTab={setActiveSubTab}
       />,
@@ -68,8 +70,13 @@ describe('ActorBankView', () => {
       fireEvent.click(screen.getByRole('button', { name: /open in casting room/i }))
     })
 
-    expect(setActiveCharId).toHaveBeenCalledTimes(1)
-    expect(setActiveCharId).toHaveBeenCalledWith(CHAR_ID)
+    expect(onWorkflowCharacterSelect).toHaveBeenCalledTimes(1)
+    expect(onWorkflowCharacterSelect).toHaveBeenCalledWith({
+      charId: CHAR_ID,
+      bankSlug: CHAR_SLUG,
+      source: 'actor-bank',
+    })
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('projectId=proj_actor_bank'))
     expect(setActiveStep).toHaveBeenCalledTimes(1)
     expect(setActiveStep).toHaveBeenCalledWith(1)
     expect(setActiveSubTab).toHaveBeenCalledTimes(1)
