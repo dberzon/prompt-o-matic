@@ -1,4 +1,4 @@
-import { getEntity, listAttributes, writeAttribute } from '../db/repositories.js'
+import { getEntity, writeAttribute } from '../db/repositories.js'
 import { EntityNotFoundError } from './projection.js'
 import { CharacterBibleSchema } from './schemas/characterBible.schema.js'
 import { EraBibleSchema } from './schemas/eraBible.schema.js'
@@ -92,8 +92,26 @@ function parseApprovalPayload(value) {
  */
 function latestApprovalAttribute(db, entityId, section) {
   const key = approvalAttributeKey(section)
-  const rows = listAttributes(db, { entityId, key })
-  return rows[0] ?? null
+  const row = db.prepare(`
+    SELECT id, value
+    FROM entity_attributes
+    WHERE entity_id = ?
+      AND key = ?
+      AND dismissed_at IS NULL
+      AND superseded_by IS NULL
+    ORDER BY created_at DESC, rowid DESC
+    LIMIT 1
+  `).get(entityId, key)
+  if (!row) return null
+  let value = null
+  if (row.value != null) {
+    try {
+      value = JSON.parse(row.value)
+    } catch {
+      value = row.value
+    }
+  }
+  return { id: row.id, value }
 }
 
 /**
