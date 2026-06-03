@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createEntity, listAttributes } from '../db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../db/sqlite.js'
 import {
@@ -106,6 +106,22 @@ describe('bible section approval', () => {
     const a = getBibleApprovals(db, 'ent_c').physical
     expect(a.state).toBe('approved')
     expect(a.actor).toBe('r2')
+  })
+
+  it('uses the last approval write when writes share the same millisecond timestamp', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-06-03T11:10:00.000Z'))
+    try {
+      const db = ensureDb(createTempDbPath())
+      createEntity(db, { id: 'ent_same_ms', type: 'character', name: 'C' })
+      rejectBibleSection(db, 'ent_same_ms', 'physical', { actor: 'r1' })
+      approveBibleSection(db, 'ent_same_ms', 'physical', { actor: 'r2' })
+      const a = getBibleApprovals(db, 'ent_same_ms').physical
+      expect(a.state).toBe('approved')
+      expect(a.actor).toBe('r2')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('missing entity throws EntityNotFoundError', () => {

@@ -299,6 +299,36 @@ describe('runPolish', () => {
     expect(result.polished).toContain('polished cloud prompt')
   })
 
+  it('skips local bible lookup for entityId in cloud mode', async () => {
+    let capturedSystem = ''
+    const fetchImpl = vi.fn(async (_url, init) => {
+      const body = JSON.parse(String(init?.body || '{}'))
+      capturedSystem = body.system || ''
+      return {
+        ok: true,
+        json: async () => ({ content: [{ text: 'polished cloud prompt' }] }),
+      }
+    })
+
+    const result = await runPolish({
+      payload: {
+        engine: 'cloud',
+        fragments: ['a person', 'interior'],
+        entityId: 'ruslan_levashov',
+      },
+      fetchImpl,
+      env: {
+        APP_MODE: 'cloud',
+        ANTHROPIC_API_KEY: 'test-key',
+      },
+    })
+
+    expect(result.provider).toBe('cloud')
+    expect(result.polished).toContain('polished cloud prompt')
+    expect(capturedSystem).not.toContain('### Character Bible Reference')
+    expect(sha256Hex(capturedSystem)).toBe(POLISH_V1_RENDERED_SHA256)
+  })
+
   it('falls back to cloud in auto mode when local unavailable', async () => {
     const fetchImpl = vi.fn(async (url) => {
       if (String(url).includes('/api/tags')) {
