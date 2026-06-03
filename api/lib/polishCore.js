@@ -70,6 +70,10 @@ function normalizePolishedText(polished, frontPrefix) {
     : `${normalizedPrefix}, ${polished}`
 }
 
+function canOpenLocalDatabase(env = process.env) {
+  return String(envRead(env, 'APP_MODE') || 'local-studio') !== 'cloud'
+}
+
 async function embeddedProvider({ userMessage, fetchImpl, payload, systemPrompt }) {
   const sys = systemPrompt ?? getPolishSystemPromptText()
   const port = Number(payload?.embeddedPort)
@@ -280,7 +284,7 @@ export async function runPolish({
 
   let db = dbOverride
   let openedDb = false
-  if (!db && normalizedPayload.entityId) {
+  if (!db && normalizedPayload.entityId && canOpenLocalDatabase(env)) {
     db = createSqliteDatabase({ env })
     initializeDatabase(db)
     openedDb = true

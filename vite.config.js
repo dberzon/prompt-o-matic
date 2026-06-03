@@ -116,8 +116,8 @@ import entityExtrapolateStage5Handler from './api/entity-extrapolate-stage5.js'
 // ── Chroma auto-spawn ─────────────────────────────────────────────────────────
 let chromaProcess = null
 
-function chromaProbeBaseUrls(url = 'http://127.0.0.1:8000') {
-  const bases = new Set(['http://127.0.0.1:8000', 'http://localhost:8000'])
+export function chromaProbeBaseUrls(url = 'http://127.0.0.1:8000') {
+  const bases = new Set()
   try {
     const u = new URL(url.replace(/\/$/, ''))
     const port = u.port || '8000'
@@ -125,15 +125,18 @@ function chromaProbeBaseUrls(url = 'http://127.0.0.1:8000') {
     bases.add(base)
     if (u.hostname === '127.0.0.1') bases.add(`${u.protocol}//localhost:${port}`)
     else if (u.hostname === 'localhost') bases.add(`${u.protocol}//127.0.0.1:${port}`)
-  } catch { /* keep fallbacks */ }
+  } catch {
+    bases.add('http://127.0.0.1:8000')
+    bases.add('http://localhost:8000')
+  }
   return [...bases]
 }
 
-async function isChromaRunning(url = 'http://127.0.0.1:8000') {
+export async function isChromaRunning(url = 'http://127.0.0.1:8000', fetchImpl = fetch) {
   for (const base of chromaProbeBaseUrls(url)) {
     for (const endpoint of [`${base}/api/v2/heartbeat`, `${base}/api/v1/heartbeat`]) {
       try {
-        const res = await fetch(endpoint, { signal: AbortSignal.timeout(1500) })
+        const res = await fetchImpl(endpoint, { signal: AbortSignal.timeout(1500) })
         if (res.ok) return true
       } catch { /* try next */ }
     }
@@ -150,9 +153,9 @@ function stripNodeModulesFromPathEnv(env) {
   }
 }
 
-function resolveChromaLaunch(chromaDataPath) {
+function resolveChromaLaunch(chromaDataPath, env = process.env) {
   const args = ['run', '--path', chromaDataPath]
-  const override = String(process.env.CHROMA_BIN || '').trim()
+  const override = String(env.CHROMA_BIN || '').trim()
   if (override) return { cmd: override, args }
 
   if (process.platform === 'win32') {
@@ -172,38 +175,66 @@ function resolveChromaLaunch(chromaDataPath) {
   return { cmd: 'chroma', args }
 }
 
-async function startChromaServer(chromaDataPath = './chroma_data') {
-  const already = await isChromaRunning()
+function isDefaultLocalChromaUrl(chromaUrl) {
+  try {
+    const u = new URL(chromaUrl)
+    const port = u.port || '8000'
+    return u.protocol === 'http:' && port === '8000' && (u.hostname === 'localhost' || u.hostname === '127.0.0.1')
+  } catch {
+    return true
+  }
+}
+
+export async function startChromaServer(chromaDataPath = './chroma_data', chromaUrl = 'http://localhost:8000', {
+  consoleImpl = console,
+  env = process.env,
+  isRunning = isChromaRunning,
+  processImpl = process,
+  spawnImpl = spawn,
+} = {}) {
+  const already = await isRunning(chromaUrl)
   if (already) {
-    console.log('\x1b[36m[chroma]\x1b[0m Already running on :8000')
+    consoleImpl.log(`\x1b[36m[chroma]\x1b[0m Already running at ${chromaUrl}`)
     return
   }
-  const launch = resolveChromaLaunch(chromaDataPath)
+  if (!isDefaultLocalChromaUrl(chromaUrl)) {
+    consoleImpl.log(
+      `\x1b[33m[chroma]\x1b[0m CHROMA_URL is ${chromaUrl}; skipping auto-start to avoid launching a different Chroma instance.`,
+    )
+    return
+  }
+  const launch = resolveChromaLaunch(chromaDataPath, env)
   if (!launch) return
-  console.log('\x1b[36m[chroma]\x1b[0m Starting… (' + [launch.cmd, ...launch.args].join(' ') + ')')
-  const spawnEnv = { ...process.env }
+  consoleImpl.log('\x1b[36m[chroma]\x1b[0m Starting… (' + [launch.cmd, ...launch.args].join(' ') + ')')
+  const spawnEnv = { ...env }
   stripNodeModulesFromPathEnv(spawnEnv)
-  chromaProcess = spawn(launch.cmd, launch.args, {
+  chromaProcess = spawnImpl(launch.cmd, launch.args, {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: spawnEnv,
     windowsHide: true,
   })
   chromaProcess.stdout.on('data', (d) => {
     for (const line of d.toString().trim().split('\n')) {
-      console.log(`\x1b[36m[chroma]\x1b[0m ${line}`)
+      consoleImpl.log(`\x1b[36m[chroma]\x1b[0m ${line}`)
     }
   })
   chromaProcess.stderr.on('data', (d) => {
     for (const line of d.toString().trim().split('\n')) {
-      if (line.trim()) console.log(`\x1b[36m[chroma]\x1b[0m ${line}`)
+      if (line.trim()) consoleImpl.log(`\x1b[36m[chroma]\x1b[0m ${line}`)
     }
   })
+  chromaProcess.on('error', (err) => {
+    consoleImpl.warn(
+      `\x1b[33m[chroma]\x1b[0m Failed to start Chroma (${err?.code || err?.message || 'unknown error'}). Install Python chromadb or set CHROMA_BIN; continuing without auto-start.`,
+    )
+    chromaProcess = null
+  })
   chromaProcess.on('exit', (code) => {
-    if (code !== null) console.log(`\x1b[36m[chroma]\x1b[0m Process exited (code ${code})`)
+    if (code !== null) consoleImpl.log(`\x1b[36m[chroma]\x1b[0m Process exited (code ${code})`)
     chromaProcess = null
   })
   for (const sig of ['exit', 'SIGINT', 'SIGTERM']) {
-    process.once(sig, () => { chromaProcess?.kill(); chromaProcess = null })
+    processImpl.once(sig, () => { chromaProcess?.kill(); chromaProcess = null })
   }
 }
 
@@ -274,7 +305,7 @@ function apiDevPlugin(env) {
 
       const autoStartChroma = env.AUTO_START_CHROMA !== 'false'
       server.httpServer?.once('listening', () => {
-        if (autoStartChroma) startChromaServer(env.CHROMA_DATA_PATH || './chroma_data')
+        if (autoStartChroma) startChromaServer(env.CHROMA_DATA_PATH || './chroma_data', chromaUrl)
         // Clean up orphaned preview characters (older than 1 hour) left by failed ingest deletions.
         try {
           const db = getWatcherDb(env)
