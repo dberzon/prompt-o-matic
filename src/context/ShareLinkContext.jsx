@@ -5,6 +5,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from 'react'
 import { useProject } from './ProjectContext.jsx'
 import { useWorkspace } from './WorkspaceContext.jsx'
@@ -259,11 +260,11 @@ export function readWorkflowLocalStorage() {
 export function workflowLocalStorageToCanonical(wf) {
   return decodeSharePayload({
     v: 3,
-    step: WORKFLOW_DEFAULTS.step,
+    step: typeof wf.activeStep === 'number' ? wf.activeStep : WORKFLOW_DEFAULTS.step,
     projectId: wf.activeProjectId ?? null,
     charId: wf.activeCharId ?? null,
-    entityId: null,
-    bankSlug: null,
+    entityId: wf.activeEntityId ?? null,
+    bankSlug: wf.activeBankSlug ?? null,
     scene: wf.scene ?? '',
     dirKey: wf.dirKey ?? null,
     charCount: wf.charCount ?? 1,
@@ -290,6 +291,7 @@ export function ShareLinkProvider({ children }) {
   const { active } = useProject()
   const { captureSharePayload, applyShareDecoded } = useWorkspace()
   const workflowGetterRef = useRef(/** @type {(() => Record<string, unknown>) | null} */ (null))
+  const [workflowBootstrapFields, setWorkflowBootstrapFields] = useState(null)
 
   const registerWorkflowShareSource = useCallback((getter) => {
     workflowGetterRef.current = getter
@@ -330,7 +332,9 @@ export function ShareLinkProvider({ children }) {
     const canonical = resolveShareBootstrap(hashDecoded, localDecoded)
     if (!canonical) return
     applyShareDecoded(toWorkspaceSharePayload(canonical))
-    notifyWorkflowShareApply(extractWorkflowShareFields(canonical))
+    const workflowFields = extractWorkflowShareFields(canonical)
+    setWorkflowBootstrapFields(workflowFields)
+    notifyWorkflowShareApply(workflowFields)
   }, [applyShareDecoded])
 
   const value = useMemo(
@@ -342,12 +346,14 @@ export function ShareLinkProvider({ children }) {
       resolveShareBootstrap,
       toWorkspaceSharePayload,
       extractWorkflowShareFields,
+      workflowBootstrapFields,
       registerWorkflowShareSource,
       subscribeWorkflowShareApply,
       CURRENT_SHARE_VERSION,
     }),
     [
       handleShareState,
+      workflowBootstrapFields,
       registerWorkflowShareSource,
       subscribeWorkflowShareApply,
     ],

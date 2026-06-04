@@ -111,7 +111,13 @@ function RenderStatusBar({ isPollingAudit, isPollingPortfolio, auditionStatuses,
   )
 }
 
-export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed, comfyStatus = null, comfyError = '' }) {
+export default function CastingPipelinePanel({
+  jumpToCharacterId,
+  onJumpConsumed,
+  onWorkflowCharacterSelect = null,
+  comfyStatus = null,
+  comfyError = '',
+}) {
   // ── Global UI state ───────────────────────────────────────────────────────
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
@@ -214,6 +220,11 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
   const [isSSEConnected, setIsSSEConnected] = useState(false)
   const sseRef = useRef(null)
   const sseTickTimer = useRef(null)
+
+  function selectWorkflowCharacter(characterId) {
+    setSelectedCharacterId(characterId)
+    if (characterId) onWorkflowCharacterSelect?.({ charId: characterId, source: 'casting-pipeline' })
+  }
 
   // ── Derived ───────────────────────────────────────────────────────────────
   const selectedBankEntry = useMemo(() => bankEntries.find((e) => e.id === selectedBankEntryId) || null, [bankEntries, selectedBankEntryId])
@@ -619,7 +630,7 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
       setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, error: err?.message || 'Approve failed' } }))
       return
     }
-    setSelectedCharacterId(characterId)
+    selectWorkflowCharacter(characterId)
     setTimeout(() => activeCharSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100)
     if (!selectedWorkflowId) {
       const charName = savedCharacters.find((c) => c.id === characterId)?.name || null
@@ -709,7 +720,7 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
             map.set(newId, { id: newId, name: cand?.name || '(unnamed)', age: cand?.age, lifecycleStatus: 'auditioned' })
             return [...map.values()]
           })
-          setSelectedCharacterId(newId)
+          selectWorkflowCharacter(newId)
           const charName = cand?.name || null
           setBatchFeedback({ type: 'success', message: `Character saved${charName ? `: ${charName}` : ''}.` })
           backgroundCompilePromptPacks(newId)
@@ -1321,7 +1332,7 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
         })()}
 
         <div className={styles.row}>
-          <select value={selectedCharacterId} onChange={(e) => { setSelectedCharacterId(e.target.value); setRenamingCharacterId(null) }} className={styles.select}>
+          <select value={selectedCharacterId} onChange={(e) => { selectWorkflowCharacter(e.target.value); setRenamingCharacterId(null) }} className={styles.select}>
             <option value="">Select character…</option>
             {savedCharacters.filter((c) => c.lifecycleStatus !== 'preview').map((c) => {
               const lcLabel = c.lifecycleStatus === 'portfolio_pending' ? ' ⏳' : c.lifecycleStatus === 'portfolio_failed' ? ' ✗' : c.lifecycleStatus === 'ready' ? ' ✓' : ''

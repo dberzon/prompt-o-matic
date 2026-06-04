@@ -7,7 +7,7 @@ import * as projectsApi from './lib/api/projects.js'
 import * as promptStorage from './api/promptStorage.js'
 import * as comfyApi from './lib/api/comfy.js'
 import { ProjectProvider } from './context/ProjectContext.jsx'
-import { WorkspaceProvider } from './context/WorkspaceContext.jsx'
+import { WORKFLOW_PERSIST_KEY, WorkspaceProvider } from './context/WorkspaceContext.jsx'
 import { ShareLinkProvider } from './context/ShareLinkContext.jsx'
 import { EmbeddedHealthProvider } from './context/EmbeddedHealthContext.jsx'
 import App from './App.jsx'
@@ -18,6 +18,7 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   localStorage.clear()
+  window.location.hash = ''
 })
 
 /** @returns {import('./lib/api/projects.js').ProjectRecord} */
@@ -153,5 +154,38 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByRole('tab', { name: /Casting Pipeline/i })).toBeTruthy()
     })
+  })
+
+  it('restores persisted workflow navigation into the owning App state', async () => {
+    setupAppMocks()
+    localStorage.setItem(
+      WORKFLOW_PERSIST_KEY,
+      JSON.stringify({
+        scene: 'persisted prompt scene',
+        dirKey: null,
+        charCount: 1,
+        chars: [{ g: 'man', a: '30s' }],
+        scenario: null,
+        chips: {},
+        activeProjectId: 'p_two',
+        activeCharId: 'char_restore',
+        activeEntityId: 'entity_restore',
+        activeBankSlug: 'slug-restore',
+        activeStep: 4,
+        activeSubTab: 'actor-bank',
+      }),
+    )
+
+    renderApp()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('prompt-studio-step')).toBeTruthy()
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Second Project' })).toBeTruthy()
+    })
+
+    const stepper = screen.getByRole('navigation', { name: /workflow stepper/i })
+    expect(within(stepper).getByRole('button', { name: /prompt studio/i }).getAttribute('aria-current')).toBe('step')
   })
 })
