@@ -1266,17 +1266,30 @@ export function listAttributeSupersedeChain(db, { entityId, attributeId }) {
     current = next
   }
 
-  const items = listAttributes(db, {
+  const chainRows = listAttributes(db, {
     entityId: requested.entityId,
     key: requested.key,
     includeDismissed: true,
     includeSuperseded: true,
-  }).sort((left, right) => {
-    const leftTime = Date.parse(left.createdAt || '') || 0
-    const rightTime = Date.parse(right.createdAt || '') || 0
-    if (leftTime !== rightTime) return leftTime - rightTime
-    return String(left.id).localeCompare(String(right.id))
   })
+  const byId = new Map(chainRows.map((item) => [item.id, item]))
+  let root = requested
+  const rootVisited = new Set([root.id])
+  while (true) {
+    const previous = chainRows.find((item) => item.supersededBy === root.id)
+    if (!previous || rootVisited.has(previous.id)) break
+    rootVisited.add(previous.id)
+    root = previous
+  }
+
+  const items = []
+  let item = root
+  const itemVisited = new Set()
+  while (item && !itemVisited.has(item.id)) {
+    items.push(item)
+    itemVisited.add(item.id)
+    item = item.supersededBy ? byId.get(item.supersededBy) : null
+  }
 
   return {
     entityId: requested.entityId,
@@ -1308,7 +1321,7 @@ export function listAttributes(db, { entityId, key, provenance, includeDismissed
     conditions.push('superseded_by IS NULL')
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-  const rows = db.prepare(`SELECT * FROM entity_attributes ${where} ORDER BY created_at DESC`).all(...params)
+  const rows = db.prepare(`SELECT * FROM entity_attributes ${where} ORDER BY created_at DESC, rowid DESC`).all(...params)
   return rows.map(mapAttributeRow)
 }
 
