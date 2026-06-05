@@ -195,7 +195,7 @@ describe('App', () => {
       blend: { enabled: false, dirKey: null, weight: 70 },
       narrativeBeat: null,
     })
-    window.location.hash = `state=${encoded}`
+    window.location.hash = `#state=${encoded}`
 
     renderApp()
 

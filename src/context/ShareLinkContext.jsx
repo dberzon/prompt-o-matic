@@ -331,7 +331,10 @@ export function ShareLinkProvider({ children }) {
     const lsRaw = readWorkflowLocalStorage()
     const localDecoded = lsRaw ? workflowLocalStorageToCanonical(lsRaw) : null
     const canonical = resolveShareBootstrap(hashDecoded, localDecoded)
-    if (!canonical) return
+    if (!canonical) {
+      latestWorkflowShareFields = null
+      return
+    }
     applyShareDecoded(toWorkspaceSharePayload(canonical))
     notifyWorkflowShareApply(extractWorkflowShareFields(canonical))
   }, [applyShareDecoded])
