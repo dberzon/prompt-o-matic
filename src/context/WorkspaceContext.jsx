@@ -259,7 +259,7 @@ export function WorkspaceProvider({ children }) {
   const [customDirectors, setCustomDirectors] = useState(() => readCustomDirectors())
   const [profiles, setProfiles] = useState({})
   const [selectedProfile, setSelectedProfile] = useState('')
-  const [narrativeBeat, setNarrativeBeat] = useState(null)
+  const [narrativeBeat, setNarrativeBeat] = useState(persistSeed?.narrativeBeat ?? null)
   const [useStyleKeyForPolish, setUseStyleKeyForPolish] = useState(false)
   const [applyDiff, setApplyDiff] = useState(null)
   const [isApplyDiffPinned, setIsApplyDiffPinned] = useState(false)

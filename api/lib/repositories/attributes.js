@@ -51,13 +51,13 @@ export function validateAttributeKeyForEntityType(entityType, key) {
     return { ok: false, reason: 'invalid_key_charset' }
   }
   const root = key.includes('.') ? key.slice(0, key.indexOf('.')) : key
-  if (entityType === 'character') {
+  if (entityType === 'character' || entityType === 'environment') {
     if (CHARACTER_ROOTS.has(root)) return { ok: true }
-    return { ok: false, reason: `invalid_character_key_root:${root}` }
+    return { ok: false, reason: `invalid_${entityType}_key_root:${root}` }
   }
-  if (entityType === 'environment' || entityType === 'location') {
+  if (entityType === 'location') {
     if (LOCATION_ROOTS.has(root)) return { ok: true }
-    return { ok: false, reason: `invalid_environment_key_root:${root}` }
+    return { ok: false, reason: `invalid_location_key_root:${root}` }
   }
   if (entityType === 'prop' || entityType === 'institution') {
     return { ok: true }

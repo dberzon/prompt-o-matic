@@ -278,8 +278,10 @@ export function workflowLocalStorageToCanonical(wf) {
 const ShareLinkContext = createContext(null)
 
 const workflowApplyListeners = new Set()
+let latestWorkflowShareFields = null
 
 function notifyWorkflowShareApply(fields) {
+  latestWorkflowShareFields = fields
   for (const listener of workflowApplyListeners) {
     listener(fields)
   }
@@ -302,6 +304,7 @@ export function ShareLinkProvider({ children }) {
 
   const subscribeWorkflowShareApply = useCallback((listener) => {
     workflowApplyListeners.add(listener)
+    if (latestWorkflowShareFields) listener(latestWorkflowShareFields)
     return () => workflowApplyListeners.delete(listener)
   }, [])
 
@@ -328,7 +331,10 @@ export function ShareLinkProvider({ children }) {
     const lsRaw = readWorkflowLocalStorage()
     const localDecoded = lsRaw ? workflowLocalStorageToCanonical(lsRaw) : null
     const canonical = resolveShareBootstrap(hashDecoded, localDecoded)
-    if (!canonical) return
+    if (!canonical) {
+      latestWorkflowShareFields = null
+      return
+    }
     applyShareDecoded(toWorkspaceSharePayload(canonical))
     notifyWorkflowShareApply(extractWorkflowShareFields(canonical))
   }, [applyShareDecoded])

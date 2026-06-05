@@ -68,6 +68,13 @@ export default {
           sendJsonMiddleware(res, 404, { error: 'Entity not found' })
           return
         }
+        if (err instanceof z.ZodError) {
+          sendJsonMiddleware(res, 422, {
+            error: 'Bible is incomplete or invalid',
+            issues: err.issues,
+          })
+          return
+        }
         throw err
       }
 
