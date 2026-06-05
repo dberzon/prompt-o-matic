@@ -30,7 +30,12 @@ function SceneProbe({ nextScene, onReady }) {
     if (nextScene != null) ws.setScene(nextScene)
     onReady?.(ws)
   }, [nextScene, onReady, ws])
-  return <div data-testid="scene">{ws.scene}</div>
+  return (
+    <>
+      <div data-testid="scene">{ws.scene}</div>
+      <div data-testid="narrative-beat">{ws.narrativeBeat ?? ''}</div>
+    </>
+  )
 }
 
 function renderWorkspace(ui) {
@@ -86,6 +91,7 @@ describe('WorkspaceContext workflow persist', () => {
 
     renderWorkspace(<SceneProbe />)
     expect(screen.getByTestId('scene').textContent).toBe('restored on reload')
+    expect(screen.getByTestId('narrative-beat').textContent).toBe('beat-restore')
   })
 
   it('ignores malformed JSON in localStorage on mount without throwing', () => {

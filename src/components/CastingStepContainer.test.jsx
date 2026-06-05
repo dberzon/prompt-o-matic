@@ -19,10 +19,16 @@ function CastingStepHarness(props) {
 
 vi.mock('./CastingPipelinePanel.jsx', () => ({
   default: () => (
-    <select data-testid="mock-pipeline-select" defaultValue="">
-      <option value="">Select character…</option>
-      <option value="char_pipeline">Pipeline character</option>
-    </select>
+    <>
+      <select data-testid="mock-pipeline-workflow-select" defaultValue="">
+        <option value="">Select workflow…</option>
+        <option value="workflow_not_character">Workflow</option>
+      </select>
+      <select data-testid="mock-pipeline-select" defaultValue="" data-workflow-character-select="true">
+        <option value="">Select character…</option>
+        <option value="char_pipeline">Pipeline character</option>
+      </select>
+    </>
   ),
 }))
 
@@ -129,6 +135,22 @@ describe('CastingStepContainer', () => {
     setActiveCharId.mockClear()
     fireEvent.click(screen.getByTestId('mock-bank-char'))
     expect(setActiveCharId).toHaveBeenCalledWith('char_bank')
+  })
+
+  it('ignores non-character selects inside the Casting Pipeline panel', () => {
+    const setActiveCharId = vi.fn()
+    render(
+      <CastingStepHarness
+        {...baseProps}
+        setActiveCharId={setActiveCharId}
+      />,
+    )
+
+    fireEvent.change(screen.getByTestId('mock-pipeline-workflow-select'), {
+      target: { value: 'workflow_not_character' },
+    })
+
+    expect(setActiveCharId).not.toHaveBeenCalled()
   })
 
   it('Next Step is disabled without activeCharId and calls onNext when enabled', () => {

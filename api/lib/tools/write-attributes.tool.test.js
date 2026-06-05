@@ -68,4 +68,26 @@ describe('write-attributes tool', () => {
       expect(['canon', 'inferred', 'suggested', 'temporary', 'derived']).toContain(row.provenance)
     }
   })
+
+  it('accepts character-shaped Bible keys for environment entities', async () => {
+    const { db } = createTempDb()
+    const entity = createEntity(db, { id: 'ent_env_1', type: 'environment', name: 'Communal Apartment' })
+    setWriteAttributesDb({ db })
+
+    const reg = createRegistry({ tools: [writeAttributesTool] })
+
+    const out = await reg.invoke('write-attributes', {
+      entityId: entity.id,
+      attributes: [
+        { key: 'demographics.eraLabel', value: 'late Soviet', provenance: 'inferred' },
+        { key: 'physical.face', value: 'cracked communal hallway plaster', provenance: 'inferred' },
+      ],
+    })
+
+    expect(out.written.map((row) => row.key).sort()).toEqual([
+      'demographics.eraLabel',
+      'physical.face',
+    ])
+    expect(out.rejected).toHaveLength(0)
+  })
 })

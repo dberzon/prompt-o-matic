@@ -201,6 +201,37 @@ describe('POST /api/bibles/:entityId/snapshot', () => {
     expect(out.body?.error).toMatch(/not found/i)
   })
 
+  it('returns 422 instead of 500 when the projected Bible is incomplete', async () => {
+    const dbPath = tempDbPath()
+    const db = openDb(dbPath)
+    createEntity(db, { id: 'ent_incomplete', type: 'character', name: 'Incomplete' })
+    writeAttribute(db, {
+      entityId: 'ent_incomplete',
+      key: 'demographics.gender',
+      value: 'nb',
+      provenance: 'canon',
+    })
+    const { res, out } = mockRes()
+    const req = /** @type {import('http').IncomingMessage} */ ({
+      method: 'POST',
+      url: '/api/bibles/ent_incomplete/snapshot',
+      body: { label: 'draft' },
+    })
+
+    const orig = process.env.SQLITE_DB_PATH
+    process.env.SQLITE_DB_PATH = dbPath
+    try {
+      await snapshotRoute.handler(req, res)
+    } finally {
+      if (orig === undefined) delete process.env.SQLITE_DB_PATH
+      else process.env.SQLITE_DB_PATH = orig
+    }
+
+    expect(out.status).toBe(422)
+    expect(out.body?.error).toMatch(/incomplete|invalid/i)
+    expect(out.body?.issues?.length).toBeGreaterThan(0)
+  })
+
   it('round-trips parentSnapshotId for same entity', async () => {
     const dbPath = tempDbPath()
     const db = openDb(dbPath)
