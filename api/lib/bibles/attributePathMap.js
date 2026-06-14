@@ -8,6 +8,7 @@
 
 /** @type {AttributePathMap} */
 export const CHARACTER_ENTITY_KEY_TO_BIBLE_PATH = {
+  description: 'visuals.portraitBrief',
   'demographics.age': 'demographics.ageRange',
   'setting.era': 'demographics.eraLabel',
   'home.housingNotes': 'demographics.housingNotes',

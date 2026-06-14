@@ -52,19 +52,19 @@ describe('BibleStepContainer', () => {
     expect(screen.queryByTestId('mock-bible-editor')).toBeNull()
   })
 
-  it('POSTs lift-from-bank-entry with bank slug and sets entity id on success', async () => {
+  it('POSTs lift-from-bank-entry with canonical bank slug and sets entity id on success', async () => {
     const setActiveEntityId = vi.fn()
     const fetchMock = vi.fn(async (url, init) => {
       const u = String(url)
       if (u.includes('/api/characters?id=')) {
         return {
           ok: true,
-          json: async () => ({ item: { name: 'Test Actor', description: 'Raw desc' } }),
+          json: async () => ({ item: { name: 'Test Actor', slug: 'canonical_slug', description: 'Raw desc' } }),
         }
       }
       if (u.includes('/api/entities/lift-from-bank-entry')) {
         const body = JSON.parse(init.body)
-        expect(body.slug).toBe('bank_slug_1')
+        expect(body.slug).toBe('canonical_slug')
         return {
           ok: true,
           json: async () => ({ ok: true, entity: { id: 'ent_lifted' } }),
