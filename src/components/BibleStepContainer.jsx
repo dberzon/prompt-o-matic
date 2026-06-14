@@ -28,7 +28,7 @@ export default function BibleStepContainer({
   const [liftError, setLiftError] = useState('')
 
   const handleLift = useCallback(async () => {
-    const bankEntrySlug = activeBankSlug ?? activeCharId
+    let bankEntrySlug = activeBankSlug ?? activeCharId
     if (!bankEntrySlug || !activeCharId) return
 
     setLifting(true)
@@ -41,6 +41,9 @@ export default function BibleStepContainer({
       if (res.ok && data?.item) {
         name = data.item.name || name
         description = data.item.rawDescription || data.item.description || ''
+        if (typeof data.item.slug === 'string' && data.item.slug.trim()) {
+          bankEntrySlug = data.item.slug.trim()
+        }
       }
     } catch {
       /* fall back to slug as name */

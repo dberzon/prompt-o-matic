@@ -290,7 +290,7 @@ describe('projectBible / projection', () => {
     expect(_provenance['visuals.continuityNotes']).toBe('derived')
   })
 
-  it('projectBibleView returns empty bible without parsing required sections', () => {
+  it('projectBibleView maps bank lift description into a partial visual bible', () => {
     const dbPath = createTempDbPath()
     process.env.SQLITE_DB_PATH = dbPath
     process.env.APP_MODE = 'local-studio'
@@ -306,8 +306,12 @@ describe('projectBible / projection', () => {
     })
     const view = projectBibleView(db, 'ent_empty')
     expect(view.entityType).toBe('character')
-    expect(view.bible).toEqual({})
-    expect(view.provenance).toEqual({})
+    expect(view.bible).toEqual({
+      visuals: { portraitBrief: 'Only a bank description.' },
+    })
+    expect(view.provenance).toEqual({
+      'visuals.portraitBrief': 'canon',
+    })
     expect(() => CharacterBibleSchema.parse(view.bible)).toThrow()
   })
 

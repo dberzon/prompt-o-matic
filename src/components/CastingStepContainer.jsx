@@ -84,6 +84,16 @@ export default function CastingStepContainer({
       : payload)
   }, [applyCharacterSelection])
 
+  const handleOpenActorBankInCastingRoom = useCallback((charId, bankSlug = null) => {
+    applyCharacterSelection({
+      charId,
+      bankSlug,
+      source: 'actor-bank',
+    })
+    setActiveStep(1)
+    setActiveSubTab('casting-pipeline')
+  }, [applyCharacterSelection, setActiveStep, setActiveSubTab])
+
   return (
     <div className={styles.root}>
       <div className={styles.subTabs} role="tablist" aria-label="Casting step views">
@@ -133,7 +143,7 @@ export default function CastingStepContainer({
         )}
         {activeSubTab === 'actor-bank' && (
           <ActorBankView
-            setActiveCharId={setActiveCharId}
+            onOpenInCastingRoom={handleOpenActorBankInCastingRoom}
             setActiveStep={setActiveStep}
             setActiveSubTab={setActiveSubTab}
           />

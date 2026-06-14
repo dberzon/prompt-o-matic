@@ -260,7 +260,7 @@ export default function ActorDetail({ character: initialCharacter, images: initi
             <button
               type="button"
               className={styles.castingRoomBtn}
-              onClick={() => onOpenInCastingRoom(id)}
+              onClick={() => onOpenInCastingRoom(id, character.slug ?? null)}
             >
               Open in Casting Room →
             </button>

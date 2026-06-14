@@ -145,7 +145,7 @@ describe('bibles HTTP routes (ya8d)', () => {
       expect(out.body?.entityType).toBe('character')
     })
 
-    it('returns partial bible after bank lift (description only, no Zod error)', async () => {
+    it('returns partial visual bible after bank lift (description only, no Zod error)', async () => {
       const dbPath = tempDbPath()
       const db = openDb(dbPath)
       createEntity(db, { id: 'ent_lift', type: 'character', name: 'Lifted' })
@@ -168,8 +168,12 @@ describe('bibles HTTP routes (ya8d)', () => {
 
       expect(out.status).toBe(200)
       expect(out.body?.entityType).toBe('character')
-      expect(out.body?.bible).toEqual({})
-      expect(out.body?.provenance).toEqual({})
+      expect(out.body?.bible).toEqual({
+        visuals: { portraitBrief: 'Weary detective in a wool coat.' },
+      })
+      expect(out.body?.provenance).toEqual({
+        'visuals.portraitBrief': 'canon',
+      })
     })
 
     it('returns 404 for unknown entity', async () => {

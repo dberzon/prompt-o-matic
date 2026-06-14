@@ -68,6 +68,7 @@ describe('detectEntityBibleGaps', () => {
     })
     const gaps = detectEntityBibleGaps(db, 'e2')
     expect(gaps.some((g) => g.field === 'description')).toBe(false)
+    expect(gaps.some((g) => g.field === 'visuals.portraitBrief')).toBe(false)
     expect(gaps.some((g) => g.field === 'demographics.gender')).toBe(true)
     expect(gaps.length).toBeGreaterThan(5)
   })
