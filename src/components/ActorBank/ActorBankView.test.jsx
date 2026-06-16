@@ -40,15 +40,15 @@ function stubCharactersFetch() {
 }
 
 describe('ActorBankView', () => {
-  it('Open in Casting Room calls all three setters exactly once', async () => {
+  it('Open in Casting Room selects the actor and navigates to Casting Pipeline', async () => {
     stubCharactersFetch()
-    const setActiveCharId = vi.fn()
+    const onWorkflowCharacterSelect = vi.fn()
     const setActiveStep = vi.fn()
     const setActiveSubTab = vi.fn()
 
     render(
       <ActorBankView
-        setActiveCharId={setActiveCharId}
+        onWorkflowCharacterSelect={onWorkflowCharacterSelect}
         setActiveStep={setActiveStep}
         setActiveSubTab={setActiveSubTab}
       />,
@@ -68,8 +68,8 @@ describe('ActorBankView', () => {
       fireEvent.click(screen.getByRole('button', { name: /open in casting room/i }))
     })
 
-    expect(setActiveCharId).toHaveBeenCalledTimes(1)
-    expect(setActiveCharId).toHaveBeenCalledWith(CHAR_ID)
+    expect(onWorkflowCharacterSelect).toHaveBeenCalledTimes(1)
+    expect(onWorkflowCharacterSelect).toHaveBeenCalledWith({ charId: CHAR_ID, source: 'actor-bank' })
     expect(setActiveStep).toHaveBeenCalledTimes(1)
     expect(setActiveStep).toHaveBeenCalledWith(1)
     expect(setActiveSubTab).toHaveBeenCalledTimes(1)

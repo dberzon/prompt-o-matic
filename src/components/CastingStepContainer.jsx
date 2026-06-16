@@ -71,6 +71,7 @@ export default function CastingStepContainer({
   const handlePipelineSelectCapture = useCallback((event) => {
     const target = event.target
     if (!(target instanceof HTMLSelectElement)) return
+    if (target.dataset.workflowCharacterSelect !== 'true') return
     if (!target.value) return
     applyCharacterSelection({
       charId: target.value,
@@ -133,7 +134,7 @@ export default function CastingStepContainer({
         )}
         {activeSubTab === 'actor-bank' && (
           <ActorBankView
-            setActiveCharId={setActiveCharId}
+            onWorkflowCharacterSelect={relayCharacterSelect}
             setActiveStep={setActiveStep}
             setActiveSubTab={setActiveSubTab}
           />
