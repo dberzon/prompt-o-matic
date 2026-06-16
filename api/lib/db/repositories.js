@@ -1271,7 +1271,28 @@ export function listAttributeSupersedeChain(db, { entityId, attributeId }) {
     key: requested.key,
     includeDismissed: true,
     includeSuperseded: true,
-  }).sort((left, right) => {
+  })
+  const chainDepth = new Map()
+  const byId = new Map(items.map((item) => [item.id, item]))
+  const depthFromHead = (item) => {
+    if (chainDepth.has(item.id)) return chainDepth.get(item.id)
+    const visited = new Set([item.id])
+    let depth = 0
+    let cursor = item
+    while (cursor?.supersededBy) {
+      const next = byId.get(cursor.supersededBy)
+      if (!next || visited.has(next.id)) break
+      depth += 1
+      visited.add(next.id)
+      cursor = next
+    }
+    chainDepth.set(item.id, depth)
+    return depth
+  }
+  items.sort((left, right) => {
+    const leftDepth = depthFromHead(left)
+    const rightDepth = depthFromHead(right)
+    if (leftDepth !== rightDepth) return rightDepth - leftDepth
     const leftTime = Date.parse(left.createdAt || '') || 0
     const rightTime = Date.parse(right.createdAt || '') || 0
     if (leftTime !== rightTime) return leftTime - rightTime
