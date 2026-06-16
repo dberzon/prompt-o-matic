@@ -1,4 +1,5 @@
 import { getEntity, listAttributes } from '../db/repositories.js'
+import { z } from 'zod'
 import {
   CHARACTER_ENTITY_KEY_TO_BIBLE_PATH,
   ERA_ENTITY_KEY_TO_BIBLE_PATH,
@@ -179,6 +180,50 @@ function leafMapToProvenance(rootMap) {
   return out
 }
 
+/**
+ * @param {import('zod').ZodTypeAny} fieldSchema
+ * @returns {import('zod').ZodTypeAny}
+ */
+function unwrapOptionalDefault(fieldSchema) {
+  let cur = fieldSchema
+  while (cur instanceof z.ZodOptional || cur instanceof z.ZodDefault) {
+    cur = cur.unwrap()
+  }
+  return cur
+}
+
+/**
+ * Fill only top-level structural sections so sparse entities still have a
+ * schema-identifiable Bible shape for the editor and export renderers.
+ *
+ * @param {Record<string, unknown>} nested
+ * @param {import('zod').ZodObject<any>} rootSchema
+ * @returns {Record<string, unknown>}
+ */
+function withProjectionSkeleton(nested, rootSchema) {
+  const out = { ...nested }
+  for (const key of Object.keys(rootSchema.shape)) {
+    if (out[key] !== undefined) continue
+    const inner = unwrapOptionalDefault(rootSchema.shape[key])
+    if (inner instanceof z.ZodObject) {
+      out[key] = {}
+    } else if (inner instanceof z.ZodArray) {
+      out[key] = []
+    }
+  }
+  return out
+}
+
+/**
+ * @param {Record<string, unknown>} nested
+ * @param {import('zod').ZodObject<any>} rootSchema
+ * @returns {Record<string, unknown>}
+ */
+function parseStrictOrPartial(nested, rootSchema) {
+  const parsed = rootSchema.safeParse(nested)
+  return parsed.success ? parsed.data : withProjectionSkeleton(nested, rootSchema)
+}
+
 const CHARACTER_BIBLE_ROOTS = new Set(Object.keys(CharacterBibleSchema.shape))
 const LOCATION_BIBLE_ROOTS = new Set(Object.keys(LocationBibleSchema.shape))
 const ERA_BIBLE_ROOTS = new Set(Object.keys(EraBibleSchema.shape))
@@ -263,7 +308,7 @@ function buildCharacterBibleLeafMap(db, entityId) {
 export function projectCharacterBible(db, entityId) {
   const leafMap = buildCharacterBibleLeafMap(db, entityId)
   const nested = leafMapToNestedObject(leafMap)
-  const parsed = CharacterBibleSchema.parse(nested)
+  const parsed = parseStrictOrPartial(nested, CharacterBibleSchema)
   return { ...parsed, _provenance: leafMapToProvenance(leafMap) }
 }
 
@@ -289,7 +334,7 @@ function buildLocationBibleLeafMap(db, entityId) {
 export function projectLocationBible(db, entityId) {
   const leafMap = buildLocationBibleLeafMap(db, entityId)
   const nested = leafMapToNestedObject(leafMap)
-  const parsed = LocationBibleSchema.parse(nested)
+  const parsed = parseStrictOrPartial(nested, LocationBibleSchema)
   return { ...parsed, _provenance: leafMapToProvenance(leafMap) }
 }
 
@@ -310,7 +355,7 @@ function buildEraBibleLeafMap(db, entityId) {
 export function projectEraBible(db, entityId) {
   const leafMap = buildEraBibleLeafMap(db, entityId)
   const nested = leafMapToNestedObject(leafMap)
-  const parsed = EraBibleSchema.parse(nested)
+  const parsed = parseStrictOrPartial(nested, EraBibleSchema)
   return { ...parsed, _provenance: leafMapToProvenance(leafMap) }
 }
 
@@ -336,7 +381,7 @@ function buildPropBibleLeafMap(db, entityId) {
 export function projectPropBible(db, entityId) {
   const leafMap = buildPropBibleLeafMap(db, entityId)
   const nested = leafMapToNestedObject(leafMap)
-  const parsed = PropBibleSchema.parse(nested)
+  const parsed = parseStrictOrPartial(nested, PropBibleSchema)
   return { ...parsed, _provenance: leafMapToProvenance(leafMap) }
 }
 
