@@ -11,6 +11,19 @@ export function sendJsonMiddleware(res, status, payload) {
   res.end(JSON.stringify(payload))
 }
 
+export function getRequestQueryParam(req, key) {
+  const direct = req?.query?.[key]
+  if (typeof direct === 'string') return direct
+  if (Array.isArray(direct) && typeof direct[0] === 'string') return direct[0]
+
+  try {
+    const url = new URL(req?.url || '', 'http://localhost')
+    return url.searchParams.get(key) ?? undefined
+  } catch {
+    return undefined
+  }
+}
+
 export async function readRawBody(req) {
   if (Buffer.isBuffer(req.rawBody)) return req.rawBody
   const chunks = []

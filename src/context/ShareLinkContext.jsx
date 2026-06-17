@@ -277,19 +277,20 @@ export function workflowLocalStorageToCanonical(wf) {
 
 const ShareLinkContext = createContext(null)
 
-const workflowApplyListeners = new Set()
-
-function notifyWorkflowShareApply(fields) {
-  for (const listener of workflowApplyListeners) {
-    listener(fields)
-  }
-}
-
 /** @param {{ children: import('react').ReactNode }} props */
 export function ShareLinkProvider({ children }) {
   const { active } = useProject()
   const { captureSharePayload, applyShareDecoded } = useWorkspace()
   const workflowGetterRef = useRef(/** @type {(() => Record<string, unknown>) | null} */ (null))
+  const workflowApplyListenersRef = useRef(new Set())
+  const latestWorkflowApplyFieldsRef = useRef(null)
+
+  const notifyWorkflowShareApply = useCallback((fields) => {
+    latestWorkflowApplyFieldsRef.current = fields
+    for (const listener of workflowApplyListenersRef.current) {
+      listener(fields)
+    }
+  }, [])
 
   const registerWorkflowShareSource = useCallback((getter) => {
     workflowGetterRef.current = getter
@@ -301,8 +302,9 @@ export function ShareLinkProvider({ children }) {
   }, [])
 
   const subscribeWorkflowShareApply = useCallback((listener) => {
-    workflowApplyListeners.add(listener)
-    return () => workflowApplyListeners.delete(listener)
+    workflowApplyListenersRef.current.add(listener)
+    if (latestWorkflowApplyFieldsRef.current) listener(latestWorkflowApplyFieldsRef.current)
+    return () => workflowApplyListenersRef.current.delete(listener)
   }, [])
 
   const handleShareState = useCallback(async () => {
@@ -331,7 +333,7 @@ export function ShareLinkProvider({ children }) {
     if (!canonical) return
     applyShareDecoded(toWorkspaceSharePayload(canonical))
     notifyWorkflowShareApply(extractWorkflowShareFields(canonical))
-  }, [applyShareDecoded])
+  }, [applyShareDecoded, notifyWorkflowShareApply])
 
   const value = useMemo(
     () => ({

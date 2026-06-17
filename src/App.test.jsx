@@ -7,8 +7,8 @@ import * as projectsApi from './lib/api/projects.js'
 import * as promptStorage from './api/promptStorage.js'
 import * as comfyApi from './lib/api/comfy.js'
 import { ProjectProvider } from './context/ProjectContext.jsx'
-import { WorkspaceProvider } from './context/WorkspaceContext.jsx'
-import { ShareLinkProvider } from './context/ShareLinkContext.jsx'
+import { WorkspaceProvider, WORKFLOW_PERSIST_KEY } from './context/WorkspaceContext.jsx'
+import { ShareLinkProvider, encodeShareState } from './context/ShareLinkContext.jsx'
 import { EmbeddedHealthProvider } from './context/EmbeddedHealthContext.jsx'
 import App from './App.jsx'
 
@@ -18,6 +18,7 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   localStorage.clear()
+  window.location.hash = ''
 })
 
 /** @returns {import('./lib/api/projects.js').ProjectRecord} */
@@ -153,5 +154,51 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByRole('tab', { name: /Casting Pipeline/i })).toBeTruthy()
     })
+  })
+
+  it('restores the active workflow character from persisted workspace state', async () => {
+    setupAppMocks()
+    localStorage.setItem(WORKFLOW_PERSIST_KEY, JSON.stringify({
+      scene: '',
+      dirKey: null,
+      charCount: 1,
+      chars: [{ g: 'person', a: '30s' }],
+      chips: {},
+      activeProjectId: 'proj_default',
+      activeCharId: 'char_restore_123',
+    }))
+
+    renderApp()
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /next step/i }).disabled).toBe(false)
+    })
+    expect(screen.getByText(/selected character: char_res/i)).toBeTruthy()
+  })
+
+  it('applies workflow fields from share state on boot', async () => {
+    const originalHash = window.location.hash
+    setupAppMocks()
+    window.location.hash = `#state=${encodeShareState({
+      v: 3,
+      step: 4,
+      projectId: 'proj_default',
+      charId: 'char_from_share',
+      entityId: 'entity_from_share',
+      bankSlug: 'bank_from_share',
+      scene: 'shared scene',
+      dirKey: null,
+      charCount: 1,
+      chars: [{ g: 'person', a: '30s' }],
+      chips: {},
+    })}`
+
+    renderApp()
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /prompt studio/i }).getAttribute('aria-current')).toBe('step')
+    })
+
+    window.location.hash = originalHash
   })
 })

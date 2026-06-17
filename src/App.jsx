@@ -37,19 +37,62 @@ export default function App() {
     return <DevDashboard />
   }
 
-  const { active } = useProject()
+  const { active, setActiveById } = useProject()
   const activeProjectId = active?.id ?? null
   const ws = useWorkspace()
-  const { handleShareState } = useShareLink()
+  const {
+    handleShareState,
+    registerWorkflowShareSource,
+    subscribeWorkflowShareApply,
+  } = useShareLink()
   const { comfyStatus, comfyError, embeddedStatus, setEmbeddedStatus } = useEmbeddedHealth()
 
   const [activeStep, setActiveStep] = useState(1)
   const [activeSubTab, setActiveSubTab] = useState('casting-pipeline')
-  const [activeCharId, setActiveCharId] = useState(null)
+  const [activeCharId, setActiveCharId] = useState(() => ws.restoredWorkflowIds?.activeCharId ?? null)
   const [activeEntityId, setActiveEntityId] = useState(null)
   const [activeBankSlug, setActiveBankSlug] = useState(null)
   const [embeddedSetupOpen, setEmbeddedSetupOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+
+  useEffect(() => ws.registerWorkflowPersistSource(() => ({
+    activeProjectId,
+    activeCharId,
+  })), [ws.registerWorkflowPersistSource, activeProjectId, activeCharId])
+
+  useEffect(() => registerWorkflowShareSource(() => ({
+    step: activeStep,
+    projectId: activeProjectId,
+    charId: activeCharId,
+    entityId: activeEntityId,
+    bankSlug: activeBankSlug,
+  })), [
+    registerWorkflowShareSource,
+    activeStep,
+    activeProjectId,
+    activeCharId,
+    activeEntityId,
+    activeBankSlug,
+  ])
+
+  useEffect(() => subscribeWorkflowShareApply((fields) => {
+    const step = Number(fields?.step)
+    if (Number.isInteger(step) && step >= 1 && step <= 6) {
+      setActiveStep(step)
+    }
+    if (typeof fields?.projectId === 'string' && fields.projectId) {
+      setActiveById(fields.projectId)
+    }
+    if (typeof fields?.charId === 'string' || fields?.charId === null) {
+      setActiveCharId(fields.charId)
+    }
+    if (typeof fields?.entityId === 'string' || fields?.entityId === null) {
+      setActiveEntityId(fields.entityId)
+    }
+    if (typeof fields?.bankSlug === 'string' || fields?.bankSlug === null) {
+      setActiveBankSlug(fields.bankSlug)
+    }
+  }), [subscribeWorkflowShareApply, setActiveById])
 
   useEffect(() => {
     if (activeStep === 4) ws.fetchBankSlugs()
