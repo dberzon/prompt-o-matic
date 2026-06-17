@@ -62,6 +62,7 @@ class MockEventSource {
 afterEach(() => {
   cleanup()
   lastEs.current = null
+  vi.clearAllMocks()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })

@@ -196,7 +196,10 @@ describe('App', () => {
       blend: { enabled: false, dirKey: null, weight: 70 },
       narrativeBeat: null,
     })
-    window.history.replaceState(null, '', `/#state=${encoded}`)
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, pathname: '/', hash: `#state=${encoded}` },
+    })
     setupAppMocks()
 
     renderApp()
