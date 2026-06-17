@@ -74,7 +74,7 @@ export default function BibleEditor({ entityId }) {
   }, [autofillUi])
 
   const cancelRun = useCallback((runId) => {
-    void cancelAutofillBible(runId).catch(() => {
+    void Promise.resolve(cancelAutofillBible(runId)).catch(() => {
       /* best-effort cleanup for a background job */
     })
   }, [])
