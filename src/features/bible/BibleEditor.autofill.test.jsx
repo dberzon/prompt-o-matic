@@ -13,13 +13,14 @@ vi.mock('../../lib/api/bibles.js', () => ({
 
 vi.mock('../../lib/api/agentsAutofill.js', () => ({
   startAutofillBible: vi.fn(),
+  cancelAutofillBible: vi.fn(),
 }))
 
 vi.mock('../../lib/api/entityAttributes.js', () => ({
   listEntityAttributes: vi.fn(),
 }))
 
-import { startAutofillBible } from '../../lib/api/agentsAutofill.js'
+import { cancelAutofillBible, startAutofillBible } from '../../lib/api/agentsAutofill.js'
 import { fetchBible, fetchBibleCompleteness } from '../../lib/api/bibles.js'
 import { listEntityAttributes } from '../../lib/api/entityAttributes.js'
 
@@ -235,5 +236,93 @@ describe('BibleEditor autofill', () => {
     })
 
     await waitFor(() => expect(btn.disabled).toBe(false))
+  })
+
+  it('ignores rapid re-clicks while autofill start is pending', async () => {
+    vi.stubGlobal('EventSource', MockEventSource)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url) => {
+        const u = typeof url === 'string' ? url : String(url)
+        if (u.includes('/api/extrapolation/autofill-run-test/status')) {
+          return jsonResponse({
+            runId: 'autofill-run-test',
+            done: false,
+            cancelled: false,
+            result: null,
+            error: null,
+            events: [],
+          })
+        }
+        return jsonResponse({})
+      }),
+    )
+
+    vi.mocked(fetchBible).mockResolvedValue({ bible: characterBible, provenance: {} })
+    vi.mocked(fetchBibleCompleteness).mockResolvedValue(completenessReport())
+    vi.mocked(listEntityAttributes).mockResolvedValue({ items: [] })
+    let resolveStart
+    vi.mocked(startAutofillBible).mockImplementation(
+      () => new Promise((resolve) => {
+        resolveStart = resolve
+      }),
+    )
+
+    render(<BibleEditor entityId="ent_autofill" />)
+    await waitFor(() => expect(screen.getByTestId('T_BIBLE_EDITOR')).toBeTruthy())
+
+    const btn = /** @type {HTMLButtonElement} */ (screen.getByTestId('T_BIBLE_AUTOFILL'))
+    fireEvent.click(btn)
+    fireEvent.click(btn)
+
+    expect(btn.disabled).toBe(true)
+    expect(startAutofillBible).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      resolveStart({ runId: 'autofill-run-test' })
+    })
+  })
+
+  it('cancels a live autofill run when the editor switches entities', async () => {
+    vi.stubGlobal('EventSource', MockEventSource)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(async (url) => {
+        const u = typeof url === 'string' ? url : String(url)
+        if (u.includes('/api/extrapolation/autofill-run-test/status')) {
+          return jsonResponse({
+            runId: 'autofill-run-test',
+            done: false,
+            cancelled: false,
+            result: null,
+            error: null,
+            events: [],
+          })
+        }
+        return jsonResponse({})
+      }),
+    )
+
+    vi.mocked(fetchBible).mockResolvedValue({ bible: characterBible, provenance: {} })
+    vi.mocked(fetchBibleCompleteness).mockResolvedValue(completenessReport())
+    vi.mocked(listEntityAttributes).mockResolvedValue({ items: [] })
+    vi.mocked(startAutofillBible).mockResolvedValue({ runId: 'autofill-run-test' })
+    vi.mocked(cancelAutofillBible).mockResolvedValue({
+      ok: true,
+      runId: 'autofill-run-test',
+      cancelled: true,
+    })
+
+    const view = render(<BibleEditor entityId="ent_autofill" />)
+    await waitFor(() => expect(screen.getByTestId('T_BIBLE_EDITOR')).toBeTruthy())
+
+    fireEvent.click(screen.getByTestId('T_BIBLE_AUTOFILL'))
+    await waitFor(() => expect(lastEs.current).toBeTruthy())
+
+    view.rerender(<BibleEditor entityId="ent_other" />)
+
+    await waitFor(() => {
+      expect(cancelAutofillBible).toHaveBeenCalledWith('autofill-run-test')
+    })
   })
 })

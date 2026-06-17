@@ -6,6 +6,7 @@ import { createEntity } from '../../lib/db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../../lib/db/sqlite.js'
 import { clearExtrapolationRunTrackingForTests } from '../../lib/extrapolation/extrapolationRunStore.js'
 import { clearExtrapolationProgressRunsForTests } from '../../lib/extrapolation/progress-bus.js'
+import { clearAutofillRunRegistryForTests } from '../../lib/agents/autofillRunRegistry.js'
 import streamRoute from '../extrapolation/stream.route.js'
 
 const { rawFn } = vi.hoisted(() => ({
@@ -28,6 +29,7 @@ const tempDirs = []
 afterEach(() => {
   clearExtrapolationProgressRunsForTests()
   clearExtrapolationRunTrackingForTests()
+  clearAutofillRunRegistryForTests()
   while (tempDirs.length) {
     try {
       fs.rmSync(tempDirs.pop(), { recursive: true, force: true })
@@ -139,6 +141,60 @@ describe('POST /api/agents/autofill-bible', () => {
 
       fireClose()
       await streamPromise
+    } finally {
+      if (prev === undefined) delete process.env.SQLITE_DB_PATH
+      else process.env.SQLITE_DB_PATH = prev
+    }
+  })
+
+  it('rejects a second autofill run for the same entity while one is active', async () => {
+    /** @type {(value: string) => void} */
+    let resolveLlm = () => {}
+    rawFn.mockImplementation(
+      () => new Promise((resolve) => {
+        resolveLlm = resolve
+      }),
+    )
+
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qpb-autofill-route-'))
+    tempDirs.push(dir)
+    const dbPath = path.join(dir, 'db.sqlite')
+    const db = createSqliteDatabase({ env: { APP_MODE: 'local-studio', SQLITE_DB_PATH: dbPath } })
+    initializeDatabase(db)
+    createEntity(db, { id: 'ent_route_mutex', type: 'character', name: 'Mutex Hero' })
+    db.close()
+
+    const prev = process.env.SQLITE_DB_PATH
+    process.env.SQLITE_DB_PATH = dbPath
+
+    try {
+      const first = mockJsonRes()
+      await autofillRoute.handler(
+        /** @type {import('http').IncomingMessage} */ ({
+          method: 'POST',
+          url: '/api/agents/autofill-bible',
+          body: { entityId: 'ent_route_mutex', maxIterations: 4 },
+        }),
+        first.res,
+      )
+      expect(first.out.status).toBe(202)
+
+      const second = mockJsonRes()
+      await autofillRoute.handler(
+        /** @type {import('http').IncomingMessage} */ ({
+          method: 'POST',
+          url: '/api/agents/autofill-bible',
+          body: { entityId: 'ent_route_mutex', maxIterations: 4 },
+        }),
+        second.res,
+      )
+
+      expect(second.out.status).toBe(409)
+      expect(second.out.body?.error).toMatch(/already running/i)
+      expect(second.out.body?.runId).toBe(first.out.body.runId)
+
+      resolveLlm(s1Ok)
+      await new Promise((r) => setTimeout(r, 100))
     } finally {
       if (prev === undefined) delete process.env.SQLITE_DB_PATH
       else process.env.SQLITE_DB_PATH = prev

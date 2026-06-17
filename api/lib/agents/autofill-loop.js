@@ -64,12 +64,13 @@ function defaultTokenEstimate(args, responseText) {
  *   cache?: import('../extrapolation/stageCache.js').StageCache
  *   detectGaps?: typeof detectEntityBibleGaps
  *   meterLlmCall?: (args: { system: string, user: string, response: string }) => number
+ *   shouldCancel?: () => boolean
  * }} opts
  * @returns {Promise<{
  *   iterations: number
  *   gapsResolved: number
  *   gapsRemaining: number
- *   terminationReason: 'complete' | 'budget' | 'max-iterations'
+ *   terminationReason: 'complete' | 'budget' | 'max-iterations' | 'cancelled'
  * }>}
  */
 export async function runAutofillLoop({
@@ -83,6 +84,7 @@ export async function runAutofillLoop({
   cache = new StageCache(),
   detectGaps = detectEntityBibleGaps,
   meterLlmCall,
+  shouldCancel,
 }) {
   /** @param {Record<string, unknown> & { type: string }} e */
   const emit = (e) => {
@@ -115,6 +117,19 @@ export async function runAutofillLoop({
   emit({ type: 'run:start', entityId, kind: 'autofill-bible' })
 
   while (true) {
+      if (typeof shouldCancel === 'function' && shouldCancel()) {
+        const gapsRemaining = detectGaps(db, entityId).length
+        emit({
+          type: 'run:end',
+          cancelled: true,
+          terminationReason: 'cancelled',
+          iterations,
+          gapsResolved,
+          gapsRemaining,
+        })
+        return { iterations, gapsResolved, gapsRemaining, terminationReason: 'cancelled' }
+      }
+
       const gapsAll = detectGaps(db, entityId)
       const gapsRemaining = gapsAll.length
 
@@ -200,6 +215,19 @@ export async function runAutofillLoop({
         skipped.add(gapKey)
         emit({ type: 'iter:end', iteration: iterations, ok: false, reason: 'run-stage-failed' })
         continue
+      }
+
+      if (typeof shouldCancel === 'function' && shouldCancel()) {
+        const gr = detectGaps(db, entityId).length
+        emit({
+          type: 'run:end',
+          cancelled: true,
+          terminationReason: 'cancelled',
+          iterations,
+          gapsResolved,
+          gapsRemaining: gr,
+        })
+        return { iterations, gapsResolved, gapsRemaining: gr, terminationReason: 'cancelled' }
       }
 
       const batchRows = rowsForWriteBatch(stageResult.writes || [])
