@@ -33,23 +33,67 @@ const STEP_PLACEHOLDER = {
 }
 
 export default function App() {
-  if (typeof window !== 'undefined' && window.location.pathname === '/dev-dashboard') {
-    return <DevDashboard />
-  }
-
-  const { active } = useProject()
+  const { active, projects, setActiveById } = useProject()
   const activeProjectId = active?.id ?? null
   const ws = useWorkspace()
-  const { handleShareState } = useShareLink()
+  const { handleShareState, registerWorkflowShareSource, subscribeWorkflowShareApply } = useShareLink()
   const { comfyStatus, comfyError, embeddedStatus, setEmbeddedStatus } = useEmbeddedHealth()
+  const isDevDashboard = typeof window !== 'undefined' && window.location.pathname === '/dev-dashboard'
 
   const [activeStep, setActiveStep] = useState(1)
   const [activeSubTab, setActiveSubTab] = useState('casting-pipeline')
-  const [activeCharId, setActiveCharId] = useState(null)
+  const [activeCharId, setActiveCharId] = useState(() => ws.restoredWorkflowIds.activeCharId ?? null)
   const [activeEntityId, setActiveEntityId] = useState(null)
   const [activeBankSlug, setActiveBankSlug] = useState(null)
+  const [pendingWorkflowProjectId, setPendingWorkflowProjectId] = useState(
+    () => ws.restoredWorkflowIds.activeProjectId ?? null,
+  )
   const [embeddedSetupOpen, setEmbeddedSetupOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+
+  useEffect(() => ws.registerWorkflowPersistSource(() => ({
+    activeProjectId,
+    activeCharId,
+  })), [ws.registerWorkflowPersistSource, activeProjectId, activeCharId])
+
+  useEffect(() => registerWorkflowShareSource(() => ({
+    step: activeStep,
+    projectId: activeProjectId,
+    charId: activeCharId,
+    entityId: activeEntityId,
+    bankSlug: activeBankSlug,
+  })), [
+    registerWorkflowShareSource,
+    activeStep,
+    activeProjectId,
+    activeCharId,
+    activeEntityId,
+    activeBankSlug,
+  ])
+
+  useEffect(() => subscribeWorkflowShareApply((fields) => {
+    if (typeof fields?.step === 'number' && Number.isFinite(fields.step)) {
+      setActiveStep(Math.min(6, Math.max(1, Math.trunc(fields.step))))
+    }
+    setActiveCharId(typeof fields?.charId === 'string' ? fields.charId : null)
+    setActiveEntityId(typeof fields?.entityId === 'string' ? fields.entityId : null)
+    setActiveBankSlug(typeof fields?.bankSlug === 'string' ? fields.bankSlug : null)
+    if (typeof fields?.projectId === 'string' && fields.projectId.trim()) {
+      setPendingWorkflowProjectId(fields.projectId)
+    }
+  }), [subscribeWorkflowShareApply])
+
+  useEffect(() => {
+    if (!pendingWorkflowProjectId) return
+    if (pendingWorkflowProjectId === activeProjectId) {
+      setPendingWorkflowProjectId(null)
+      return
+    }
+    if (projects.some((project) => project.id === pendingWorkflowProjectId)) {
+      setActiveById(pendingWorkflowProjectId)
+      setPendingWorkflowProjectId(null)
+    }
+  }, [pendingWorkflowProjectId, activeProjectId, projects, setActiveById])
 
   useEffect(() => {
     if (activeStep === 4) ws.fetchBankSlugs()
@@ -169,6 +213,10 @@ export default function App() {
       {stepPanel}
     </>
   )
+
+  if (isDevDashboard) {
+    return <DevDashboard />
+  }
 
   return (
     <div className={styles.app}>

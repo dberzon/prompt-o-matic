@@ -14,3 +14,11 @@ export function startAutofillBible(entityId, opts = {}) {
   }
   return mapErrors(apiPost('/api/agents/autofill-bible', body))
 }
+
+/**
+ * @param {string} runId
+ * @returns {Promise<{ ok: boolean, runId: string, cancelled: boolean }>}
+ */
+export function cancelAutofillBible(runId) {
+  return mapErrors(apiPost('/api/agents/autofill-bible/cancel', { runId }))
+}

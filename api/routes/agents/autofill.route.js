@@ -18,6 +18,7 @@ import { normalizeHandlerError, readJsonBody, sendJsonMiddleware } from '../../l
 import { StageCache } from '../../lib/extrapolation/stageCache.js'
 import { createLlmClient } from '../../lib/llm/client.js'
 import { createVectorRuntime } from '../../lib/vector/runtime.js'
+import { beginAutofillRun } from '../../lib/agents/autofillRunRegistry.js'
 
 const bodySchema = z
   .object({
@@ -63,12 +64,26 @@ export default {
         return
       }
 
+      const llm = createLlmClient({ env: process.env, fetchImpl: fetch }).raw
       const runId = randomUUID()
+      const started = beginAutofillRun({ runId, entityId: parsed.data.entityId })
+      if (!started.ok) {
+        try {
+          runtime.close()
+        } catch {
+          /* ignore */
+        }
+        sendJsonMiddleware(res, 409, {
+          error: 'Autofill already running for this entity',
+          runId: started.existingRunId,
+        })
+        return
+      }
+      const runRecord = started.record
       const bus = createProgressBus()
       registerExtrapolationProgressRun(runId, bus)
       const tracking = attachExtrapolationRunTracking(runId, bus)
 
-      const llm = createLlmClient({ env: process.env, fetchImpl: fetch }).raw
       const maxIterations = parsed.data.maxIterations ?? 6
       const budgetTokens = parsed.data.budgetTokens
 
@@ -94,6 +109,7 @@ export default {
           onEvent: (e) => bus.emit(e),
           env: process.env,
           cache,
+          shouldCancel: () => runRecord.shouldCancel(),
         })
           .then((r) => {
             tracking.setSuccess(r)
@@ -124,6 +140,7 @@ export default {
               /* ignore */
             }
             scheduleDisposeExtrapolationRunTracking(runId, tracking, 120_000)
+            runRecord.settle()
             if (cacheDir) {
               try {
                 fs.rmSync(cacheDir, { recursive: true, force: true })

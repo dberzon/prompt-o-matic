@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AutofillStatusToast from '../../components/AutofillStatusToast.jsx'
 import AttributeReviewPanel from '../../components/AttributeReviewPanel.jsx'
 import EntityConflictPanel from '../../components/EntityConflictPanel.jsx'
 import { useExtrapolationStream } from '../../hooks/useExtrapolationStream.js'
-import { startAutofillBible } from '../../lib/api/agentsAutofill.js'
+import { cancelAutofillBible, startAutofillBible } from '../../lib/api/agentsAutofill.js'
 import { approveBibleSection, fetchBible, fetchBibleCompleteness } from '../../lib/api/bibles.js'
 import { listEntityAttributes } from '../../lib/api/entityAttributes.js'
 import { detectBibleRootSchema, stripProvenance } from '../../../api/lib/bibles/detectRootSchema.js'
@@ -44,7 +44,7 @@ function parseBibleApprovalStates(items) {
 }
 
 /**
- * @typedef {null | { phase: 'live', runId: string } | { phase: 'summary', events: Array<Record<string, unknown>>, result: unknown, streamError: string, streamWarning: string, streamStatus: string }} AutofillUiState
+ * @typedef {null | { phase: 'starting', entityId: string } | { phase: 'live', runId: string, entityId: string } | { phase: 'summary', events: Array<Record<string, unknown>>, result: unknown, streamError: string, streamWarning: string, streamStatus: string }} AutofillUiState
  */
 
 /**
@@ -57,9 +57,27 @@ export default function BibleEditor({ entityId }) {
   const [bundle, setBundle] = useState(null)
   /** @type {[AutofillUiState, import('react').Dispatch<import('react').SetStateAction<AutofillUiState>>]} */
   const [autofillUi, setAutofillUi] = useState(/** @type {AutofillUiState} */ (null))
+  const entityIdRef = useRef(entityId)
+  const autofillUiRef = useRef(autofillUi)
+  const autofillStartPendingRef = useRef(false)
 
   const autofillRunId = autofillUi?.phase === 'live' ? autofillUi.runId : null
   const stream = useExtrapolationStream(autofillRunId)
+
+  useEffect(() => {
+    entityIdRef.current = entityId
+  }, [entityId])
+
+  useEffect(() => {
+    autofillUiRef.current = autofillUi
+    autofillStartPendingRef.current = autofillUi?.phase === 'starting' || autofillUi?.phase === 'live'
+  }, [autofillUi])
+
+  const cancelRun = useCallback((runId) => {
+    void Promise.resolve(cancelAutofillBible(runId)).catch(() => {
+      /* best-effort cleanup for a background job */
+    })
+  }, [])
 
   const load = useCallback(async () => {
     if (!entityId) {
@@ -103,6 +121,13 @@ export default function BibleEditor({ entityId }) {
     void load()
   }, [load])
 
+  useEffect(() => () => {
+    const current = autofillUiRef.current
+    if (current?.phase === 'live') {
+      cancelRun(current.runId)
+    }
+  }, [entityId, cancelRun])
+
   useEffect(() => {
     setAutofillUi(null)
   }, [entityId])
@@ -123,22 +148,39 @@ export default function BibleEditor({ entityId }) {
 
   const handleAutofillClick = useCallback(async () => {
     if (!entityId) return
-    if (autofillUi?.phase === 'live') return
+    if (
+      autofillStartPendingRef.current
+      || autofillUi?.phase === 'starting'
+      || autofillUi?.phase === 'live'
+    ) return
     setError('')
+    const startedForEntity = entityId
+    autofillStartPendingRef.current = true
+    setAutofillUi({ phase: 'starting', entityId: startedForEntity })
     try {
       const data = await startAutofillBible(entityId)
       const runId = data?.runId
       if (typeof runId !== 'string' || !runId) {
         throw new Error('Autofill did not return a run id')
       }
-      setAutofillUi({ phase: 'live', runId })
+      if (entityIdRef.current !== startedForEntity) {
+        cancelRun(runId)
+        autofillStartPendingRef.current = false
+        return
+      }
+      setAutofillUi({ phase: 'live', runId, entityId: startedForEntity })
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Autofill failed to start')
+      autofillStartPendingRef.current = false
+      if (entityIdRef.current === startedForEntity) {
+        setAutofillUi(null)
+        setError(err instanceof Error ? err.message : 'Autofill failed to start')
+      }
     }
-  }, [entityId, autofillUi?.phase])
+  }, [entityId, autofillUi?.phase, cancelRun])
 
   const autofillBusy =
-    autofillUi?.phase === 'live' && stream.status !== 'done' && stream.status !== 'error'
+    autofillUi?.phase === 'starting'
+    || (autofillUi?.phase === 'live' && stream.status !== 'done' && stream.status !== 'error')
 
   const sectionEntries = bundle?.sectionEntries ?? []
   const approvals = bundle?.approvals ?? {}
@@ -244,7 +286,7 @@ export default function BibleEditor({ entityId }) {
       </div>
 
       <AutofillStatusToast
-        open={autofillUi != null}
+        open={autofillUi != null && autofillUi.phase !== 'starting'}
         live={autofillUi?.phase === 'live'}
         events={autofillUi?.phase === 'live' ? stream.events : autofillUi?.events ?? []}
         result={autofillUi?.phase === 'live' ? stream.result : autofillUi?.result ?? null}

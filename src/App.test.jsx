@@ -8,7 +8,7 @@ import * as promptStorage from './api/promptStorage.js'
 import * as comfyApi from './lib/api/comfy.js'
 import { ProjectProvider } from './context/ProjectContext.jsx'
 import { WorkspaceProvider } from './context/WorkspaceContext.jsx'
-import { ShareLinkProvider } from './context/ShareLinkContext.jsx'
+import { ShareLinkProvider, encodeShareState } from './context/ShareLinkContext.jsx'
 import { EmbeddedHealthProvider } from './context/EmbeddedHealthContext.jsx'
 import App from './App.jsx'
 
@@ -18,6 +18,7 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   localStorage.clear()
+  window.history.replaceState(null, '', '/')
 })
 
 /** @returns {import('./lib/api/projects.js').ProjectRecord} */
@@ -152,6 +153,60 @@ describe('App', () => {
     fireEvent.click(within(stepper).getByRole('button', { name: /casting/i }))
     await waitFor(() => {
       expect(screen.getByRole('tab', { name: /Casting Pipeline/i })).toBeTruthy()
+    })
+  })
+
+  it('restores persisted workflow project and character ids into the shell', async () => {
+    localStorage.setItem(
+      'qpb.workflow.v1',
+      JSON.stringify({
+        scene: 'stored workflow',
+        dirKey: null,
+        charCount: 1,
+        chars: [{ g: 'man', a: '30s' }],
+        chips: {},
+        activeProjectId: 'p_two',
+        activeCharId: 'char_restored_123',
+      }),
+    )
+    setupAppMocks()
+
+    renderApp()
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Second Project' })).toBeTruthy()
+      expect(screen.getByText(/selected character: char_res/i)).toBeTruthy()
+    })
+  })
+
+  it('applies v3 share workflow fields to project, step, and selected ids', async () => {
+    const encoded = encodeShareState({
+      v: 3,
+      step: 4,
+      projectId: 'p_two',
+      charId: 'char_hash_123',
+      entityId: 'ent_hash_123',
+      bankSlug: 'bank-hash',
+      scene: 'hash workflow',
+      dirKey: null,
+      charCount: 1,
+      chars: [{ g: 'woman', a: '20s' }],
+      scenario: null,
+      chips: {},
+      blend: { enabled: false, dirKey: null, weight: 70 },
+      narrativeBeat: null,
+    })
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { ...window.location, pathname: '/', hash: `#state=${encoded}` },
+    })
+    setupAppMocks()
+
+    renderApp()
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Second Project' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: /Prompt Studio/i }).getAttribute('aria-current')).toBe('step')
     })
   })
 })
