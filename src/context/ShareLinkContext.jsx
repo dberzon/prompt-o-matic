@@ -290,6 +290,7 @@ export function ShareLinkProvider({ children }) {
   const { active } = useProject()
   const { captureSharePayload, applyShareDecoded } = useWorkspace()
   const workflowGetterRef = useRef(/** @type {(() => Record<string, unknown>) | null} */ (null))
+  const lastWorkflowApplyRef = useRef(/** @type {ReturnType<typeof extractWorkflowShareFields> | null} */ (null))
 
   const registerWorkflowShareSource = useCallback((getter) => {
     workflowGetterRef.current = getter
@@ -302,6 +303,9 @@ export function ShareLinkProvider({ children }) {
 
   const subscribeWorkflowShareApply = useCallback((listener) => {
     workflowApplyListeners.add(listener)
+    if (lastWorkflowApplyRef.current) {
+      listener(lastWorkflowApplyRef.current)
+    }
     return () => workflowApplyListeners.delete(listener)
   }, [])
 
@@ -328,9 +332,14 @@ export function ShareLinkProvider({ children }) {
     const lsRaw = readWorkflowLocalStorage()
     const localDecoded = lsRaw ? workflowLocalStorageToCanonical(lsRaw) : null
     const canonical = resolveShareBootstrap(hashDecoded, localDecoded)
-    if (!canonical) return
+    if (!canonical) {
+      lastWorkflowApplyRef.current = null
+      return
+    }
     applyShareDecoded(toWorkspaceSharePayload(canonical))
-    notifyWorkflowShareApply(extractWorkflowShareFields(canonical))
+    const workflowFields = extractWorkflowShareFields(canonical)
+    lastWorkflowApplyRef.current = workflowFields
+    notifyWorkflowShareApply(workflowFields)
   }, [applyShareDecoded])
 
   const value = useMemo(

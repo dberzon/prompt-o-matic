@@ -59,6 +59,7 @@ export default function BibleEditor({ entityId }) {
   const [autofillUi, setAutofillUi] = useState(/** @type {AutofillUiState} */ (null))
   const entityIdRef = useRef(entityId)
   const autofillUiRef = useRef(autofillUi)
+  const autofillStartPendingRef = useRef(false)
 
   const autofillRunId = autofillUi?.phase === 'live' ? autofillUi.runId : null
   const stream = useExtrapolationStream(autofillRunId)
@@ -69,6 +70,7 @@ export default function BibleEditor({ entityId }) {
 
   useEffect(() => {
     autofillUiRef.current = autofillUi
+    autofillStartPendingRef.current = autofillUi?.phase === 'starting' || autofillUi?.phase === 'live'
   }, [autofillUi])
 
   const cancelRun = useCallback((runId) => {
@@ -146,9 +148,14 @@ export default function BibleEditor({ entityId }) {
 
   const handleAutofillClick = useCallback(async () => {
     if (!entityId) return
-    if (autofillUi?.phase === 'starting' || autofillUi?.phase === 'live') return
+    if (
+      autofillStartPendingRef.current
+      || autofillUi?.phase === 'starting'
+      || autofillUi?.phase === 'live'
+    ) return
     setError('')
     const startedForEntity = entityId
+    autofillStartPendingRef.current = true
     setAutofillUi({ phase: 'starting', entityId: startedForEntity })
     try {
       const data = await startAutofillBible(entityId)
@@ -158,10 +165,12 @@ export default function BibleEditor({ entityId }) {
       }
       if (entityIdRef.current !== startedForEntity) {
         cancelRun(runId)
+        autofillStartPendingRef.current = false
         return
       }
       setAutofillUi({ phase: 'live', runId, entityId: startedForEntity })
     } catch (err) {
+      autofillStartPendingRef.current = false
       if (entityIdRef.current === startedForEntity) {
         setAutofillUi(null)
         setError(err instanceof Error ? err.message : 'Autofill failed to start')
