@@ -1308,7 +1308,7 @@ export function listAttributes(db, { entityId, key, provenance, includeDismissed
     conditions.push('superseded_by IS NULL')
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-  const rows = db.prepare(`SELECT * FROM entity_attributes ${where} ORDER BY created_at DESC`).all(...params)
+  const rows = db.prepare(`SELECT * FROM entity_attributes ${where} ORDER BY datetime(created_at) DESC, rowid DESC`).all(...params)
   return rows.map(mapAttributeRow)
 }
 

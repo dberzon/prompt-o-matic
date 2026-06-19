@@ -415,6 +415,65 @@ describe('runPolish', () => {
     expect(result.polished).toContain('lmstudio polished output')
   })
 
+  it('rejects client-supplied LM Studio base URLs in cloud mode before probing', async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({ data: [] }),
+    }))
+
+    await expect(runPolish({
+      payload: {
+        engine: 'local',
+        localProvider: 'lmstudio',
+        lmStudioBaseUrl: 'http://169.254.169.254/latest/meta-data',
+        fragments: ['city', 'night'],
+      },
+      fetchImpl,
+      env: {
+        APP_MODE: 'cloud',
+        LLM_PROVIDER: 'lmstudio',
+      },
+    })).rejects.toMatchObject({
+      status: 400,
+      message: 'Client-supplied LM Studio base URLs are disabled in cloud mode',
+    })
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('still allows server-configured LM Studio base URLs in cloud mode', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const s = String(url)
+      if (s.includes('/models')) {
+        return { ok: true, json: async () => ({ data: [{ id: 'qwen-local' }] }) }
+      }
+      if (s.includes('/chat/completions')) {
+        return {
+          ok: true,
+          json: async () => ({
+            choices: [{ message: { content: 'cloud env lmstudio output' } }],
+          }),
+        }
+      }
+      return { ok: false, text: async () => 'unexpected' }
+    })
+
+    const result = await runPolish({
+      payload: {
+        engine: 'local',
+        fragments: ['city', 'night'],
+      },
+      fetchImpl,
+      env: {
+        APP_MODE: 'cloud',
+        LLM_PROVIDER: 'lmstudio',
+        LMSTUDIO_BASE_URL: 'http://127.0.0.1:1234/v1',
+      },
+    })
+
+    expect(result.provider).toBe('local')
+    expect(result.polished).toContain('cloud env lmstudio output')
+  })
+
   it('passes bible-appended system prompt to provider when entityId is set', async () => {
     const dbPath = createTempDbPath()
     const db = ensureDb(dbPath)
@@ -601,5 +660,29 @@ describe('healthCheck', () => {
 
     expect(result.lmstudio.available).toBe(false)
     expect(result.local.available).toBe(true)
+  })
+
+  it('rejects client-supplied LM Studio health URLs in cloud mode before fetching', async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({}),
+    }))
+
+    await expect(healthCheck({
+      engine: 'local',
+      fetchImpl,
+      payload: {
+        localProvider: 'lmstudio',
+        lmStudioBaseUrl: 'http://internal-service.local:8080/v1',
+      },
+      env: {
+        APP_MODE: 'cloud',
+        LLM_PROVIDER: 'lmstudio',
+      },
+    })).rejects.toMatchObject({
+      status: 400,
+      message: 'Client-supplied LM Studio base URLs are disabled in cloud mode',
+    })
+    expect(fetchImpl).not.toHaveBeenCalled()
   })
 })
