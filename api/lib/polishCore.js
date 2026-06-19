@@ -3,10 +3,10 @@ import { lmStudioProvider } from './llm/providers/lmStudioProvider.js'
 import { mockProvider } from './llm/providers/mockProvider.js'
 import { ollamaProvider } from './llm/providers/ollamaProvider.js'
 import {
-  DEFAULT_LMSTUDIO_URL,
   DEFAULT_OLLAMA_MODEL,
   DEFAULT_OLLAMA_URL,
   envRead,
+  resolveLmStudioBaseUrl,
 } from './llm/providers/shared.js'
 import { buildPolishSystemMessage, getPolishV1RenderedBody } from './polish/polishSystemMessage.js'
 import { parsePolishRequest } from './polish/polishRequestSchema.js'
@@ -144,7 +144,7 @@ async function probeEmbedded(payload, fetchImpl) {
 }
 
 async function probeLmStudio(fetchImpl, env, payload = {}) {
-  const baseUrl = String(payload?.lmStudioBaseUrl || envRead(env, 'LMSTUDIO_BASE_URL') || DEFAULT_LMSTUDIO_URL).replace(/\/+$/, '')
+  const baseUrl = resolveLmStudioBaseUrl(env, payload)
   const timeoutMs = Number.parseInt(envRead(env, 'LMSTUDIO_TIMEOUT_MS') || '8000', 10)
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), Number.isFinite(timeoutMs) ? timeoutMs : 8000)
@@ -330,7 +330,7 @@ export async function healthCheck({
   const providerSelection = await resolveProviderSelection({ engine, localOnly, fetchImpl, env, payload })
   const localProvider = normalizeLocalProvider(payload?.localProvider, env)
   const ollamaBaseUrl = (envRead(env, 'OLLAMA_BASE_URL') || DEFAULT_OLLAMA_URL).replace(/\/+$/, '')
-  const lmStudioBaseUrl = String(payload?.lmStudioBaseUrl || envRead(env, 'LMSTUDIO_BASE_URL') || DEFAULT_LMSTUDIO_URL).replace(/\/+$/, '')
+  const lmStudioBaseUrl = resolveLmStudioBaseUrl(env, payload)
   let local = { available: false, model: envRead(env, 'OLLAMA_MODEL') || DEFAULT_OLLAMA_MODEL }
 
   try {

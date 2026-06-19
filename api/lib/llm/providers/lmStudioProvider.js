@@ -1,7 +1,7 @@
-import { DEFAULT_LMSTUDIO_MODEL, DEFAULT_LMSTUDIO_URL, envRead, stripThinkBlocks } from './shared.js'
+import { DEFAULT_LMSTUDIO_MODEL, envRead, resolveLmStudioBaseUrl, stripThinkBlocks } from './shared.js'
 
 export async function lmStudioProvider({ userMessage, fetchImpl, env, payload = {}, systemPrompt }) {
-  const baseUrl = String(payload?.lmStudioBaseUrl || envRead(env, 'LMSTUDIO_BASE_URL') || DEFAULT_LMSTUDIO_URL).replace(/\/+$/, '')
+  const baseUrl = resolveLmStudioBaseUrl(env, payload)
   const model = payload?.lmStudioModel || envRead(env, 'LMSTUDIO_MODEL') || DEFAULT_LMSTUDIO_MODEL
   const timeoutMs = Number.parseInt(envRead(env, 'LMSTUDIO_TIMEOUT_MS') || '120000', 10)
   // Default 4000 — audition requests can produce 3+ character profiles × 15 fields each

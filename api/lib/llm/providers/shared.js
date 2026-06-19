@@ -8,6 +8,19 @@ export function envRead(env, key) {
   return env?.[key] ?? process.env[key]
 }
 
+export function resolveLmStudioBaseUrl(env, payload = {}) {
+  const requested = typeof payload?.lmStudioBaseUrl === 'string'
+    ? payload.lmStudioBaseUrl.trim()
+    : ''
+  const appMode = String(envRead(env, 'APP_MODE') || 'local-studio')
+  if (appMode === 'cloud' && requested) {
+    const err = new Error('Client-supplied LM Studio base URLs are disabled in cloud mode')
+    err.status = 400
+    throw err
+  }
+  return String(requested || envRead(env, 'LMSTUDIO_BASE_URL') || DEFAULT_LMSTUDIO_URL).replace(/\/+$/, '')
+}
+
 export function parseAnthropicText(data) {
   return data?.content?.[0]?.text?.trim() ?? ''
 }
