@@ -133,7 +133,7 @@ export default function CastingStepContainer({
         )}
         {activeSubTab === 'actor-bank' && (
           <ActorBankView
-            setActiveCharId={setActiveCharId}
+            setActiveCharId={(id) => relayCharacterSelect({ charId: id, source: 'actor-bank' })}
             setActiveStep={setActiveStep}
             setActiveSubTab={setActiveSubTab}
           />
