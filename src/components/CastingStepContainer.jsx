@@ -136,6 +136,7 @@ export default function CastingStepContainer({
             setActiveCharId={setActiveCharId}
             setActiveStep={setActiveStep}
             setActiveSubTab={setActiveSubTab}
+            onWorkflowCharacterSelect={relayCharacterSelect}
           />
         )}
       </div>
