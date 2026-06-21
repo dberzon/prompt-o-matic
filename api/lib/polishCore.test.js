@@ -326,6 +326,42 @@ describe('runPolish', () => {
     expect(result.fallback).toBe('local-unavailable')
   })
 
+  it('uses the request localProvider as the auto-mode local default when LLM_PROVIDER is unset', async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      const s = String(url)
+      if (s.includes('/api/tags')) {
+        return { ok: true, json: async () => ({ models: [{ name: 'qwen-local' }] }) }
+      }
+      if (s.includes('/api/generate')) {
+        return {
+          ok: true,
+          json: async () => ({ response: 'polished via explicit local provider' }),
+        }
+      }
+      return { ok: false, text: async () => 'unexpected' }
+    })
+
+    const result = await runPolish({
+      payload: {
+        engine: 'auto',
+        localProvider: 'ollama',
+        fragments: ['wide shot', 'fog'],
+      },
+      fetchImpl,
+      env: {},
+    })
+
+    expect(result.provider).toBe('local')
+    expect(result.polished).toContain('polished via explicit local provider')
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.stringContaining('/api/tags'),
+    )
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.stringContaining('/api/generate'),
+      expect.any(Object),
+    )
+  })
+
   it('rejects when local-only mode is enabled and local is unavailable', async () => {
     const fetchImpl = vi.fn(async (url) => {
       if (String(url).includes('/api/tags')) {

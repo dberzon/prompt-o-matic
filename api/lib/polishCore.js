@@ -176,6 +176,11 @@ function normalizeLocalProvider(input, env) {
   return 'ollama'
 }
 
+function isLocalProviderName(input) {
+  const raw = String(input || '').toLowerCase()
+  return raw === 'lmstudio' || raw === 'mock' || raw === 'ollama'
+}
+
 function normalizeLocalOnly(input) {
   return input === true || input === '1' || input === 'true'
 }
@@ -185,7 +190,7 @@ export async function resolveProviderSelection({ engine, localOnly = false, fetc
   const strictLocalOnly = normalizeLocalOnly(localOnly)
   const localProvider = normalizeLocalProvider(payload?.localProvider, env)
   const defaultRaw = envRead(env, 'LLM_PROVIDER')
-  const defaultProvider = defaultRaw === 'embedded' || defaultRaw === 'ollama' || defaultRaw === 'lmstudio' || defaultRaw === 'mock' ? 'local' : 'cloud'
+  const defaultProvider = defaultRaw === 'embedded' || isLocalProviderName(defaultRaw) || isLocalProviderName(payload?.localProvider) ? 'local' : 'cloud'
   const selected = normalizedEngine === 'auto' ? defaultProvider : normalizedEngine
 
   if (strictLocalOnly && selected === 'cloud') {
