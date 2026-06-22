@@ -299,6 +299,25 @@ describe('runPolish', () => {
     expect(result.polished).toContain('polished cloud prompt')
   })
 
+  it('skips local bible lookup in cloud mode when entityId is present', async () => {
+    const result = await runPolish({
+      payload: {
+        engine: 'cloud',
+        fragments: ['a person', 'interior'],
+        entityId: 'ent_cloud_polish',
+        mockResponse: 'cloud polish without sqlite',
+      },
+      fetchImpl: vi.fn(),
+      env: {
+        APP_MODE: 'cloud',
+        LLM_CLOUD_PROVIDER: 'mock',
+      },
+    })
+
+    expect(result.provider).toBe('cloud')
+    expect(result.polished).toContain('cloud polish without sqlite')
+  })
+
   it('falls back to cloud in auto mode when local unavailable', async () => {
     const fetchImpl = vi.fn(async (url) => {
       if (String(url).includes('/api/tags')) {
