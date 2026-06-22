@@ -265,7 +265,7 @@ function startComfyWatcher(comfyBaseUrl, env) {
   }, 2000)
 }
 
-function apiDevPlugin(env) {
+export function apiDevPlugin(env) {
   return {
     name: 'api-dev-polish',
     configureServer(server) {
@@ -788,9 +788,13 @@ function apiDevPlugin(env) {
           assertCharacterBatchOperationAllowed('candidate-save', env)
           const body = await readJsonBody(req)
           runtime = createVectorRuntime({ env })
-          const item = saveCandidateAsCharacter(runtime.db, body || {})
+          const item = await saveCandidateAsCharacter(runtime, body || {})
           if (!item) {
             sendJsonMiddleware(res, 404, { error: 'Candidate not found' })
+            return
+          }
+          if (item.warning) {
+            sendJsonMiddleware(res, 200, { ok: false, warning: item.warning, matches: item.matches })
             return
           }
           sendJsonMiddleware(res, 200, { ok: true, item })
