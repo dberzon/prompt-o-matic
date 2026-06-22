@@ -1198,7 +1198,7 @@ const ATTRIBUTE_PROVENANCES = new Set(['canon', 'inferred', 'suggested', 'tempor
 
 function mapAttributeRow(row) {
   if (!row) return null
-  return {
+  const mapped = {
     id: row.id,
     entityId: row.entity_id,
     key: row.key,
@@ -1210,10 +1210,17 @@ function mapAttributeRow(row) {
     dismissedAt: row.dismissed_at ?? null,
     createdAt: row.created_at,
   }
+  if (row._rowid != null) {
+    Object.defineProperty(mapped, '_rowid', {
+      value: Number(row._rowid),
+      enumerable: false,
+    })
+  }
+  return mapped
 }
 
 function selectAttributeById(db, id) {
-  return mapAttributeRow(db.prepare('SELECT * FROM entity_attributes WHERE id = ?').get(id))
+  return mapAttributeRow(db.prepare('SELECT rowid AS _rowid, * FROM entity_attributes WHERE id = ?').get(id))
 }
 
 export function writeAttribute(db, { entityId, key, value, provenance, confidence, sourceStage, supersedes } = {}) {
@@ -1275,6 +1282,9 @@ export function listAttributeSupersedeChain(db, { entityId, attributeId }) {
     const leftTime = Date.parse(left.createdAt || '') || 0
     const rightTime = Date.parse(right.createdAt || '') || 0
     if (leftTime !== rightTime) return leftTime - rightTime
+    const leftRowid = Number(left._rowid || 0)
+    const rightRowid = Number(right._rowid || 0)
+    if (leftRowid !== rightRowid) return leftRowid - rightRowid
     return String(left.id).localeCompare(String(right.id))
   })
 
@@ -1308,7 +1318,7 @@ export function listAttributes(db, { entityId, key, provenance, includeDismissed
     conditions.push('superseded_by IS NULL')
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-  const rows = db.prepare(`SELECT * FROM entity_attributes ${where} ORDER BY created_at DESC`).all(...params)
+  const rows = db.prepare(`SELECT rowid AS _rowid, * FROM entity_attributes ${where} ORDER BY created_at DESC, rowid DESC`).all(...params)
   return rows.map(mapAttributeRow)
 }
 

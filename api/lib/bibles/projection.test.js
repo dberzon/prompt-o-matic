@@ -133,6 +133,37 @@ describe('projectBible / projection', () => {
     expect(() => projectBible(db, 'missing-entity-id')).toThrow(EntityNotFoundError)
   })
 
+  it('projectBible: sparse character entities still expose required section shells', () => {
+    const dbPath = createTempDbPath()
+    process.env.SQLITE_DB_PATH = dbPath
+    process.env.APP_MODE = 'local-studio'
+    const db = ensureDb(dbPath)
+    createEntity(db, { id: 'ent_sparse', type: 'character', name: 'Sparse' })
+
+    const out = projectBible(db, 'ent_sparse')
+
+    expect(out.demographics).toEqual({})
+    expect(out.physical).toEqual({})
+    expect(out.visuals).toEqual({})
+    expect(out._provenance).toEqual({})
+  })
+
+  it('projectBible: sparse location entities expose required section shells', () => {
+    const dbPath = createTempDbPath()
+    process.env.SQLITE_DB_PATH = dbPath
+    process.env.APP_MODE = 'local-studio'
+    const db = ensureDb(dbPath)
+    createEntity(db, { id: 'loc_sparse', type: 'location', name: 'Warehouse' })
+
+    const out = projectBible(db, 'loc_sparse')
+
+    expect(out.identity).toEqual({ name: 'Warehouse' })
+    expect(out.geography).toEqual({})
+    expect(out.function).toEqual({})
+    expect(out.visuals).toEqual({})
+    expect(out._provenance).toEqual({ 'identity.name': 'canon' })
+  })
+
   it('projectCharacterBible: full Ruslan-shaped attributes parse as CharacterBible and expose _provenance', () => {
     const dbPath = createTempDbPath()
     process.env.SQLITE_DB_PATH = dbPath
