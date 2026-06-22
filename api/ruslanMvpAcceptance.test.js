@@ -104,6 +104,9 @@ function mockComfyFetch() {
     if (target.includes('/view?')) {
       return { ok: true, arrayBuffer: async () => Buffer.from('png-bytes') }
     }
+    if (target.endsWith('/upload/image') && init.method === 'POST') {
+      return { ok: true, json: async () => ({ name: 'ruslan-anchor-input.png', subfolder: '', type: 'input' }) }
+    }
     return { ok: true, json: async () => ({}) }
   })
 }
@@ -200,9 +203,26 @@ describe('Ruslan MVP acceptance (Section 13 worked example)', () => {
       entityId: ENTITY_ID,
       ipadapterStrength: 0.72,
     })
-    expect(typeof payload.prompt['99'].inputs.image).toBe('string')
-    expect(payload.prompt['99'].inputs.image.length).toBeGreaterThan(0)
+    expect(Buffer.isBuffer(payload.prompt['99'].inputs.image)).toBe(true)
     expect(listVisualAnchors(db, { entityId: ENTITY_ID, type: 'ipadapter_embedding' })).toHaveLength(1)
     expect(payload.prompt['98'].inputs.weight).toBe(0.72)
+
+    fetchImpl.mockClear()
+    await comfyService.queuePromptPack({
+      promptPack: compiled.packs[0],
+      workflowId: 'qwen-image-2512-default',
+      db,
+      entityId: ENTITY_ID,
+      ipadapterStrength: 0.72,
+    })
+    expect(fetchImpl.mock.calls.some(([url]) => String(url).endsWith('/upload/image'))).toBe(true)
+    const queuedPayload = buildComfyPromptPayload({
+      promptPack: compiled.packs[0],
+      workflowId: 'qwen-image-2512-default',
+      db,
+      entityId: ENTITY_ID,
+      ipadapterStrength: 0.72,
+    })
+    expect(queuedPayload.prompt['99'].inputs.image).toBe('ruslan-anchor-input.png')
   })
 })

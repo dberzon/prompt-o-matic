@@ -155,7 +155,10 @@ export async function ensureIpAdapterEmbeddingCache({
 
   const digest = imagePayloadDigest(primary.payload)
   const existing = findMatchingEmbeddingAnchor(db, entityId, primary, digest)
-  if (existing.parsed?.clipEmbedding?.length && existing.parsed?.comfyImage?.filename) {
+  if (
+    existing.parsed?.clipEmbedding?.length
+    && (skipUpload || existing.parsed?.comfyImage?.filename)
+  ) {
     return existing.parsed
   }
 
@@ -167,13 +170,6 @@ export async function ensureIpAdapterEmbeddingCache({
       fetchImpl,
       timeoutMs: comfyService.config.timeoutMs,
     })
-  }
-  if (!comfyImage) {
-    comfyImage = {
-      filename: `reference-${digest.slice(0, 16)}.png`,
-      subfolder: '',
-      type: 'input',
-    }
   }
 
   const clipEmbedding = deriveClipVisionEmbeddingFromImage(primary.payload)

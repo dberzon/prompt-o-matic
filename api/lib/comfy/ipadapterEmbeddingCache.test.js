@@ -122,4 +122,48 @@ describe('ipadapter embedding cache', () => {
     expect(fetchImpl).not.toHaveBeenCalled()
     expect(resolveIpAdapterWorkflowImage(db, 'ent_filename')?.filename).toBe('reference-anchor.png')
   })
+
+  it('does not invent a Comfy filename when upload is skipped for image bytes', async () => {
+    const db = createTempDb()
+    createEntity(db, { id: 'ent_skip_upload', type: 'character', name: 'Ruslan' })
+    createVisualAnchor(db, {
+      id: 'anchor_skip_upload',
+      entityId: 'ent_skip_upload',
+      type: 'reference_image',
+      payload: Buffer.from('png-bytes'),
+      isPrimary: true,
+    })
+
+    const fetchImpl = vi.fn()
+    const cached = await ensureIpAdapterEmbeddingCache({
+      db,
+      entityId: 'ent_skip_upload',
+      comfyService: { config: { baseUrl: 'http://127.0.0.1:8188', timeoutMs: 5000 } },
+      fetchImpl,
+      skipUpload: true,
+    })
+
+    expect(cached?.clipEmbedding).toHaveLength(768)
+    expect(cached?.comfyImage).toBeNull()
+    expect(fetchImpl).not.toHaveBeenCalled()
+
+    const resolvedBeforeUpload = resolveIpAdapterWorkflowImage(db, 'ent_skip_upload')
+    expect(resolvedBeforeUpload?.kind).toBe('reference')
+    expect(Buffer.isBuffer(resolvedBeforeUpload?.image)).toBe(true)
+
+    fetchImpl.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ name: 'uploaded-after-skip.png', subfolder: '', type: 'input' }),
+    })
+    const uploaded = await ensureIpAdapterEmbeddingCache({
+      db,
+      entityId: 'ent_skip_upload',
+      comfyService: { config: { baseUrl: 'http://127.0.0.1:8188', timeoutMs: 5000 } },
+      fetchImpl,
+    })
+
+    expect(uploaded?.comfyImage?.filename).toBe('uploaded-after-skip.png')
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(resolveIpAdapterWorkflowImage(db, 'ent_skip_upload')?.filename).toBe('uploaded-after-skip.png')
+  })
 })
