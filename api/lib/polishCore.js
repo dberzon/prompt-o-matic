@@ -180,6 +180,10 @@ function normalizeLocalOnly(input) {
   return input === true || input === '1' || input === 'true'
 }
 
+function isCloudAppMode(env) {
+  return String(envRead(env, 'APP_MODE') || 'local-studio') === 'cloud'
+}
+
 export async function resolveProviderSelection({ engine, localOnly = false, fetchImpl, env, payload = {} }) {
   const normalizedEngine = normalizeEngine(engine)
   const strictLocalOnly = normalizeLocalOnly(localOnly)
@@ -280,7 +284,7 @@ export async function runPolish({
 
   let db = dbOverride
   let openedDb = false
-  if (!db && normalizedPayload.entityId) {
+  if (!db && normalizedPayload.entityId && !isCloudAppMode(env)) {
     db = createSqliteDatabase({ env })
     initializeDatabase(db)
     openedDb = true
