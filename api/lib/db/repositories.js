@@ -1216,6 +1216,19 @@ function selectAttributeById(db, id) {
   return mapAttributeRow(db.prepare('SELECT * FROM entity_attributes WHERE id = ?').get(id))
 }
 
+function selectAttributeSuperseding(db, attribute) {
+  if (!attribute) return null
+  return mapAttributeRow(db.prepare(`
+    SELECT *
+    FROM entity_attributes
+    WHERE superseded_by = ?
+      AND entity_id = ?
+      AND key = ?
+    ORDER BY created_at ASC, rowid ASC
+    LIMIT 1
+  `).get(attribute.id, attribute.entityId, attribute.key))
+}
+
 export function writeAttribute(db, { entityId, key, value, provenance, confidence, sourceStage, supersedes } = {}) {
   if (!provenance) {
     throw new Error('writeAttribute: provenance is required')
@@ -1266,17 +1279,23 @@ export function listAttributeSupersedeChain(db, { entityId, attributeId }) {
     current = next
   }
 
-  const items = listAttributes(db, {
-    entityId: requested.entityId,
-    key: requested.key,
-    includeDismissed: true,
-    includeSuperseded: true,
-  }).sort((left, right) => {
-    const leftTime = Date.parse(left.createdAt || '') || 0
-    const rightTime = Date.parse(right.createdAt || '') || 0
-    if (leftTime !== rightTime) return leftTime - rightTime
-    return String(left.id).localeCompare(String(right.id))
-  })
+  let root = requested
+  const reverseVisited = new Set([root.id])
+  while (root) {
+    const previous = selectAttributeSuperseding(db, root)
+    if (!previous || reverseVisited.has(previous.id)) break
+    reverseVisited.add(previous.id)
+    root = previous
+  }
+
+  const items = []
+  let cursor = root
+  const chainVisited = new Set()
+  while (cursor && !chainVisited.has(cursor.id)) {
+    chainVisited.add(cursor.id)
+    items.push(cursor)
+    cursor = cursor.supersededBy ? selectAttributeById(db, cursor.supersededBy) : null
+  }
 
   return {
     entityId: requested.entityId,
@@ -1308,7 +1327,7 @@ export function listAttributes(db, { entityId, key, provenance, includeDismissed
     conditions.push('superseded_by IS NULL')
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-  const rows = db.prepare(`SELECT * FROM entity_attributes ${where} ORDER BY created_at DESC`).all(...params)
+  const rows = db.prepare(`SELECT * FROM entity_attributes ${where} ORDER BY created_at DESC, rowid DESC`).all(...params)
   return rows.map(mapAttributeRow)
 }
 
