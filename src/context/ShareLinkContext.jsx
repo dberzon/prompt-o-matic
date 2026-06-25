@@ -259,11 +259,11 @@ export function readWorkflowLocalStorage() {
 export function workflowLocalStorageToCanonical(wf) {
   return decodeSharePayload({
     v: 3,
-    step: WORKFLOW_DEFAULTS.step,
-    projectId: wf.activeProjectId ?? null,
-    charId: wf.activeCharId ?? null,
-    entityId: null,
-    bankSlug: null,
+    step: wf.activeStep ?? wf.step ?? WORKFLOW_DEFAULTS.step,
+    projectId: wf.activeProjectId ?? wf.projectId ?? null,
+    charId: wf.activeCharId ?? wf.charId ?? null,
+    entityId: wf.activeEntityId ?? wf.entityId ?? null,
+    bankSlug: wf.activeBankSlug ?? wf.bankSlug ?? null,
     scene: wf.scene ?? '',
     dirKey: wf.dirKey ?? null,
     charCount: wf.charCount ?? 1,
@@ -290,6 +290,7 @@ export function ShareLinkProvider({ children }) {
   const { active } = useProject()
   const { captureSharePayload, applyShareDecoded } = useWorkspace()
   const workflowGetterRef = useRef(/** @type {(() => Record<string, unknown>) | null} */ (null))
+  const lastWorkflowApplyRef = useRef(/** @type {Record<string, unknown> | null} */ (null))
 
   const registerWorkflowShareSource = useCallback((getter) => {
     workflowGetterRef.current = getter
@@ -302,6 +303,9 @@ export function ShareLinkProvider({ children }) {
 
   const subscribeWorkflowShareApply = useCallback((listener) => {
     workflowApplyListeners.add(listener)
+    if (lastWorkflowApplyRef.current) {
+      listener(lastWorkflowApplyRef.current)
+    }
     return () => workflowApplyListeners.delete(listener)
   }, [])
 
@@ -330,7 +334,9 @@ export function ShareLinkProvider({ children }) {
     const canonical = resolveShareBootstrap(hashDecoded, localDecoded)
     if (!canonical) return
     applyShareDecoded(toWorkspaceSharePayload(canonical))
-    notifyWorkflowShareApply(extractWorkflowShareFields(canonical))
+    const workflowFields = extractWorkflowShareFields(canonical)
+    lastWorkflowApplyRef.current = workflowFields
+    notifyWorkflowShareApply(workflowFields)
   }, [applyShareDecoded])
 
   const value = useMemo(

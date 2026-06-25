@@ -8,7 +8,7 @@ import * as promptStorage from './api/promptStorage.js'
 import * as comfyApi from './lib/api/comfy.js'
 import { ProjectProvider } from './context/ProjectContext.jsx'
 import { WorkspaceProvider } from './context/WorkspaceContext.jsx'
-import { ShareLinkProvider } from './context/ShareLinkContext.jsx'
+import { ShareLinkProvider, decodeShareState } from './context/ShareLinkContext.jsx'
 import { EmbeddedHealthProvider } from './context/EmbeddedHealthContext.jsx'
 import App from './App.jsx'
 
@@ -153,5 +153,54 @@ describe('App', () => {
     await waitFor(() => {
       expect(screen.getByRole('tab', { name: /Casting Pipeline/i })).toBeTruthy()
     })
+  })
+
+  it('restores workflow selection and includes it in copied share URLs', async () => {
+    setupAppMocks()
+    localStorage.setItem(
+      'qpb.workflow.v1',
+      JSON.stringify({
+        activeStep: 4,
+        activeProjectId: 'p_two',
+        activeCharId: 'char_restored',
+        activeEntityId: 'ent_restored',
+        activeBankSlug: 'bank_restored',
+        scene: 'restored prompt studio scene',
+        dirKey: null,
+        charCount: 1,
+        chars: [{ g: 'woman', a: '30s' }],
+        scenario: null,
+        chips: {},
+        blend: { enabled: false, dirKey: null, weight: 70 },
+        narrativeBeat: null,
+      }),
+    )
+
+    renderApp()
+
+    await waitFor(() => {
+      expect(screen.getByTestId('prompt-studio-step')).toBeTruthy()
+      expect(screen.getByTestId('bible-quickref')).toBeTruthy()
+    })
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Second Project' })).toBeTruthy()
+    })
+
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true })
+    fireEvent.click(await screen.findByRole('button', { name: /copy share url/i }))
+
+    await waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalled()
+    })
+    const copied = navigator.clipboard.writeText.mock.calls.at(-1)?.[0]
+    const encoded = new URL(copied).hash.slice('#state='.length)
+    const decoded = decodeShareState(encoded)
+
+    expect(decoded.step).toBe(4)
+    expect(decoded.projectId).toBe('p_two')
+    expect(decoded.charId).toBe('char_restored')
+    expect(decoded.entityId).toBe('ent_restored')
+    expect(decoded.bankSlug).toBe('bank_restored')
+    expect(decoded.scene).toBe('restored prompt studio scene')
   })
 })

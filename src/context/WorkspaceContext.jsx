@@ -63,12 +63,32 @@ function blendFieldsFromPersist(snapshot) {
   }
 }
 
+function normalizeWorkflowStep(value) {
+  return Number.isInteger(value) && value >= 1 && value <= 6 ? value : 1
+}
+
+function normalizeNullableString(value) {
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
 /**
  * @param {Record<string, unknown>} workspace
- * @param {{ activeProjectId?: string | null, activeCharId?: string | null }} [extras]
+ * @param {{
+ *   activeStep?: number,
+ *   step?: number,
+ *   activeProjectId?: string | null,
+ *   projectId?: string | null,
+ *   activeCharId?: string | null,
+ *   charId?: string | null,
+ *   activeEntityId?: string | null,
+ *   entityId?: string | null,
+ *   activeBankSlug?: string | null,
+ *   bankSlug?: string | null,
+ * }} [extras]
  */
 export function buildWorkflowPersistPayload(workspace, extras = {}) {
   return {
+    activeStep: normalizeWorkflowStep(extras.activeStep ?? extras.step),
     scene: typeof workspace.scene === 'string' ? workspace.scene : '',
     dirKey: typeof workspace.selectedDir === 'string' || workspace.selectedDir === null
       ? workspace.selectedDir
@@ -89,14 +109,10 @@ export function buildWorkflowPersistPayload(workspace, extras = {}) {
     narrativeBeat: typeof workspace.narrativeBeat === 'string' || workspace.narrativeBeat === null
       ? workspace.narrativeBeat
       : null,
-    activeProjectId:
-      typeof extras.activeProjectId === 'string' || extras.activeProjectId === null
-        ? extras.activeProjectId ?? null
-        : null,
-    activeCharId:
-      typeof extras.activeCharId === 'string' || extras.activeCharId === null
-        ? extras.activeCharId ?? null
-        : null,
+    activeProjectId: normalizeNullableString(extras.activeProjectId ?? extras.projectId),
+    activeCharId: normalizeNullableString(extras.activeCharId ?? extras.charId),
+    activeEntityId: normalizeNullableString(extras.activeEntityId ?? extras.entityId),
+    activeBankSlug: normalizeNullableString(extras.activeBankSlug ?? extras.bankSlug),
   }
 }
 
@@ -113,8 +129,11 @@ function workspaceSeedFromPersist(snapshot) {
     chips: snapshot.chips && typeof snapshot.chips === 'object' ? snapshot.chips : {},
     narrativeBeat: typeof snapshot.narrativeBeat === 'string' ? snapshot.narrativeBeat : null,
     ...blend,
-    activeProjectId: snapshot.activeProjectId ?? null,
-    activeCharId: snapshot.activeCharId ?? null,
+    activeStep: normalizeWorkflowStep(snapshot.activeStep ?? snapshot.step),
+    activeProjectId: normalizeNullableString(snapshot.activeProjectId ?? snapshot.projectId),
+    activeCharId: normalizeNullableString(snapshot.activeCharId ?? snapshot.charId),
+    activeEntityId: normalizeNullableString(snapshot.activeEntityId ?? snapshot.entityId),
+    activeBankSlug: normalizeNullableString(snapshot.activeBankSlug ?? snapshot.bankSlug),
   }
 }
 
@@ -269,10 +288,13 @@ export function WorkspaceProvider({ children }) {
   const [characters, setCharacters] = useState(() => readCharacters())
   const [bankCharsForSelector, setBankCharsForSelector] = useState([])
   const [persistExtrasRevision, setPersistExtrasRevision] = useState(0)
-  const workflowPersistGetterRef = useRef(/** @type {(() => { activeProjectId?: string | null, activeCharId?: string | null }) | null} */ (null))
+  const workflowPersistGetterRef = useRef(/** @type {(() => Record<string, unknown>) | null} */ (null))
   const restoredWorkflowIds = useMemo(() => ({
+    activeStep: persistSeed?.activeStep ?? 1,
     activeProjectId: persistSeed?.activeProjectId ?? null,
     activeCharId: persistSeed?.activeCharId ?? null,
+    activeEntityId: persistSeed?.activeEntityId ?? null,
+    activeBankSlug: persistSeed?.activeBankSlug ?? null,
   }), [persistSeed])
 
   const registerWorkflowPersistSource = useCallback((getter) => {

@@ -101,8 +101,11 @@ describe('WorkspaceContext workflow persist', () => {
       const ws = useWorkspace()
       useEffect(() => {
         const unregister = ws.registerWorkflowPersistSource(() => ({
+          activeStep: 4,
           activeProjectId: 'proj_live',
           activeCharId: 'char_live',
+          activeEntityId: 'ent_live',
+          activeBankSlug: 'bank_live',
         }))
         ws.setScene('with workflow ids')
         return unregister
@@ -117,8 +120,11 @@ describe('WorkspaceContext workflow persist', () => {
 
     const workflowWrites = setItem.mock.calls.filter(([key]) => key === WORKFLOW_PERSIST_KEY)
     const payload = JSON.parse(workflowWrites[workflowWrites.length - 1][1])
+    expect(payload.activeStep).toBe(4)
     expect(payload.activeProjectId).toBe('proj_live')
     expect(payload.activeCharId).toBe('char_live')
+    expect(payload.activeEntityId).toBe('ent_live')
+    expect(payload.activeBankSlug).toBe('bank_live')
     expect(payload.scene).toBe('with workflow ids')
   })
 })
