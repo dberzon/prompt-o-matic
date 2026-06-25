@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useProject } from './context/ProjectContext.jsx'
 import { useWorkspace } from './context/WorkspaceContext.jsx'
 import { useShareLink } from './context/ShareLinkContext.jsx'
@@ -32,24 +32,80 @@ const STEP_PLACEHOLDER = {
   6: 'Portfolio',
 }
 
+function normalizeWorkflowStep(value) {
+  return Number.isInteger(value) && value >= 1 && value <= 6 ? value : null
+}
+
+function normalizeNullableString(value) {
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
 export default function App() {
   if (typeof window !== 'undefined' && window.location.pathname === '/dev-dashboard') {
     return <DevDashboard />
   }
 
-  const { active } = useProject()
+  const { active, projects, setActiveById } = useProject()
   const activeProjectId = active?.id ?? null
   const ws = useWorkspace()
-  const { handleShareState } = useShareLink()
+  const { handleShareState, registerWorkflowShareSource, subscribeWorkflowShareApply } = useShareLink()
   const { comfyStatus, comfyError, embeddedStatus, setEmbeddedStatus } = useEmbeddedHealth()
+  const restoredWorkflowIds = ws.restoredWorkflowIds ?? {}
 
-  const [activeStep, setActiveStep] = useState(1)
+  const [activeStep, setActiveStep] = useState(() => normalizeWorkflowStep(restoredWorkflowIds.activeStep) ?? 1)
   const [activeSubTab, setActiveSubTab] = useState('casting-pipeline')
-  const [activeCharId, setActiveCharId] = useState(null)
-  const [activeEntityId, setActiveEntityId] = useState(null)
-  const [activeBankSlug, setActiveBankSlug] = useState(null)
+  const [activeCharId, setActiveCharId] = useState(() => normalizeNullableString(restoredWorkflowIds.activeCharId))
+  const [activeEntityId, setActiveEntityId] = useState(() => normalizeNullableString(restoredWorkflowIds.activeEntityId))
+  const [activeBankSlug, setActiveBankSlug] = useState(() => normalizeNullableString(restoredWorkflowIds.activeBankSlug))
+  const [pendingProjectId, setPendingProjectId] = useState(() => normalizeNullableString(restoredWorkflowIds.activeProjectId))
   const [embeddedSetupOpen, setEmbeddedSetupOpen] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const workflowStateRef = useRef({})
+
+  workflowStateRef.current = {
+    step: activeStep,
+    projectId: activeProjectId,
+    charId: activeCharId,
+    entityId: activeEntityId,
+    bankSlug: activeBankSlug,
+    activeStep,
+    activeProjectId,
+    activeCharId,
+    activeEntityId,
+    activeBankSlug,
+  }
+
+  useEffect(() => {
+    return ws.registerWorkflowPersistSource(() => workflowStateRef.current)
+  }, [ws.registerWorkflowPersistSource])
+
+  useEffect(() => {
+    return registerWorkflowShareSource(() => workflowStateRef.current)
+  }, [registerWorkflowShareSource])
+
+  useEffect(() => {
+    return subscribeWorkflowShareApply((fields) => {
+      const nextStep = normalizeWorkflowStep(fields?.step)
+      if (nextStep) setActiveStep(nextStep)
+      const projectId = normalizeNullableString(fields?.projectId)
+      if (projectId) setPendingProjectId(projectId)
+      setActiveCharId(normalizeNullableString(fields?.charId))
+      setActiveEntityId(normalizeNullableString(fields?.entityId))
+      setActiveBankSlug(normalizeNullableString(fields?.bankSlug))
+    })
+  }, [subscribeWorkflowShareApply])
+
+  useEffect(() => {
+    if (!pendingProjectId) return
+    if (activeProjectId === pendingProjectId) {
+      setPendingProjectId(null)
+      return
+    }
+    if (projects.some((project) => project.id === pendingProjectId)) {
+      setActiveById(pendingProjectId)
+      setPendingProjectId(null)
+    }
+  }, [activeProjectId, pendingProjectId, projects, setActiveById])
 
   useEffect(() => {
     if (activeStep === 4) ws.fetchBankSlugs()
