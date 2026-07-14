@@ -18,11 +18,21 @@ function CastingStepHarness(props) {
 }
 
 vi.mock('./CastingPipelinePanel.jsx', () => ({
-  default: () => (
-    <select data-testid="mock-pipeline-select" defaultValue="">
-      <option value="">Select character…</option>
-      <option value="char_pipeline">Pipeline character</option>
-    </select>
+  default: ({ onActiveCharacterChange }) => (
+    <div>
+      <select data-testid="mock-pipeline-workflow" defaultValue="">
+        <option value="">Select workflow…</option>
+        <option value="workflow_1">Workflow</option>
+      </select>
+      <select
+        data-testid="mock-pipeline-select"
+        defaultValue=""
+        onChange={(event) => onActiveCharacterChange?.(event.target.value)}
+      >
+        <option value="">Select character…</option>
+        <option value="char_pipeline">Pipeline character</option>
+      </select>
+    </div>
   ),
 }))
 
@@ -110,6 +120,12 @@ describe('CastingStepContainer', () => {
       />,
     )
 
+    fireEvent.change(screen.getByTestId('mock-pipeline-workflow'), {
+      target: { value: 'workflow_1' },
+    })
+    expect(setActiveCharId).not.toHaveBeenCalled()
+    expect(setActiveEntityId).not.toHaveBeenCalled()
+
     fireEvent.change(screen.getByTestId('mock-pipeline-select'), {
       target: { value: 'char_pipeline' },
     })
@@ -127,8 +143,12 @@ describe('CastingStepContainer', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /Actor Bank/i }))
     setActiveCharId.mockClear()
+    setActiveEntityId.mockClear()
+    setActiveBankSlug.mockClear()
     fireEvent.click(screen.getByTestId('mock-bank-char'))
     expect(setActiveCharId).toHaveBeenCalledWith('char_bank')
+    expect(setActiveEntityId).toHaveBeenCalledWith(null)
+    expect(setActiveBankSlug).toHaveBeenCalledWith(null)
   })
 
   it('Next Step is disabled without activeCharId and calls onNext when enabled', () => {

@@ -111,7 +111,13 @@ function RenderStatusBar({ isPollingAudit, isPollingPortfolio, auditionStatuses,
   )
 }
 
-export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed, comfyStatus = null, comfyError = '' }) {
+export default function CastingPipelinePanel({
+  jumpToCharacterId,
+  onJumpConsumed,
+  onActiveCharacterChange,
+  comfyStatus = null,
+  comfyError = '',
+}) {
   // ── Global UI state ───────────────────────────────────────────────────────
   const [loading, setLoading] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
@@ -620,6 +626,7 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
       return
     }
     setSelectedCharacterId(characterId)
+    onActiveCharacterChange?.(characterId)
     setTimeout(() => activeCharSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100)
     if (!selectedWorkflowId) {
       const charName = savedCharacters.find((c) => c.id === characterId)?.name || null
@@ -710,6 +717,7 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
             return [...map.values()]
           })
           setSelectedCharacterId(newId)
+          onActiveCharacterChange?.(newId)
           const charName = cand?.name || null
           setBatchFeedback({ type: 'success', message: `Character saved${charName ? `: ${charName}` : ''}.` })
           backgroundCompilePromptPacks(newId)
@@ -1321,7 +1329,15 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
         })()}
 
         <div className={styles.row}>
-          <select value={selectedCharacterId} onChange={(e) => { setSelectedCharacterId(e.target.value); setRenamingCharacterId(null) }} className={styles.select}>
+          <select
+            value={selectedCharacterId}
+            onChange={(e) => {
+              setSelectedCharacterId(e.target.value)
+              setRenamingCharacterId(null)
+              onActiveCharacterChange?.(e.target.value)
+            }}
+            className={styles.select}
+          >
             <option value="">Select character…</option>
             {savedCharacters.filter((c) => c.lifecycleStatus !== 'preview').map((c) => {
               const lcLabel = c.lifecycleStatus === 'portfolio_pending' ? ' ⏳' : c.lifecycleStatus === 'portfolio_failed' ? ' ✗' : c.lifecycleStatus === 'ready' ? ' ✓' : ''
