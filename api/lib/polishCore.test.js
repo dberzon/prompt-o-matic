@@ -457,6 +457,22 @@ describe('runPolish', () => {
     expect(capturedSystem).toContain('- physical.face: angular cheekbones marker')
   })
 
+  it('skips local bible lookup for cloud polish requests with entityId', async () => {
+    const result = await runPolish({
+      payload: {
+        engine: 'cloud',
+        cloudProvider: 'mock',
+        mockResponse: 'cloud polished output',
+        fragments: ['city', 'night'],
+        entityId: 'entity-from-local-share',
+      },
+      env: { APP_MODE: 'cloud' },
+    })
+
+    expect(result.polished).toBe('cloud polished output')
+    expect(result.provider).toBe('cloud')
+  })
+
   it('does not append bible block when entityId is omitted', async () => {
     let capturedSystem = ''
     const fetchImpl = vi.fn(async (url, init) => {
