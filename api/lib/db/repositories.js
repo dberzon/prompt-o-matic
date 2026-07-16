@@ -1266,17 +1266,30 @@ export function listAttributeSupersedeChain(db, { entityId, attributeId }) {
     current = next
   }
 
-  const items = listAttributes(db, {
+  const allItems = listAttributes(db, {
     entityId: requested.entityId,
     key: requested.key,
     includeDismissed: true,
     includeSuperseded: true,
-  }).sort((left, right) => {
-    const leftTime = Date.parse(left.createdAt || '') || 0
-    const rightTime = Date.parse(right.createdAt || '') || 0
-    if (leftTime !== rightTime) return leftTime - rightTime
-    return String(left.id).localeCompare(String(right.id))
   })
+  const byId = new Map(allItems.map((item) => [item.id, item]))
+  const supersededTargets = new Set(allItems.map((item) => item.supersededBy).filter(Boolean))
+  const roots = allItems.filter((item) => !supersededTargets.has(item.id))
+  const buildPath = (root) => {
+    const path = []
+    const seen = new Set()
+    let node = root
+    while (node && !seen.has(node.id)) {
+      path.push(node)
+      seen.add(node.id)
+      node = node.supersededBy ? byId.get(node.supersededBy) : null
+    }
+    return path
+  }
+  const items = roots
+    .map(buildPath)
+    .find((path) => path.some((item) => item.id === requested.id || item.id === current.id))
+    ?? allItems
 
   return {
     entityId: requested.entityId,
@@ -1308,7 +1321,7 @@ export function listAttributes(db, { entityId, key, provenance, includeDismissed
     conditions.push('superseded_by IS NULL')
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-  const rows = db.prepare(`SELECT * FROM entity_attributes ${where} ORDER BY created_at DESC`).all(...params)
+  const rows = db.prepare(`SELECT * FROM entity_attributes ${where} ORDER BY created_at DESC, rowid DESC`).all(...params)
   return rows.map(mapAttributeRow)
 }
 

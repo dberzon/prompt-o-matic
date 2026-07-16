@@ -68,12 +68,9 @@ export default function CastingStepContainer({
     }
   }, [setActiveCharId, setActiveEntityId, setActiveBankSlug])
 
-  const handlePipelineSelectCapture = useCallback((event) => {
-    const target = event.target
-    if (!(target instanceof HTMLSelectElement)) return
-    if (!target.value) return
+  const handlePipelineCharacterSelect = useCallback((charId) => {
     applyCharacterSelection({
-      charId: target.value,
+      charId,
       source: 'casting-pipeline',
     })
   }, [applyCharacterSelection])
@@ -83,6 +80,12 @@ export default function CastingStepContainer({
       ? { charId: payload, source: 'actor-bank' }
       : payload)
   }, [applyCharacterSelection])
+
+  const handleOpenInCastingRoom = useCallback((charId) => {
+    applyCharacterSelection({ charId, source: 'actor-bank' })
+    setActiveStep(1)
+    setActiveSubTab('casting-pipeline')
+  }, [applyCharacterSelection, setActiveStep, setActiveSubTab])
 
   return (
     <div className={styles.root}>
@@ -103,14 +106,11 @@ export default function CastingStepContainer({
 
       <div className={styles.panel}>
         {activeSubTab === 'casting-pipeline' && (
-          <div
-            className={styles.captureRoot}
-            data-subtab="casting-pipeline"
-            onChangeCapture={handlePipelineSelectCapture}
-          >
+          <div className={styles.captureRoot} data-subtab="casting-pipeline">
             <CastingPipelinePanel
               jumpToCharacterId={activeSubTab === 'casting-pipeline' ? activeCharId : null}
               onJumpConsumed={() => {}}
+              onActiveCharacterChange={handlePipelineCharacterSelect}
               comfyStatus={comfyStatus}
               comfyError={comfyError}
             />
@@ -133,9 +133,7 @@ export default function CastingStepContainer({
         )}
         {activeSubTab === 'actor-bank' && (
           <ActorBankView
-            setActiveCharId={setActiveCharId}
-            setActiveStep={setActiveStep}
-            setActiveSubTab={setActiveSubTab}
+            onOpenInCastingRoom={handleOpenInCastingRoom}
           />
         )}
       </div>

@@ -280,7 +280,8 @@ export async function runPolish({
 
   let db = dbOverride
   let openedDb = false
-  if (!db && normalizedPayload.entityId) {
+  const appMode = String(envRead(env, 'APP_MODE') || 'local-studio')
+  if (!db && normalizedPayload.entityId && appMode !== 'cloud') {
     db = createSqliteDatabase({ env })
     initializeDatabase(db)
     openedDb = true
