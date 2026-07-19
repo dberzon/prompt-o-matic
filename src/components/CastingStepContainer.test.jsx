@@ -44,11 +44,11 @@ vi.mock('./CharacterBuilder.jsx', () => ({
 }))
 
 vi.mock('./ActorBank/ActorBankView.jsx', () => ({
-  default: ({ setActiveCharId }) => (
+  default: ({ onWorkflowCharacterSelect }) => (
     <button
       type="button"
       data-testid="mock-bank-char"
-      onClick={() => setActiveCharId?.('char_bank')}
+      onClick={() => onWorkflowCharacterSelect?.('char_bank')}
     >
       Pick bank character
     </button>
@@ -127,8 +127,12 @@ describe('CastingStepContainer', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: /Actor Bank/i }))
     setActiveCharId.mockClear()
+    setActiveEntityId.mockClear()
+    setActiveBankSlug.mockClear()
     fireEvent.click(screen.getByTestId('mock-bank-char'))
     expect(setActiveCharId).toHaveBeenCalledWith('char_bank')
+    expect(setActiveEntityId).toHaveBeenCalledWith(null)
+    expect(setActiveBankSlug).toHaveBeenCalledWith(null)
   })
 
   it('Next Step is disabled without activeCharId and calls onNext when enabled', () => {
