@@ -71,6 +71,7 @@ export default function CastingStepContainer({
   const handlePipelineSelectCapture = useCallback((event) => {
     const target = event.target
     if (!(target instanceof HTMLSelectElement)) return
+    if (!target.hasAttribute('data-workflow-character-select')) return
     if (!target.value) return
     applyCharacterSelection({
       charId: target.value,

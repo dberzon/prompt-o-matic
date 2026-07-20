@@ -1321,7 +1321,12 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
         })()}
 
         <div className={styles.row}>
-          <select value={selectedCharacterId} onChange={(e) => { setSelectedCharacterId(e.target.value); setRenamingCharacterId(null) }} className={styles.select}>
+          <select
+            value={selectedCharacterId}
+            onChange={(e) => { setSelectedCharacterId(e.target.value); setRenamingCharacterId(null) }}
+            className={styles.select}
+            data-workflow-character-select
+          >
             <option value="">Select character…</option>
             {savedCharacters.filter((c) => c.lifecycleStatus !== 'preview').map((c) => {
               const lcLabel = c.lifecycleStatus === 'portfolio_pending' ? ' ⏳' : c.lifecycleStatus === 'portfolio_failed' ? ' ✗' : c.lifecycleStatus === 'ready' ? ' ✓' : ''
