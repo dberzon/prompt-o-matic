@@ -206,7 +206,7 @@ describe('extrapolation orchestrator', () => {
     }
   })
 
-  it('runs stages 2-5 in parallel when enabled', async () => {
+  it('preserves stage dependencies when parallel middle stages are requested', async () => {
     const db = ensureDb(createTempDbPath())
     createEntity(db, { id: 'ent_parallel', type: 'character', name: 'Ruslan' })
     writeAttribute(db, {
@@ -221,7 +221,9 @@ describe('extrapolation orchestrator', () => {
     const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qpb-extrapolation-cache-'))
     tempDirs.push(cacheDir)
     const cache = new StageCache({ cacheDir })
+    const userMessages = []
     const llm = async ({ user }) => {
+      userMessages.push(user)
       if (user.includes('Write a single visual descriptor')) {
         return JSON.stringify({ visualDescriptor: 'frontal portrait, neutral expression' })
       }
@@ -253,6 +255,9 @@ describe('extrapolation orchestrator', () => {
     expect(result.cancelled).toBe(false)
     expect(result.stages.map((item) => item.stageId)).toEqual([1, 2, 3, 4, 5, 6])
     expect(result.prior[6]).toBeTruthy()
+    expect(userMessages.find((user) => user.includes('Infer psychology attributes'))).toContain('Stage 2 context')
+    expect(userMessages.find((user) => user.includes('Project likely environments'))).toContain('Stage 3 context')
+    expect(userMessages.find((user) => user.includes('Write a single visual descriptor'))).toContain('Stage 4 context')
     for (const st of result.stages) {
       expect(Array.isArray(st.dropped)).toBe(true)
     }

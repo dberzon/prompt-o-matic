@@ -143,23 +143,20 @@ export async function runExtrapolationPipeline({
       if (canParallelMiddle && MIDDLE_STAGE_IDS.includes(stage.id)) {
         if (middleStagesRan) continue
         middleStagesRan = true
+        // Stages 3-5 consume the immediately preceding stage through `prior`.
+        // Keep accepting the legacy parallel option, but preserve that dependency
+        // chain so context-free results are never persisted.
         for (const stageId of MIDDLE_STAGE_IDS) {
           emitProgress(progress, { type: 'stage:start', stageId })
-        }
-        const middleResults = await Promise.all(MIDDLE_STAGE_IDS.map((stageId) => runExtrapolationStage({
-          db,
-          entityId,
-          stageId,
-          llm,
-          cache,
-          prior,
-          env,
-        })))
-        for (const stageId of MIDDLE_STAGE_IDS) {
-          const result = middleResults.find((item) => item.stageId === stageId)
-          if (!result) {
-            throw new Error(`Missing extrapolation stage result for stage ${stageId}`)
-          }
+          const result = await runExtrapolationStage({
+            db,
+            entityId,
+            stageId,
+            llm,
+            cache,
+            prior,
+            env,
+          })
           await recordStageResult(ctx, result)
         }
         continue
