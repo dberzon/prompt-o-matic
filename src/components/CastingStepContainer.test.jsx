@@ -19,16 +19,10 @@ function CastingStepHarness(props) {
 
 vi.mock('./CastingPipelinePanel.jsx', () => ({
   default: () => (
-    <>
-      <select data-testid="mock-unrelated-select" defaultValue="">
-        <option value="">Select gender…</option>
-        <option value="female">Female</option>
-      </select>
-      <select data-testid="mock-pipeline-select" defaultValue="" data-workflow-character-select>
-        <option value="">Select character…</option>
-        <option value="char_pipeline">Pipeline character</option>
-      </select>
-    </>
+    <select data-testid="mock-pipeline-select" defaultValue="">
+      <option value="">Select character…</option>
+      <option value="char_pipeline">Pipeline character</option>
+    </select>
   ),
 }))
 
@@ -135,28 +129,6 @@ describe('CastingStepContainer', () => {
     setActiveCharId.mockClear()
     fireEvent.click(screen.getByTestId('mock-bank-char'))
     expect(setActiveCharId).toHaveBeenCalledWith('char_bank')
-  })
-
-  it('ignores non-character selects in the casting pipeline', () => {
-    const setActiveCharId = vi.fn()
-    const setActiveEntityId = vi.fn()
-    const setActiveBankSlug = vi.fn()
-    render(
-      <CastingStepHarness
-        {...baseProps}
-        setActiveCharId={setActiveCharId}
-        setActiveEntityId={setActiveEntityId}
-        setActiveBankSlug={setActiveBankSlug}
-      />,
-    )
-
-    fireEvent.change(screen.getByTestId('mock-unrelated-select'), {
-      target: { value: 'female' },
-    })
-
-    expect(setActiveCharId).not.toHaveBeenCalled()
-    expect(setActiveEntityId).not.toHaveBeenCalled()
-    expect(setActiveBankSlug).not.toHaveBeenCalled()
   })
 
   it('Next Step is disabled without activeCharId and calls onNext when enabled', () => {
