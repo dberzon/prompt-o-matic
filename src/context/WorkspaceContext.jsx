@@ -653,6 +653,38 @@ export function WorkspaceProvider({ children }) {
   }, [])
 
   const clearAll = useCallback(() => {
+    const resetWorkspace = {
+      scene: '',
+      selectedDir: null,
+      scenario: null,
+      chips: {},
+      blendEnabled: false,
+      blendDir: null,
+      blendWeight: 70,
+      charCount: 1,
+      chars: DEFAULT_CHARS,
+      narrativeBeat: null,
+    }
+    try {
+      const extras = workflowPersistGetterRef.current?.() ?? {}
+      localStorage.setItem(
+        WORKFLOW_PERSIST_KEY,
+        JSON.stringify(buildWorkflowPersistPayload(resetWorkspace, extras)),
+      )
+    } catch {
+      /* quota or private mode */
+    }
+    try {
+      if (typeof window !== 'undefined' && window.location.hash.startsWith('#state=')) {
+        window.history.replaceState(
+          window.history.state,
+          '',
+          `${window.location.pathname}${window.location.search}`,
+        )
+      }
+    } catch {
+      /* history may be unavailable in embedded contexts */
+    }
     setScene('')
     setSelectedDir(null)
     setScenario(null)
