@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useEffect } from 'react'
 import {
   WORKFLOW_PERSIST_DEBOUNCE_MS,
@@ -21,6 +21,7 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
   localStorage.clear()
+  window.history.replaceState({}, '', '/')
   vi.useRealTimers()
 })
 
@@ -120,5 +121,37 @@ describe('WorkspaceContext workflow persist', () => {
     expect(payload.activeProjectId).toBe('proj_live')
     expect(payload.activeCharId).toBe('char_live')
     expect(payload.scene).toBe('with workflow ids')
+  })
+
+  it('persists reset immediately and removes a share-state hash', () => {
+    localStorage.setItem(
+      WORKFLOW_PERSIST_KEY,
+      JSON.stringify({
+        scene: 'must stay cleared',
+        dirKey: null,
+        charCount: 1,
+        chars: [{ g: 'man', a: '40s' }],
+        scenario: null,
+        chips: { mood: ['rain'] },
+        blend: { enabled: false, dirKey: null, weight: 70 },
+        narrativeBeat: null,
+      }),
+    )
+    window.history.replaceState({}, '', '/#state=stale-share')
+
+    function ClearProbe() {
+      const ws = useWorkspace()
+      return <button onClick={ws.clearAll}>Reset all</button>
+    }
+
+    const first = renderWorkspace(<ClearProbe />)
+    fireEvent.click(screen.getByRole('button', { name: 'Reset all' }))
+
+    expect(window.location.hash).toBe('')
+    expect(JSON.parse(localStorage.getItem(WORKFLOW_PERSIST_KEY)).scene).toBe('')
+
+    first.unmount()
+    renderWorkspace(<SceneProbe />)
+    expect(screen.getByTestId('scene').textContent).toBe('')
   })
 })
