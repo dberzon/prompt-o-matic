@@ -260,9 +260,47 @@ export function updateCharacter(db, id, patch) {
 
 export function deleteCharacter(db, id) {
   const deleteFn = db.transaction((charId) => {
+    const character = getCharacter(db, charId)
+    if (!character) return false
+
+    // Preview renders store candidate.previewImageUrl as /api/generated-image-view?id=...
+    // before deleting the temporary character. Preserve those image rows so the URL
+    // does not 404 after cleanup.
+    const preserveGeneratedImages = character.lifecycleStatus === 'preview'
+
     // comfy_jobs and generated_images reference character directly
     db.prepare('DELETE FROM comfy_jobs WHERE character_id = ?').run(charId)
-    db.prepare('DELETE FROM generated_images WHERE character_id = ?').run(charId)
+    if (preserveGeneratedImages) {
+      const imageRows = db.prepare(
+        'SELECT id, payload_json FROM generated_images WHERE character_id = ?',
+      ).all(charId)
+      const detachStmt = db.prepare(`
+        UPDATE generated_images
+        SET character_id = NULL,
+            payload_json = @payload_json,
+            updated_at = @updated_at
+        WHERE id = @id
+      `)
+      const updatedAt = nowIso()
+      for (const row of imageRows) {
+        let payload = {}
+        try {
+          payload = JSON.parse(row.payload_json || '{}')
+        } catch {
+          payload = {}
+        }
+        if (payload && typeof payload === 'object') {
+          delete payload.characterId
+        }
+        detachStmt.run({
+          id: row.id,
+          payload_json: JSON.stringify(payload),
+          updated_at: updatedAt,
+        })
+      }
+    } else {
+      db.prepare('DELETE FROM generated_images WHERE character_id = ?').run(charId)
+    }
 
     // actor_candidates link to characters via prompt_packs; cascade through that join
     db.prepare(`

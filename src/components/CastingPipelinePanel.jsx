@@ -313,7 +313,8 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
             try { const list = await listGeneratedImages({ characterId: cId }); imageMap[cId] = list?.items || [] } catch { /* silent */ }
           }
           setAuditionImages((prev) => ({ ...prev, ...imageMap }))
-          // Persist preview image URL to candidate record and delete the temp character
+          // Persist preview image URL to candidate record, then delete the temp character.
+          // Preview deletes detach (not destroy) generated_images so these URLs keep working.
           const previewIngests = toIngest.filter((j) => j.type === 'batchPreview')
           if (previewIngests.length) {
             const previewImgUpdates = {}
@@ -323,9 +324,13 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
               if (first) {
                 const url = `/api/generated-image-view?id=${encodeURIComponent(first.id)}`
                 previewImgUpdates[j.candidateId] = url
-                updateCandidatePreviewImage(j.candidateId, url).catch(() => { /* non-critical */ })
+                try {
+                  await updateCandidatePreviewImage(j.candidateId, url)
+                } catch { /* non-critical */ }
               }
-              deleteTempCharacter(j.characterId).catch(() => { /* non-critical */ })
+              try {
+                await deleteTempCharacter(j.characterId)
+              } catch { /* non-critical */ }
             }
             if (Object.keys(previewImgUpdates).length) setBatchPreviewImages((prev) => ({ ...prev, ...previewImgUpdates }))
           }
