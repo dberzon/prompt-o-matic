@@ -296,6 +296,43 @@ describe('sqlite canonical storage', () => {
       db.close()
     }
   })
+
+  it('deleteCharacter preserves generated images for preview lifecycle characters', () => {
+    const { db } = createTempDb()
+    try {
+      createCharacter(db, {
+        ...validCharacterProfile,
+        id: 'char_preview',
+        lifecycleStatus: 'preview',
+      })
+      const pack = createPromptPack(db, {
+        ...validQwenImagePromptPack,
+        id: 'pack_preview',
+        characterId: 'char_preview',
+      })
+      createGeneratedImageRecord(db, {
+        ...validGeneratedImageRecord,
+        id: 'img_preview',
+        characterId: 'char_preview',
+        promptPackId: pack.id,
+      })
+
+      const deleted = deleteCharacter(db, 'char_preview')
+      expect(deleted).toBe(true)
+      expect(getCharacter(db, 'char_preview')).toBeNull()
+      expect(getPromptPack(db, pack.id)).toBeNull()
+
+      const preserved = getGeneratedImageRecord(db, 'img_preview')
+      expect(preserved).toBeTruthy()
+      expect(preserved.id).toBe('img_preview')
+      expect(preserved.characterId).toBeUndefined()
+      expect(
+        db.prepare('SELECT character_id FROM generated_images WHERE id = ?').get('img_preview').character_id,
+      ).toBeNull()
+    } finally {
+      db.close()
+    }
+  })
 })
 
 
