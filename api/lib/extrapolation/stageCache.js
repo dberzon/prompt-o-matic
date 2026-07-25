@@ -8,9 +8,9 @@ const DEFAULT_CACHE_DIR = path.resolve(
   '../../../data/extrapolation-stage-cache',
 )
 
-function hashKey({ snapshot, stageId, modelId }) {
+function hashKey({ entityId, snapshot, stageId, modelId }) {
   return createHash('sha256')
-    .update(JSON.stringify({ snapshot, stageId, modelId }))
+    .update(JSON.stringify({ entityId, snapshot, stageId, modelId }))
     .digest('hex')
 }
 
@@ -20,8 +20,8 @@ export class StageCache {
     fs.mkdirSync(this.cacheDir, { recursive: true })
   }
 
-  get({ snapshot, stageId, modelId }) {
-    const key = hashKey({ snapshot, stageId, modelId })
+  get({ entityId, snapshot, stageId, modelId }) {
+    const key = hashKey({ entityId, snapshot, stageId, modelId })
     const filePath = path.join(this.cacheDir, `${key}.json`)
     if (!fs.existsSync(filePath)) return null
     try {
@@ -31,10 +31,11 @@ export class StageCache {
     }
   }
 
-  set({ snapshot, stageId, modelId, result }) {
-    const key = hashKey({ snapshot, stageId, modelId })
+  set({ entityId, snapshot, stageId, modelId, result }) {
+    const key = hashKey({ entityId, snapshot, stageId, modelId })
     const filePath = path.join(this.cacheDir, `${key}.json`)
     fs.writeFileSync(filePath, JSON.stringify({
+      entityId,
       snapshot,
       stageId,
       modelId,

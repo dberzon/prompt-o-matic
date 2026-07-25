@@ -206,6 +206,65 @@ describe('extrapolation orchestrator', () => {
     }
   })
 
+  it('does not reuse stage cache across entities with identical canon', async () => {
+    const db = ensureDb(createTempDbPath())
+    const sharedCanon = 'A student in 1990s Moscow.'
+    createEntity(db, { id: 'ent_cache_a', type: 'character', name: 'Character A' })
+    createEntity(db, { id: 'ent_cache_b', type: 'character', name: 'Character B' })
+    for (const entityId of ['ent_cache_a', 'ent_cache_b']) {
+      writeAttribute(db, {
+        entityId,
+        key: 'description',
+        value: sharedCanon,
+        provenance: 'canon',
+        confidence: 1,
+        sourceStage: 1,
+      })
+    }
+
+    const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qpb-extrapolation-cache-entity-'))
+    tempDirs.push(cacheDir)
+    const cache = new StageCache({ cacheDir })
+    let llmCalls = 0
+    const llm = async ({ user }) => {
+      if (user.includes('You enrich a fictional character with period-specific')) {
+        llmCalls += 1
+        return JSON.stringify({
+          attributes: [{ key: 'culture.slang', value: `slang-call-${llmCalls}`, confidence: 0.5 }],
+        })
+      }
+      return '{}'
+    }
+
+    const first = await runExtrapolationStage({
+      db,
+      entityId: 'ent_cache_a',
+      stageId: 2,
+      llm,
+      cache,
+    })
+    const second = await runExtrapolationStage({
+      db,
+      entityId: 'ent_cache_b',
+      stageId: 2,
+      llm,
+      cache,
+    })
+
+    expect(first.cacheHit).toBe(false)
+    expect(second.cacheHit).toBe(false)
+    expect(llmCalls).toBe(2)
+    expect(first.writes.every((row) => row.entityId === 'ent_cache_a')).toBe(true)
+    expect(second.writes.every((row) => row.entityId === 'ent_cache_b')).toBe(true)
+
+    const attrsA = listAttributes(db, { entityId: 'ent_cache_a', key: 'culture.slang' })
+    const attrsB = listAttributes(db, { entityId: 'ent_cache_b', key: 'culture.slang' })
+    expect(attrsA).toHaveLength(1)
+    expect(attrsB).toHaveLength(1)
+    expect(attrsA[0].value).toBe('slang-call-1')
+    expect(attrsB[0].value).toBe('slang-call-2')
+  })
+
   it('runs stages 2-5 in parallel when enabled', async () => {
     const db = ensureDb(createTempDbPath())
     createEntity(db, { id: 'ent_parallel', type: 'character', name: 'Ruslan' })
