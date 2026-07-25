@@ -40,7 +40,7 @@ export async function runExtrapolationStage({
 
   const modelId = resolveStageModelId(stageId, env)
   const snapshot = buildStageSnapshot(db, entityId)
-  const cached = cache.get({ snapshot, stageId, modelId })
+  const cached = cache.get({ entityId, snapshot, stageId, modelId })
   if (cached?.result) {
     return {
       stageId,
@@ -66,7 +66,7 @@ export async function runExtrapolationStage({
     dropped: result.dropped || [],
     raw: result.raw,
   }
-  cache.set({ snapshot, stageId, modelId, result: payload })
+  cache.set({ entityId, snapshot, stageId, modelId, result: payload })
 
   return {
     stageId,
