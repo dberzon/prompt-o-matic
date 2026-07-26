@@ -650,10 +650,10 @@ export default function PromptOutput({
           promptPackId: renderJob.promptPackId,
           view: 'cinematic_scene',
         }])
-        if (!active) return
         const item = (statusData?.items || []).find((entry) => entry.promptId === renderJob.promptId)
         const status = item?.status || 'unknown'
         if (status === 'success') {
+          // Ingest even if the component unmounted mid-poll so completed images are not lost.
           const ingested = await ingestComfyOutputs({
             promptId: renderJob.promptId,
             promptPackId: renderJob.promptPackId,
@@ -685,7 +685,10 @@ export default function PromptOutput({
           if (items.length) loadGallery()
           return
         }
-        if (status === 'failed' || item?.ok === false) {
+        if (!active) return
+        // Only terminal Comfy failure stops polling. Transient status-check errors
+        // (`ok: false` without status, or network throws) must keep polling — Casting does the same.
+        if (status === 'failed') {
           const slot = renderJob.compareSlot ?? 'main'
           const msg = item?.error || 'ComfyUI render failed'
           if (slot === 'main') {
@@ -699,20 +702,8 @@ export default function PromptOutput({
             setActiveRenderSlot(null)
           }
         }
-      } catch (err) {
-        if (!active) return
-        const slot = renderJob?.compareSlot ?? 'main'
-        const msg = err?.message || 'Render status check failed'
-        if (slot === 'main') {
-          setRenderState('failed')
-          setRenderError(msg)
-          setActiveRenderSlot(null)
-        } else {
-          setCompareSlotError((prev) => ({ ...prev, [slot]: msg }))
-          setRenderState('idle')
-          setRenderJob(null)
-          setActiveRenderSlot(null)
-        }
+      } catch {
+        // Network / status-check blip — keep polling until Comfy reports success or failed.
       }
     }
     poll()

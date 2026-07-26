@@ -1,4 +1,4 @@
-import { createEntity, writeAttribute } from '../../db/repositories.js'
+import { createEntity, getEntity, writeAttribute } from '../../db/repositories.js'
 
 function slugify(name) {
   return String(name || '')
@@ -22,18 +22,30 @@ export function applyS4Parser(db, entityId, parsed) {
   /** @type {unknown[]} */
   const suggestions = []
   const environments = Array.isArray(parsed?.environments) ? parsed.environments : []
+  /** @type {Set<string>} */
+  const seenEnvIds = new Set()
 
   for (const env of environments) {
     if (!env?.name) {
       dropped.push({ key: null, reason: 'environment_missing_name', raw: env })
       continue
     }
-    const environment = createEntity(db, {
-      id: `env_${slugify(env.name)}_${entityId}`.slice(0, 120),
-      type: 'environment',
-      name: env.name,
-    })
-    suggestions.push(environment)
+    const envId = `env_${slugify(env.name)}_${entityId}`.slice(0, 120)
+    // Deduplicate within one LLM payload (Kitchen / kitchen) and get-or-create on re-runs.
+    // createEntity alone throws UNIQUE constraint and aborts the whole stage.
+    let environment = getEntity(db, envId)
+    if (!environment) {
+      environment = createEntity(db, {
+        id: envId,
+        type: 'environment',
+        name: env.name,
+      })
+      suggestions.push(environment)
+    } else if (!seenEnvIds.has(envId)) {
+      // Existing entity from a prior run — still surface it as a suggestion for the UI.
+      suggestions.push(environment)
+    }
+    seenEnvIds.add(envId)
     if (env.summary) {
       accepted.push(writeAttribute(db, {
         entityId: environment.id,
