@@ -116,6 +116,36 @@ describe('applyS4Parser', () => {
       expect.arrayContaining(['environment_missing_name', 'relationship_attribute_incomplete']),
     )
   })
+
+  it('get-or-creates environments so re-runs and duplicate slugs do not crash', () => {
+    const db = ensureDb(createTempDbPath())
+    createEntity(db, { id: 'e4c', type: 'character', name: 'Ruslan' })
+
+    const first = applyS4Parser(db, 'e4c', {
+      environments: [{ name: 'Beer hall', summary: 'Friday hangout' }],
+    })
+    expect(first.suggestions).toHaveLength(1)
+    expect(first.suggestions[0].id).toBe('env_beer_hall_e4c')
+
+    // Re-run with the same environment name must reuse the row, not UNIQUE-crash.
+    const rerun = applyS4Parser(db, 'e4c', {
+      environments: [{ name: 'Beer hall', summary: 'Saturday hangout' }],
+    })
+    expect(rerun.suggestions).toHaveLength(1)
+    expect(rerun.suggestions[0].id).toBe('env_beer_hall_e4c')
+    expect(rerun.accepted.some((row) => row.key === 'summary' && row.value === 'Saturday hangout')).toBe(true)
+
+    // Case/spacing variants that slugify identically must share one entity in a single payload.
+    const dupes = applyS4Parser(db, 'e4c', {
+      environments: [
+        { name: 'Kitchen', summary: 'morning' },
+        { name: 'kitchen', summary: 'evening' },
+      ],
+    })
+    expect(dupes.suggestions).toHaveLength(1)
+    expect(dupes.suggestions[0].id).toBe('env_kitchen_e4c')
+    expect(dupes.accepted.filter((row) => row.entityId === 'env_kitchen_e4c')).toHaveLength(2)
+  })
 })
 
 describe('applyS5Parser', () => {
