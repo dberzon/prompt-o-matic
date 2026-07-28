@@ -128,7 +128,7 @@ describe('Ruslan MVP Done gate (Section 4)', () => {
       cache: new StageCache({ cacheDir }),
     })
 
-    expect(getEntity(db, 'rita_vlasova')?.name).toBe('Rita Vlasova')
+    expect(getEntity(db, 'rita_vlasova_ruslan_levashov')?.name).toBe('Rita Vlasova')
     expect(listEntities(db, { type: 'environment' }).length).toBeGreaterThanOrEqual(1)
 
     const fetchImpl = mockComfyFetch()
