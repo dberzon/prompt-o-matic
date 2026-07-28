@@ -57,8 +57,80 @@ describe('extrapolation prompts and parsers', () => {
     expect(characters.length).toBeGreaterThanOrEqual(4)
     expect(environments.length).toBeGreaterThanOrEqual(2)
     expect(institutions.length).toBeGreaterThanOrEqual(1)
-    expect(getEntity(db, 'rita_vlasova')?.name).toBe('Rita Vlasova')
+    expect(getEntity(db, 'rita_vlasova_ruslan_levashov')?.name).toBe('Rita Vlasova')
+    expect(getEntity(db, 'rita_vlasova')).toBeNull()
     expect(listAttributes(db, { entityId: 'ruslan_levashov', provenance: 'canon' }).length).toBeGreaterThanOrEqual(12)
+  })
+
+  it('scopes S1 related entities so lift-from-bank Bibles are not polluted', () => {
+    const db = ensureDb(createTempDbPath())
+    // Lift Rita first — entity id is the bare character slug (see entity-lift-from-bank).
+    createEntity(db, { id: 'rita_vlasova', type: 'character', name: 'Rita Vlasova' })
+    writeAttribute(db, {
+      entityId: 'rita_vlasova',
+      key: 'description',
+      value: 'Rita canon portrait brief',
+      provenance: 'canon',
+      confidence: 1,
+      sourceStage: 'lift',
+    })
+    createEntity(db, { id: 'ruslan_levashov', type: 'character', name: 'Ruslan Levashov' })
+
+    applyS1Parser(db, 'ruslan_levashov', RUSLAN_S1_FIXTURE)
+
+    // Rita's lifted Bible must keep only her lift description — no S1 writes.
+    const ritaAttrs = listAttributes(db, { entityId: 'rita_vlasova' })
+    expect(ritaAttrs).toHaveLength(1)
+    expect(ritaAttrs[0].key).toBe('description')
+    expect(ritaAttrs[0].value).toBe('Rita canon portrait brief')
+
+    // Ruslan's related Rita is a separate scoped entity.
+    const related = getEntity(db, 'rita_vlasova_ruslan_levashov')
+    expect(related?.name).toBe('Rita Vlasova')
+    expect(listAttributes(db, { entityId: related.id }).some((a) => a.key === 'name')).toBe(true)
+  })
+
+  it('isolates identical S1 related slugs across primary characters', () => {
+    const db = ensureDb(createTempDbPath())
+    createEntity(db, { id: 'char_a', type: 'character', name: 'A' })
+    createEntity(db, { id: 'char_b', type: 'character', name: 'B' })
+    const payload = {
+      primary: { attributes: [{ key: 'demographics.gender', value: 'female' }] },
+      entities: [
+        {
+          slug: 'shared_friend',
+          type: 'character',
+          name: 'Shared Friend',
+          attributes: [{ key: 'appearance.eyes', value: 'green' }],
+        },
+      ],
+    }
+    applyS1Parser(db, 'char_a', {
+      ...payload,
+      entities: [
+        {
+          ...payload.entities[0],
+          attributes: [{ key: 'appearance.eyes', value: 'green' }],
+        },
+      ],
+    })
+    applyS1Parser(db, 'char_b', {
+      ...payload,
+      entities: [
+        {
+          ...payload.entities[0],
+          attributes: [{ key: 'appearance.eyes', value: 'brown' }],
+        },
+      ],
+    })
+
+    expect(getEntity(db, 'shared_friend')).toBeNull()
+    const aRelated = listAttributes(db, { entityId: 'shared_friend_char_a', key: 'appearance.eyes' })
+    const bRelated = listAttributes(db, { entityId: 'shared_friend_char_b', key: 'appearance.eyes' })
+    expect(aRelated).toHaveLength(1)
+    expect(aRelated[0].value).toBe('green')
+    expect(bRelated).toHaveLength(1)
+    expect(bRelated[0].value).toBe('brown')
   })
 
   it('S6 conflict schema accepts stub empty payload used by orchestrator LLM stubs', () => {

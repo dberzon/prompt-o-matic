@@ -144,7 +144,7 @@ describe('Ruslan MVP acceptance (Section 13 worked example)', () => {
 
     expect(pipeline.cancelled).toBe(false)
     expect(pipeline.stages).toHaveLength(6)
-    expect(getEntity(db, 'rita_vlasova')?.name).toBe('Rita Vlasova')
+    expect(getEntity(db, 'rita_vlasova_ruslan_levashov')?.name).toBe('Rita Vlasova')
     expect(listEntities(db, { type: 'environment' }).length).toBeGreaterThanOrEqual(2)
     expect(listEntities(db, { type: 'institution' }).length).toBeGreaterThanOrEqual(1)
     expect(listAttributes(db, { entityId: ENTITY_ID, provenance: 'canon' }).length).toBeGreaterThanOrEqual(12)

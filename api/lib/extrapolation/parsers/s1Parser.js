@@ -9,10 +9,22 @@ function normalizeSlug(value) {
     .replace(/^_+|_+$/g, '')
 }
 
+/**
+ * Scope related-entity ids to the primary character so S1 cannot collide with
+ * lift-from-bank Bibles (which use bare character slugs as entity ids) or reuse
+ * another character's related entities.
+ * Matches S4's `env_${slug}_${entityId}` pattern.
+ */
+function scopedRelatedEntityId(slug, primaryEntityId) {
+  return `${slug}_${primaryEntityId}`.slice(0, 120)
+}
+
 export function applyS1Parser(db, primaryEntityId, raw) {
   const parsed = parseS1EntityExtractionOutput(raw)
   const writes = []
   const suggestions = []
+  /** @type {Set<string>} */
+  const seenRelatedIds = new Set()
 
   for (const item of parsed.primary.attributes) {
     if (!item?.key) {
@@ -31,10 +43,16 @@ export function applyS1Parser(db, primaryEntityId, raw) {
   for (const entity of parsed.entities) {
     const slug = normalizeSlug(entity.slug || entity.name)
     if (!slug) continue
-    let record = getEntity(db, slug)
+    const relatedId = scopedRelatedEntityId(slug, primaryEntityId)
+    // Never attach related-entity writes onto the primary Bible itself.
+    if (relatedId === primaryEntityId || slug === primaryEntityId) continue
+    if (seenRelatedIds.has(relatedId)) continue
+    seenRelatedIds.add(relatedId)
+
+    let record = getEntity(db, relatedId)
     if (!record) {
       record = createEntity(db, {
-        id: slug,
+        id: relatedId,
         type: entity.type,
         name: entity.name,
       })
