@@ -33,14 +33,17 @@ function isNearDuplicate(a, b) {
   }
   const union = ta.size + tb.size - intersection
   const jaccard = union > 0 ? intersection / union : 0
-  const smallerSize = Math.min(ta.size, tb.size)
-  const largerSize = Math.max(ta.size, tb.size)
-  const overlapToSmaller = intersection / Math.max(1, smallerSize)
-  // Guard against short chips/defaults swallowing authored scenes.
-  // Example: default shot "wide establishing shot" must not drop
-  // "wide establishing shot of Ruslan alone on an empty railway platform…".
-  const comparableCardinality = largerSize <= Math.max(smallerSize * 2, smallerSize + 3)
-  return jaccard >= 0.9 || (comparableCardinality && overlapToSmaller >= 0.8)
+  const overlapToSmaller = intersection / Math.max(1, Math.min(ta.size, tb.size))
+  return jaccard >= 0.9 || overlapToSmaller >= 0.8
+}
+
+function isMuchMoreSpecific(base, candidate) {
+  const baseTokens = tokenSet(base).size
+  const candidateTokens = tokenSet(candidate).size
+  if (baseTokens === 0) return candidateTokens > 0
+  // A multi-sentence scene that merely begins with a 3-token shot chip is not a
+  // near-duplicate worth discarding; comparable-length qualifier tweaks still are.
+  return candidateTokens > baseTokens * 2
 }
 
 export function dedupeFragments(parts = []) {
@@ -48,8 +51,15 @@ export function dedupeFragments(parts = []) {
   for (const part of parts) {
     const value = typeof part === 'string' ? part.trim() : ''
     if (!value) continue
-    if (out.some((existing) => isNearDuplicate(existing, value))) continue
-    out.push(value)
+    const dupIdx = out.findIndex((existing) => isNearDuplicate(existing, value))
+    if (dupIdx === -1) {
+      out.push(value)
+      continue
+    }
+    // Do not let a short prior chip/default swallow a much longer authored fragment.
+    if (isMuchMoreSpecific(out[dupIdx], value)) {
+      out.push(value)
+    }
   }
   return out
 }
