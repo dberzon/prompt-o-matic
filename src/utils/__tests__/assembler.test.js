@@ -32,6 +32,12 @@ describe('dedupeFragments', () => {
     const short = 'eastern European village outskirts'
     expect(dedupeFragments([long, short])).toHaveLength(1)
   })
+
+  it('keeps authored scenes that only share a short default shot prefix', () => {
+    const shot = 'wide establishing shot'
+    const scene = 'wide establishing shot of Ruslan alone on an empty railway platform at dusk'
+    expect(dedupeFragments([shot, scene])).toEqual([shot, scene])
+  })
 })
 
 // ── REWRITES (each trigger independently) ───────────────────────────────────

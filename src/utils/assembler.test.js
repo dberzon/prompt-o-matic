@@ -35,6 +35,12 @@ describe('dedupeFragments', () => {
 
     expect(dedupeFragments(input)).toEqual(input)
   })
+
+  it('does not treat a short shot chip as a duplicate of a longer authored scene', () => {
+    const shot = 'wide establishing shot'
+    const scene = 'wide establishing shot of Ruslan alone on an empty railway platform at dusk'
+    expect(dedupeFragments([shot, scene])).toEqual([shot, scene])
+  })
 })
 
 describe('assemblePrompt', () => {
@@ -69,6 +75,15 @@ describe('assemblePrompt', () => {
 
     expect(result).toContain('cool blue-gray, low contrast midtones')
     expect(result).toContain('warm amber interior light against cold blue exterior')
+  })
+
+  it('preserves authored scenes that begin with the default shot phrasing', () => {
+    const scene = 'wide establishing shot of Ruslan alone on an empty railway platform at dusk'
+    const result = assemblePrompt({ scene, scenario: '', chips: {} })
+
+    expect(result).toContain(scene)
+    expect(result.join(', ')).toContain('Ruslan')
+    expect(result.join(', ')).toContain('railway platform')
   })
 })
 
