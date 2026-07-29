@@ -33,8 +33,14 @@ function isNearDuplicate(a, b) {
   }
   const union = ta.size + tb.size - intersection
   const jaccard = union > 0 ? intersection / union : 0
-  const overlapToSmaller = intersection / Math.max(1, Math.min(ta.size, tb.size))
-  return jaccard >= 0.9 || overlapToSmaller >= 0.8
+  const smallerSize = Math.min(ta.size, tb.size)
+  const largerSize = Math.max(ta.size, tb.size)
+  const overlapToSmaller = intersection / Math.max(1, smallerSize)
+  // Guard against short chips/defaults swallowing authored scenes.
+  // Example: default shot "wide establishing shot" must not drop
+  // "wide establishing shot of Ruslan alone on an empty railway platform…".
+  const comparableCardinality = largerSize <= Math.max(smallerSize * 2, smallerSize + 3)
+  return jaccard >= 0.9 || (comparableCardinality && overlapToSmaller >= 0.8)
 }
 
 export function dedupeFragments(parts = []) {
