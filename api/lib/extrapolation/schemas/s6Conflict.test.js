@@ -10,43 +10,56 @@ describe('S6ConflictOutputSchema', () => {
     expect(parsed.conflicts).toEqual([])
   })
 
-  it('accepts a single conflict', () => {
+  it('accepts prompt/parser-shaped conflicts with attributeIds', () => {
     const parsed = parseS6ConflictOutput({
       conflicts: [
         {
-          keys: ['appearance.height', 'appearance.build'],
-          severity: 'medium',
-          reason: 'Height implies slight frame but build describes heavy-set.',
+          key: 'eyes',
+          message: 'Height implies slight frame but build describes heavy-set.',
+          attributeIds: ['attr_a', 'attr_b'],
         },
       ],
     })
     expect(parsed.conflicts).toHaveLength(1)
-    expect(parsed.conflicts[0].severity).toBe('medium')
+    expect(parsed.conflicts[0]).toEqual({
+      key: 'eyes',
+      message: 'Height implies slight frame but build describes heavy-set.',
+      attributeIds: ['attr_a', 'attr_b'],
+    })
   })
 
   it('accepts multiple conflicts', () => {
     const parsed = parseS6ConflictOutput({
       conflicts: [
-        { keys: ['a', 'b'], severity: 'low', reason: 'r1' },
-        { keys: ['x', 'y', 'z'], severity: 'high', reason: 'r2', suggested: 'Prefer canon era attrs.' },
+        { key: 'wardrobe', message: 'r1', attributeIds: ['a', 'b'] },
+        { key: 'era', message: 'r2', attributeIds: ['x', 'y', 'z'] },
       ],
     })
     expect(parsed.conflicts).toHaveLength(2)
-    expect(parsed.conflicts[1].suggested).toContain('canon')
+    expect(parsed.conflicts[1].attributeIds).toEqual(['x', 'y', 'z'])
   })
 
-  it('rejects invalid severity', () => {
+  it('rejects legacy keys/severity/reason shape (mismatched with parser/UI)', () => {
     const result = S6ConflictOutputSchema.safeParse({
-      conflicts: [{ keys: ['a', 'b'], severity: 'critical', reason: 'bad' }],
+      conflicts: [{ keys: ['a', 'b'], severity: 'medium', reason: 'legacy' }],
     })
     expect(result.success).toBe(false)
   })
 
-  it('rejects keys with fewer than two entries', () => {
+  it('rejects conflicts with fewer than two attributeIds', () => {
     const result = ConflictSchema.safeParse({
-      keys: ['only-one'],
-      severity: 'low',
-      reason: 'needs two keys minimum',
+      key: 'eyes',
+      message: 'needs two attribute ids',
+      attributeIds: ['only-one'],
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('rejects empty message', () => {
+    const result = ConflictSchema.safeParse({
+      key: 'eyes',
+      message: '',
+      attributeIds: ['a', 'b'],
     })
     expect(result.success).toBe(false)
   })
