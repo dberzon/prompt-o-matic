@@ -1,12 +1,14 @@
 import { z } from 'zod'
 
-/** Single contradiction between two or more attribute keys. */
+/**
+ * Single contradiction between two or more attributes.
+ * Shape matches extrapolation.s6.conflict prompt, applyS6Parser, and EntityConflictPanel.
+ */
 export const ConflictSchema = z
   .object({
-    keys: z.array(z.string()).min(2),
-    severity: z.enum(['low', 'medium', 'high']),
-    reason: z.string(),
-    suggested: z.string().optional(),
+    key: z.string().min(1),
+    message: z.string().min(1),
+    attributeIds: z.array(z.string().min(1)).min(2),
   })
   .strict()
 

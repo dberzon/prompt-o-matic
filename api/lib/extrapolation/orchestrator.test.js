@@ -186,6 +186,113 @@ describe('orchestrator entity-type dispatch', () => {
   })
 })
 
+describe('orchestrator S6 conflict persistence', () => {
+  it('writes suggested conflict markers from prompt-shaped S6 output', async () => {
+    const db = ensureDb(createTempDbPath())
+    repositories.createEntity(db, { id: 'ent_s6', type: 'character', name: 'Ruslan' })
+    repositories.writeAttribute(db, {
+      entityId: 'ent_s6',
+      key: 'description',
+      value: 'A student in 1990s Moscow.',
+      provenance: 'canon',
+      confidence: 1,
+      sourceStage: 1,
+    })
+    const first = repositories.writeAttribute(db, {
+      entityId: 'ent_s6',
+      key: 'eyes',
+      value: 'green',
+      provenance: 'inferred',
+      confidence: 0.6,
+      sourceStage: 3,
+    })
+    const second = repositories.writeAttribute(db, {
+      entityId: 'ent_s6',
+      key: 'eyes',
+      value: 'blue',
+      provenance: 'inferred',
+      confidence: 0.6,
+      sourceStage: 5,
+    })
+
+    const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qpb-orchestrator-cache-'))
+    tempDirs.push(cacheDir)
+    const cache = new StageCache({ cacheDir })
+
+    const llm = async ({ user }) => {
+      if (user.includes('Extract entities and canon attributes')) {
+        return JSON.stringify({
+          primary: { attributes: [{ key: 'name', value: 'Ruslan' }] },
+          entities: [],
+        })
+      }
+      if (user.includes('You enrich a fictional character with period-specific')) {
+        return JSON.stringify({ attributes: [{ key: 'culture.slang', value: 'bro', confidence: 0.5 }] })
+      }
+      if (user.includes('Infer psychology attributes')) {
+        return JSON.stringify({ attributes: [{ key: 'behavior.temperament', value: 'wry', confidence: 0.7 }] })
+      }
+      if (user.includes('Project likely environments')) {
+        return JSON.stringify({
+          environments: [{ name: 'Beer hall', summary: 'Hangout' }],
+          attributes: [{ key: 'routine.friday', value: 'Fridays at hall' }],
+        })
+      }
+      if (user.includes('Write a single visual descriptor')) {
+        return JSON.stringify({ visualDescriptor: 'frontal portrait, neutral expression, plain backdrop' })
+      }
+      if (user.includes('Detect contradictions')) {
+        return JSON.stringify({
+          conflicts: [
+            {
+              key: 'eyes',
+              message: 'Green vs blue eye color across stages',
+              attributeIds: [first.id, second.id],
+            },
+          ],
+        })
+      }
+      return '{}'
+    }
+
+    const stageSnapshots = []
+    const pipeline = await runExtrapolationPipeline({
+      db,
+      entityId: 'ent_s6',
+      llm,
+      cache,
+      onStageComplete: async (stageResult) => {
+        stageSnapshots.push({
+          stageId: stageResult.stageId,
+          writes: [...(stageResult.writes || [])],
+          dropped: [...(stageResult.dropped || [])],
+        })
+      },
+    })
+
+    expect(pipeline.cancelled).toBe(false)
+    const s6 = pipeline.stages.find((s) => s.stageId === 6)
+    expect(s6?.dropped || []).toEqual([])
+    expect(s6?.writes?.length).toBe(1)
+    expect(s6.writes[0]).toMatchObject({
+      key: 'conflict.eyes',
+      provenance: 'suggested',
+      sourceStage: 6,
+    })
+    expect(s6.writes[0].value).toEqual({
+      message: 'Green vs blue eye color across stages',
+      attributeIds: [first.id, second.id],
+    })
+
+    const snap6 = stageSnapshots.find((s) => s.stageId === 6)
+    expect(snap6?.writes?.length).toBe(1)
+    expect(snap6?.dropped || []).toEqual([])
+
+    const stored = repositories.listAttributes(db, { entityId: 'ent_s6', provenance: 'suggested' })
+    expect(stored.some((row) => row.key === 'conflict.eyes')).toBe(true)
+  })
+})
+
 describe('orchestrator dropped[] propagation', () => {
   it('onStageComplete receives non-empty dropped when parser drops schema-valid rows', async () => {
     const db = ensureDb(createTempDbPath())
@@ -220,21 +327,15 @@ describe('orchestrator dropped[] propagation', () => {
         return JSON.stringify({
           environments: [{ name: 'Beer hall', summary: 'Hangout' }],
           attributes: [{ key: 'routine.friday', value: 'Fridays at hall' }],
+          // Schema-valid, but otherSlug slugifies to empty → parser drops.
+          relationshipAttributes: [{ type: 'knows', otherSlug: '!!!', value: 'friend' }],
         })
       }
       if (user.includes('Write a single visual descriptor')) {
         return JSON.stringify({ visualDescriptor: 'frontal portrait, neutral expression, plain backdrop' })
       }
       if (user.includes('Detect contradictions')) {
-        return JSON.stringify({
-          conflicts: [
-            {
-              keys: ['wardrobe.jacket', 'behavior.temperament'],
-              severity: 'low',
-              reason: 'LLM reason field (no message) — parser drops until message contract aligns',
-            },
-          ],
-        })
+        return JSON.stringify({ conflicts: [] })
       }
       return '{}'
     }
@@ -254,12 +355,12 @@ describe('orchestrator dropped[] propagation', () => {
     })
 
     expect(pipeline.cancelled).toBe(false)
-    const s6 = pipeline.stages.find((s) => s.stageId === 6)
-    expect(s6?.dropped?.length).toBeGreaterThan(0)
-    expect(s6.dropped.some((d) => d.reason === 'conflict_missing_message')).toBe(true)
+    const s4 = pipeline.stages.find((s) => s.stageId === 4)
+    expect(s4?.dropped?.length).toBeGreaterThan(0)
+    expect(s4.dropped.some((d) => d.reason === 'relationship_other_slug_empty')).toBe(true)
 
-    const snap6 = stageSnapshots.find((s) => s.stageId === 6)
-    expect(snap6?.dropped?.length).toBeGreaterThan(0)
+    const snap4 = stageSnapshots.find((s) => s.stageId === 4)
+    expect(snap4?.dropped?.length).toBeGreaterThan(0)
   })
 })
 
