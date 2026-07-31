@@ -16,10 +16,17 @@ function gapWorkingKey(gap) {
 }
 
 /**
+ * Re-batch only attributes that belong to the autofill target entity.
+ *
+ * Stage parsers already persist writes under the correct `entityId`. Stripping
+ * that field and writing every row onto the primary bible re-hosts related-entity
+ * attributes (S1 people, S4 environments) as if they described the primary.
+ *
  * @param {unknown[]} writes
+ * @param {string} targetEntityId
  * @returns {Array<{ key: string, value: unknown, provenance: string, confidence?: number | null, sourceStage?: number | string | null }>}
  */
-function rowsForWriteBatch(writes) {
+function rowsForWriteBatch(writes, targetEntityId) {
   if (!Array.isArray(writes)) return []
   /** @type {Array<{ key: string, value: unknown, provenance: string, confidence?: number | null, sourceStage?: number | string | null }>} */
   const out = []
@@ -28,6 +35,8 @@ function rowsForWriteBatch(writes) {
     const row = /** @type {Record<string, unknown>} */ (w)
     if (typeof row.key !== 'string' || !row.key) continue
     if (typeof row.provenance !== 'string') continue
+    // Keep rows with matching entityId, or legacy rows that omit entityId.
+    if (typeof row.entityId === 'string' && row.entityId !== targetEntityId) continue
     out.push({
       key: row.key,
       value: row.value,
@@ -202,7 +211,7 @@ export async function runAutofillLoop({
         continue
       }
 
-      const batchRows = rowsForWriteBatch(stageResult.writes || [])
+      const batchRows = rowsForWriteBatch(stageResult.writes || [], entityId)
       try {
         writeAttributesBatch(db, { entityId, attributes: batchRows })
       } catch {

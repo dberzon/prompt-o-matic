@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runAutofillLoop } from './autofill-loop.js'
-import { createEntity, listAttributes } from '../db/repositories.js'
+import { createEntity, getEntity, listAttributes } from '../db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../db/sqlite.js'
 import { StageCache } from '../extrapolation/stageCache.js'
 
@@ -133,5 +133,51 @@ describe('runAutofillLoop', () => {
     expect(out.terminationReason).toBe('max-iterations')
     expect(out.iterations).toBe(0)
     expect(out.gapsRemaining).toBeGreaterThan(0)
+  })
+
+  it('does not re-host related-entity S1 attributes onto the primary bible', async () => {
+    const db = openTempDb()
+    createEntity(db, { id: 'ent_ruslan', type: 'character', name: 'Ruslan' })
+    const relatedPayload = JSON.stringify({
+      primary: { attributes: [{ key: 'description', value: 'Primary description only.' }] },
+      entities: [
+        {
+          type: 'character',
+          name: 'Rita Vlasova',
+          slug: 'rita_vlasova',
+          attributes: [
+            { key: 'name', value: 'Rita Vlasova' },
+            { key: 'appearance', value: 'Sharp cheekbones, dark bob.' },
+          ],
+        },
+      ],
+    })
+    const out = await runAutofillLoop({
+      db,
+      entityId: 'ent_ruslan',
+      llm: vi.fn(async () => relatedPayload),
+      cache: makeIsolatedCache(),
+      detectGaps: (gapDb, gapEntityId) => {
+        const keys = new Set(listAttributes(gapDb, { entityId: gapEntityId }).map((a) => a.key))
+        return keys.has('description')
+          ? []
+          : [{ field: 'description', severity: 'high', suggestedStageId: 1 }]
+      },
+    })
+    expect(out.terminationReason).toBe('complete')
+
+    const related = getEntity(db, 'rita_vlasova')
+    expect(related?.name).toBe('Rita Vlasova')
+    expect(listAttributes(db, { entityId: 'rita_vlasova', key: 'appearance' }).map((a) => a.value)).toContain(
+      'Sharp cheekbones, dark bob.',
+    )
+
+    const primaryNames = listAttributes(db, { entityId: 'ent_ruslan', key: 'name' })
+    expect(primaryNames.map((a) => a.value)).not.toContain('Rita Vlasova')
+    const primaryAppearance = listAttributes(db, { entityId: 'ent_ruslan', key: 'appearance' })
+    expect(primaryAppearance.map((a) => a.value)).not.toContain('Sharp cheekbones, dark bob.')
+    expect(listAttributes(db, { entityId: 'ent_ruslan', key: 'description' }).map((a) => a.value)).toContain(
+      'Primary description only.',
+    )
   })
 })
