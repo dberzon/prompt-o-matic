@@ -7,7 +7,10 @@ import {
   useRef,
 } from 'react'
 import { useProject } from './ProjectContext.jsx'
-import { useWorkspace } from './WorkspaceContext.jsx'
+import {
+  buildWorkflowPersistPayload,
+  useWorkspace,
+} from './WorkspaceContext.jsx'
 
 export const CURRENT_SHARE_VERSION = 3
 
@@ -214,6 +217,58 @@ export function resolveShareBootstrap(hashDecoded, localDecoded) {
   return null
 }
 
+/** Remove a consumed `#state=` share hash so reloads use persisted edits. */
+export function clearShareStateHash() {
+  if (typeof window === 'undefined') return false
+  try {
+    if (!window.location.hash.startsWith('#state=')) return false
+    window.history.replaceState(
+      window.history.state,
+      '',
+      `${window.location.pathname}${window.location.search}`,
+    )
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Seed `qpb.workflow.v1` from a decoded share payload before clearing `#state=`.
+ * Without this, a reload inside the workspace persist debounce would lose the share.
+ * @param {Record<string, unknown>} canonical
+ */
+export function persistCanonicalShareToLocalStorage(canonical) {
+  if (!canonical || typeof canonical !== 'object') return
+  if (typeof localStorage === 'undefined') return
+  const blend = canonical.blend && typeof canonical.blend === 'object'
+    ? canonical.blend
+    : packBlend(canonical)
+  const payload = buildWorkflowPersistPayload(
+    {
+      scene: canonical.scene,
+      selectedDir: canonical.dirKey,
+      charCount: canonical.charCount,
+      chars: canonical.chars,
+      scenario: canonical.scenario,
+      chips: canonical.chips,
+      blendEnabled: Boolean(blend.enabled),
+      blendDir: blend.dirKey ?? null,
+      blendWeight: typeof blend.weight === 'number' ? blend.weight : 70,
+      narrativeBeat: canonical.narrativeBeat ?? null,
+    },
+    {
+      activeProjectId: canonical.projectId ?? null,
+      activeCharId: canonical.charId ?? null,
+    },
+  )
+  try {
+    localStorage.setItem(WORKFLOW_LS_KEY, JSON.stringify(payload))
+  } catch {
+    /* quota or private mode */
+  }
+}
+
 /** @param {Record<string, unknown>} canonical */
 export function toWorkspaceSharePayload(canonical) {
   const blendFields = unpackBlendForWorkspace(canonical)
@@ -322,15 +377,27 @@ export function ShareLinkProvider({ children }) {
   useEffect(() => {
     if (typeof window === 'undefined') return
     const hash = window.location.hash
-    const hashDecoded = hash.startsWith('#state=')
+    const hadShareHash = hash.startsWith('#state=')
+    const hashDecoded = hadShareHash
       ? decodeShareState(hash.slice('#state='.length))
       : null
     const lsRaw = readWorkflowLocalStorage()
     const localDecoded = lsRaw ? workflowLocalStorageToCanonical(lsRaw) : null
     const canonical = resolveShareBootstrap(hashDecoded, localDecoded)
-    if (!canonical) return
-    applyShareDecoded(toWorkspaceSharePayload(canonical))
-    notifyWorkflowShareApply(extractWorkflowShareFields(canonical))
+    if (canonical) {
+      applyShareDecoded(toWorkspaceSharePayload(canonical))
+      notifyWorkflowShareApply(extractWorkflowShareFields(canonical))
+      // Hash wins over LS once; persist immediately so consuming the hash cannot
+      // drop the shared workspace on a reload before the 500ms debounce fires.
+      if (hadShareHash && hashDecoded) {
+        persistCanonicalShareToLocalStorage(canonical)
+      }
+    }
+    // Always consume `#state=` after bootstrap so later edits are not reverted
+    // by re-applying the frozen share payload on every reload.
+    if (hadShareHash) {
+      clearShareStateHash()
+    }
   }, [applyShareDecoded])
 
   const value = useMemo(

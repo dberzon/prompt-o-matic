@@ -1,15 +1,41 @@
 /**
  * @vitest-environment jsdom
  */
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, render, screen } from '@testing-library/react'
+import { useEffect } from 'react'
+import { ProjectProvider } from './ProjectContext.jsx'
+import {
+  WORKFLOW_PERSIST_DEBOUNCE_MS,
+  WORKFLOW_PERSIST_KEY,
+  WorkspaceProvider,
+  useWorkspace,
+} from './WorkspaceContext.jsx'
 import {
   CURRENT_SHARE_VERSION,
+  ShareLinkProvider,
+  clearShareStateHash,
   decodeSharePayload,
   decodeShareState,
   encodeShareState,
+  persistCanonicalShareToLocalStorage,
   resolveShareBootstrap,
   workflowLocalStorageToCanonical,
 } from './ShareLinkContext.jsx'
+
+vi.mock('../api/promptStorage.js', () => ({
+  fetchWorkspaceProfiles: vi.fn().mockResolvedValue([]),
+  upsertWorkspaceProfileRemote: vi.fn().mockResolvedValue(null),
+  deleteWorkspaceProfileRemote: vi.fn().mockResolvedValue(null),
+}))
+
+vi.mock('../lib/api/projects.js', () => ({
+  listProjects: vi.fn().mockResolvedValue({ ok: true, items: [] }),
+  createProject: vi.fn(),
+  updateProject: vi.fn(),
+  deleteProject: vi.fn(),
+  setActiveProject: vi.fn(),
+}))
 
 const V1_FIXTURE = {
   scene: 'v1 scene',
@@ -61,8 +87,31 @@ const V3_FIXTURE = {
 }
 
 afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
   localStorage.clear()
+  window.history.replaceState({}, '', '/')
+  vi.useRealTimers()
 })
+
+function SceneProbe({ nextScene, onReady }) {
+  const ws = useWorkspace()
+  useEffect(() => {
+    if (nextScene != null) ws.setScene(nextScene)
+    onReady?.(ws)
+  }, [nextScene, onReady, ws])
+  return <div data-testid="scene">{ws.scene}</div>
+}
+
+function renderShareBootstrap(ui) {
+  return render(
+    <ProjectProvider>
+      <WorkspaceProvider>
+        <ShareLinkProvider>{ui}</ShareLinkProvider>
+      </WorkspaceProvider>
+    </ProjectProvider>,
+  )
+}
 
 describe('ShareLinkContext v1/v2/v3 decode', () => {
   it('decodes v1 fixture with workflow defaults and workspace fields', () => {
@@ -168,5 +217,100 @@ describe('ShareLinkContext hash precedence', () => {
     expect(resolved.scene).toBe('stored only')
     expect(resolved.charId).toBe('char_only_ls')
     expect(resolved.step).toBe(1)
+  })
+})
+
+describe('ShareLinkContext consume share hash after bootstrap', () => {
+  it('clearShareStateHash removes only #state= fragments', () => {
+    window.history.replaceState({}, '', '/studio?x=1#state=abc')
+    expect(clearShareStateHash()).toBe(true)
+    expect(window.location.pathname).toBe('/studio')
+    expect(window.location.search).toBe('?x=1')
+    expect(window.location.hash).toBe('')
+
+    window.history.replaceState({}, '', '/studio#other')
+    expect(clearShareStateHash()).toBe(false)
+    expect(window.location.hash).toBe('#other')
+  })
+
+  it('persistCanonicalShareToLocalStorage seeds qpb.workflow.v1 from share payload', () => {
+    persistCanonicalShareToLocalStorage({
+      ...decodeSharePayload(V3_FIXTURE),
+      scene: 'seeded from share',
+    })
+    const stored = JSON.parse(localStorage.getItem(WORKFLOW_PERSIST_KEY))
+    expect(stored.scene).toBe('seeded from share')
+    expect(stored.activeProjectId).toBe('proj_v3')
+    expect(stored.activeCharId).toBe('char_abc')
+    expect(stored.dirKey).toBe('kubrick')
+  })
+
+  it('consumes #state= after apply so later edits survive reload', () => {
+    vi.useFakeTimers()
+    localStorage.setItem(
+      WORKFLOW_PERSIST_KEY,
+      JSON.stringify({
+        scene: 'older local edits',
+        dirKey: null,
+        charCount: 1,
+        chars: [{ g: 'man', a: '30s' }],
+        scenario: null,
+        chips: {},
+        blend: { enabled: false, dirKey: null, weight: 70 },
+        narrativeBeat: null,
+      }),
+    )
+    const encoded = encodeShareState({
+      ...V3_FIXTURE,
+      scene: 'shared original scene',
+    })
+    window.history.replaceState({}, '', `/#state=${encoded}`)
+
+    const first = renderShareBootstrap(<SceneProbe />)
+    expect(screen.getByTestId('scene').textContent).toBe('shared original scene')
+    expect(window.location.hash).toBe('')
+    expect(JSON.parse(localStorage.getItem(WORKFLOW_PERSIST_KEY)).scene).toBe(
+      'shared original scene',
+    )
+
+    first.unmount()
+    cleanup()
+
+    const second = renderShareBootstrap(<SceneProbe nextScene="edited after share" />)
+    act(() => {
+      vi.advanceTimersByTime(WORKFLOW_PERSIST_DEBOUNCE_MS)
+    })
+    expect(JSON.parse(localStorage.getItem(WORKFLOW_PERSIST_KEY)).scene).toBe(
+      'edited after share',
+    )
+    second.unmount()
+    cleanup()
+
+    // Reload without a share hash — persisted edits must win.
+    renderShareBootstrap(<SceneProbe />)
+    expect(window.location.hash).toBe('')
+    expect(screen.getByTestId('scene').textContent).toBe('edited after share')
+  })
+
+  it('clears a corrupt #state= hash without wiping localStorage', () => {
+    localStorage.setItem(
+      WORKFLOW_PERSIST_KEY,
+      JSON.stringify({
+        scene: 'keep local',
+        dirKey: null,
+        charCount: 1,
+        chars: [{ g: 'woman', a: '20s' }],
+        scenario: null,
+        chips: {},
+        blend: { enabled: false, dirKey: null, weight: 70 },
+        narrativeBeat: null,
+      }),
+    )
+    window.history.replaceState({}, '', '/#state=%%%not-valid%%%')
+
+    renderShareBootstrap(<SceneProbe />)
+    expect(window.location.hash).toBe('')
+    expect(screen.getByTestId('scene').textContent).toBe('keep local')
+    expect(JSON.parse(localStorage.getItem(WORKFLOW_PERSIST_KEY)).scene).toBe('keep local')
   })
 })
