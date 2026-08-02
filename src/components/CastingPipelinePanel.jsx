@@ -38,6 +38,10 @@ import { approveActorAudition, rejectActorAudition } from '../lib/api/actorAudit
 import { listBankEntries } from '../lib/api/characterBank.js'
 import styles from './CastingPipelinePanel.module.css'
 import CharacterCard from './CastingRoom/CharacterCard.jsx'
+import {
+  isPortfolioBatchTerminalFailure,
+  isPortfolioStatusItemSettled,
+} from './castingPortfolioPoll.js'
 
 const POLL_MS = 20000 // backup interval; SSE triggers immediate ticks
 const ALL_VIEWS = ['front_portrait', 'three_quarter_portrait', 'profile_portrait', 'full_body', 'audition_still', 'cinematic_scene']
@@ -393,14 +397,17 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
         }
       }
       const currentJobs = retriedJobs || portfolioJobs
+      // Only real Comfy terminal states settle the batch. Transient status-check
+      // failures (`ok: false` without status) must keep polling so later success
+      // can still be ingested — same contract as auditTick / Prompt Studio.
       const allDone = !retriedJobs && (statusData?.items || []).every((item) => {
         const j = currentJobs.find((jj) => jj.promptId === item.promptId)
-        return item.status === 'success' || !item.ok || (item.status === 'failed' && (j?.retryCount ?? 0) >= 2)
+        return isPortfolioStatusItemSettled(item, j)
       })
       if (allDone) {
         clearInterval(portfolioPollRef.current); portfolioPollRef.current = null; setIsPollingPortfolio(false)
         markComfyJobsDone(portfolioJobs.map((j) => j.promptId).filter(Boolean), 'success').catch(() => {})
-        const allFailed = (statusData?.items || []).every((item) => item.status === 'failed' || !item.ok)
+        const allFailed = isPortfolioBatchTerminalFailure(statusData?.items)
         if (allFailed && portfolioJobs[0]?.characterId) {
           const charId = portfolioJobs[0].characterId
           patchCharacterLifecycle(charId, 'portfolio_failed').catch(() => {})
