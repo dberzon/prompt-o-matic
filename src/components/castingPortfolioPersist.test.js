@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import { toPersistedPortfolioJobs } from './castingPortfolioPersist.js'
 
@@ -32,5 +33,16 @@ describe('toPersistedPortfolioJobs', () => {
     expect(toPersistedPortfolioJobs([])).toEqual([])
     expect(toPersistedPortfolioJobs(null)).toEqual([])
     expect(toPersistedPortfolioJobs(undefined)).toEqual([])
+  })
+
+  it('CastingPipelinePanel batch portfolio queue persists jobs like single-character queue', () => {
+    const source = fs.readFileSync(new URL('./CastingPipelinePanel.jsx', import.meta.url), 'utf8')
+    const start = source.indexOf('async function handleQueueBatchPortfolios')
+    const end = source.indexOf('async function handleGeneratedImageReview')
+    expect(start).toBeGreaterThan(-1)
+    expect(end).toBeGreaterThan(start)
+    const batchHandler = source.slice(start, end)
+    expect(batchHandler).toContain('saveComfyJobs(toPersistedPortfolioJobs(allJobs))')
+    expect(batchHandler).toContain('startPortfolioPoll()')
   })
 })
