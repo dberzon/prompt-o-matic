@@ -38,6 +38,7 @@ import { approveActorAudition, rejectActorAudition } from '../lib/api/actorAudit
 import { listBankEntries } from '../lib/api/characterBank.js'
 import styles from './CastingPipelinePanel.module.css'
 import CharacterCard from './CastingRoom/CharacterCard.jsx'
+import { toPersistedPortfolioJobs } from './castingPortfolioPersist.js'
 
 const POLL_MS = 20000 // backup interval; SSE triggers immediate ticks
 const ALL_VIEWS = ['front_portrait', 'three_quarter_portrait', 'profile_portrait', 'full_body', 'audition_still', 'cinematic_scene']
@@ -640,7 +641,7 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
       }))
       setPortfolioJobs(jobs); setPortfolioJobsStatus(null)
       for (const j of jobs) ingestedRef.current.delete(j.promptId)
-      if (jobs.length) saveComfyJobs(jobs.map((j) => ({ ...j, jobType: 'portfolio' }))).catch(() => {})
+      if (jobs.length) saveComfyJobs(toPersistedPortfolioJobs(jobs)).catch(() => {})
       if (jobs.length) startPortfolioPoll()
       patchCharacterLifecycle(characterId, 'portfolio_pending').catch(() => {})
       setSavedCharacters((prev) => prev.map((c) => c.id === characterId ? { ...c, lifecycleStatus: 'portfolio_pending' } : c))
@@ -811,7 +812,7 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
       }))
       setPortfolioJobs(jobs); setPortfolioJobsStatus(null)
       for (const j of jobs) ingestedRef.current.delete(j.promptId)
-      if (jobs.length) saveComfyJobs(jobs.map((j) => ({ ...j, jobType: 'portfolio' }))).catch(() => {})
+      if (jobs.length) saveComfyJobs(toPersistedPortfolioJobs(jobs)).catch(() => {})
       setSuccess(`Portfolio queued: ${result.summary?.success || 0} views.`)
       if (jobs.length) startPortfolioPoll()
       patchCharacterLifecycle(selectedCharacterId, 'portfolio_pending').catch(() => { /* non-critical */ })
@@ -847,6 +848,9 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
       } catch { failed.push(charId) }
     }
     if (allJobs.length) {
+      // Persist like single-character portfolio queue — without this, reload loses
+      // promptId→character/pack mapping and completed Comfy outputs are never ingested.
+      saveComfyJobs(toPersistedPortfolioJobs(allJobs)).catch(() => {})
       setPortfolioJobs((prev) => {
         const existing = new Set(prev.map((j) => j.promptId))
         return [...prev, ...allJobs.filter((j) => !existing.has(j.promptId))]
