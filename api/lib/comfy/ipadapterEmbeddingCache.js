@@ -7,12 +7,27 @@ import {
 
 const EMBEDDING_PAYLOAD_VERSION = 1
 const CLIP_EMBEDDING_DIMENSION = 768
+/** Legacy upload name used before digest-scoped filenames; unsafe with overwrite:true across entities. */
+const LEGACY_SHARED_COMFY_FILENAME = 'reference-anchor.png'
 
 export function imagePayloadDigest(payload) {
   const buffer = Buffer.isBuffer(payload)
     ? payload
     : Buffer.from(String(payload ?? ''), 'utf8')
   return createHash('sha256').update(buffer).digest('hex')
+}
+
+/** Content-addressed Comfy input name so distinct reference images cannot overwrite each other. */
+export function comfyUploadFilenameForImageDigest(digest) {
+  const hex = String(digest || '').replace(/[^a-f0-9]/gi, '').toLowerCase()
+  const short = (hex || 'unknown').slice(0, 16)
+  return `reference-${short}.png`
+}
+
+function isUntrustedSharedComfyFilename(filename, imagePayload) {
+  if (String(filename || '').trim() !== LEGACY_SHARED_COMFY_FILENAME) return false
+  // Filename-only primary anchors intentionally point at an existing Comfy input file.
+  return Buffer.isBuffer(imagePayload)
 }
 
 export function parseIpAdapterEmbeddingPayload(payload) {
@@ -71,10 +86,12 @@ async function uploadReferenceImageToComfy({
   imageBytes,
   fetchImpl,
   timeoutMs,
+  filename,
 }) {
   const formData = new FormData()
   const blob = new Blob([imageBytes], { type: 'image/png' })
-  formData.append('image', blob, 'reference-anchor.png')
+  const uploadName = filename || comfyUploadFilenameForImageDigest(imagePayloadDigest(imageBytes))
+  formData.append('image', blob, uploadName)
   formData.append('overwrite', 'true')
 
   const controller = new AbortController()
@@ -119,7 +136,10 @@ export function resolveIpAdapterWorkflowImage(db, entityId) {
 
   const digest = imagePayloadDigest(primary.payload)
   const { parsed } = findMatchingEmbeddingAnchor(db, entityId, primary, digest)
-  if (parsed?.comfyImage?.filename) {
+  if (
+    parsed?.comfyImage?.filename
+    && !isUntrustedSharedComfyFilename(parsed.comfyImage.filename, primary.payload)
+  ) {
     return {
       kind: 'cached',
       filename: parsed.comfyImage.filename,
@@ -155,7 +175,11 @@ export async function ensureIpAdapterEmbeddingCache({
 
   const digest = imagePayloadDigest(primary.payload)
   const existing = findMatchingEmbeddingAnchor(db, entityId, primary, digest)
-  if (existing.parsed?.clipEmbedding?.length && existing.parsed?.comfyImage?.filename) {
+  if (
+    existing.parsed?.clipEmbedding?.length
+    && existing.parsed?.comfyImage?.filename
+    && !isUntrustedSharedComfyFilename(existing.parsed.comfyImage.filename, primary.payload)
+  ) {
     return existing.parsed
   }
 
@@ -166,6 +190,7 @@ export async function ensureIpAdapterEmbeddingCache({
       imageBytes: primary.payload,
       fetchImpl,
       timeoutMs: comfyService.config.timeoutMs,
+      filename: comfyUploadFilenameForImageDigest(digest),
     })
   }
   if (!comfyImage) {
