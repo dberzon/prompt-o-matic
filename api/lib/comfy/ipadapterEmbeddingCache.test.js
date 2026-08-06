@@ -9,11 +9,13 @@ import {
 } from '../db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../db/sqlite.js'
 import {
+  comfyUploadFilenameForImageDigest,
   deriveClipVisionEmbeddingFromImage,
   ensureIpAdapterEmbeddingCache,
   imagePayloadDigest,
   parseIpAdapterEmbeddingPayload,
   resolveIpAdapterWorkflowImage,
+  serializeIpAdapterEmbeddingPayload,
 } from './ipadapterEmbeddingCache.js'
 
 const tempDirs = []
@@ -121,5 +123,107 @@ describe('ipadapter embedding cache', () => {
     expect(cached?.comfyImage?.filename).toBe('reference-anchor.png')
     expect(fetchImpl).not.toHaveBeenCalled()
     expect(resolveIpAdapterWorkflowImage(db, 'ent_filename')?.filename).toBe('reference-anchor.png')
+  })
+
+  it('uploads distinct Comfy filenames per image digest so entities cannot clobber each other', async () => {
+    const db = createTempDb()
+    createEntity(db, { id: 'ent_a', type: 'character', name: 'A' })
+    createEntity(db, { id: 'ent_b', type: 'character', name: 'B' })
+    const bytesA = Buffer.from('face-a-bytes')
+    const bytesB = Buffer.from('face-b-bytes')
+    createVisualAnchor(db, {
+      id: 'anchor_a',
+      entityId: 'ent_a',
+      type: 'reference_image',
+      payload: bytesA,
+      isPrimary: true,
+    })
+    createVisualAnchor(db, {
+      id: 'anchor_b',
+      entityId: 'ent_b',
+      type: 'reference_image',
+      payload: bytesB,
+      isPrimary: true,
+    })
+
+    const uploadedNames = []
+    const fetchImpl = vi.fn(async (_url, init) => {
+      const file = init.body.get('image')
+      uploadedNames.push(file.name)
+      return {
+        ok: true,
+        json: async () => ({ name: file.name, subfolder: '', type: 'input' }),
+      }
+    })
+    const comfyService = { config: { baseUrl: 'http://127.0.0.1:8188', timeoutMs: 5000 } }
+
+    const cachedA = await ensureIpAdapterEmbeddingCache({
+      db,
+      entityId: 'ent_a',
+      comfyService,
+      fetchImpl,
+    })
+    const cachedB = await ensureIpAdapterEmbeddingCache({
+      db,
+      entityId: 'ent_b',
+      comfyService,
+      fetchImpl,
+    })
+
+    const expectedA = comfyUploadFilenameForImageDigest(imagePayloadDigest(bytesA))
+    const expectedB = comfyUploadFilenameForImageDigest(imagePayloadDigest(bytesB))
+    expect(expectedA).not.toBe(expectedB)
+    expect(cachedA?.comfyImage?.filename).toBe(expectedA)
+    expect(cachedB?.comfyImage?.filename).toBe(expectedB)
+    expect(uploadedNames).toEqual([expectedA, expectedB])
+    expect(resolveIpAdapterWorkflowImage(db, 'ent_a')?.filename).toBe(expectedA)
+    expect(resolveIpAdapterWorkflowImage(db, 'ent_b')?.filename).toBe(expectedB)
+  })
+
+  it('repairs legacy shared reference-anchor.png cache entries by re-uploading under a digest filename', async () => {
+    const db = createTempDb()
+    createEntity(db, { id: 'ent_legacy', type: 'character', name: 'Legacy' })
+    const bytes = Buffer.from('legacy-face-bytes')
+    const digest = imagePayloadDigest(bytes)
+    const reference = createVisualAnchor(db, {
+      id: 'anchor_legacy_ref',
+      entityId: 'ent_legacy',
+      type: 'reference_image',
+      payload: bytes,
+      isPrimary: true,
+    })
+    createVisualAnchor(db, {
+      id: 'anchor_legacy_embed',
+      entityId: 'ent_legacy',
+      type: 'ipadapter_embedding',
+      payload: serializeIpAdapterEmbeddingPayload({
+        sourceAnchorId: reference.id,
+        imageDigest: digest,
+        comfyImage: { filename: 'reference-anchor.png', subfolder: '', type: 'input' },
+        clipEmbedding: deriveClipVisionEmbeddingFromImage(bytes),
+      }),
+      isPrimary: false,
+    })
+
+    expect(resolveIpAdapterWorkflowImage(db, 'ent_legacy')?.filename).toBeUndefined()
+
+    const fetchImpl = vi.fn(async (_url, init) => {
+      const file = init.body.get('image')
+      return {
+        ok: true,
+        json: async () => ({ name: file.name, subfolder: '', type: 'input' }),
+      }
+    })
+    const expected = comfyUploadFilenameForImageDigest(digest)
+    const repaired = await ensureIpAdapterEmbeddingCache({
+      db,
+      entityId: 'ent_legacy',
+      comfyService: { config: { baseUrl: 'http://127.0.0.1:8188', timeoutMs: 5000 } },
+      fetchImpl,
+    })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(repaired?.comfyImage?.filename).toBe(expected)
+    expect(resolveIpAdapterWorkflowImage(db, 'ent_legacy')?.filename).toBe(expected)
   })
 })
