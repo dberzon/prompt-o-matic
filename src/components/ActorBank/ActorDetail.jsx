@@ -1,8 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
-import { archiveCharacter, renameCharacter, restoreCharacter, regenerateCharacterPromptDescriptor, setCharacterPromptDescriptor } from '../../lib/api/characterBatches.js'
+import { archiveCharacter, renameCharacter, restoreCharacter, regenerateCharacterPromptDescriptor, setCharacterPromptDescriptor, patchCharacterLifecycle } from '../../lib/api/characterBatches.js'
 import { approveGeneratedImage, rejectGeneratedImage } from '../../lib/api/generatedImages.js'
+import { saveComfyJobs } from '../../lib/api/comfy.js'
 import { queueCharacterPortfolio } from '../../lib/api/portfolio.js'
 import styles from './ActorDetail.module.css'
+
+const DEFAULT_PORTFOLIO_VIEWS = [
+  'front_portrait',
+  'three_quarter_portrait',
+  'profile_portrait',
+  'full_body',
+  'audition_still',
+  'cinematic_scene',
+]
 
 const PROFILE_SECTIONS = [
   {
@@ -240,7 +250,26 @@ export default function ActorDetail({ character: initialCharacter, images: initi
     setRequeuLoading(true)
     setRequeuError(null)
     try {
-      await queueCharacterPortfolio({ characterId: id })
+      // Schema requires views.min(1); Casting Room always sends an explicit list.
+      // Persist queued jobs so Casting Pipeline mount restore can poll/ingest.
+      const result = await queueCharacterPortfolio({
+        characterId: id,
+        views: DEFAULT_PORTFOLIO_VIEWS,
+        options: { persistPromptPacks: true, aspectRatio: '2:3', styleProfile: 'cinematic casting portrait' },
+      })
+      const jobs = (result?.queued || [])
+        .filter((item) => item.ok && item.result?.promptId)
+        .map((item) => ({
+          promptId: item.result.promptId,
+          promptPackId: item.promptPackId,
+          view: item.view,
+          viewType: item.view,
+          characterId: id,
+          workflowVersion: item.result.workflowId || item.result.resolvedWorkflowId || '',
+          jobType: 'portfolio',
+        }))
+      if (jobs.length) await saveComfyJobs(jobs)
+      await patchCharacterLifecycle(id, 'portfolio_pending')
       setLifecycleStatus('portfolio_pending')
     } catch (err) {
       setRequeuError(err.message ?? 'Re-queue failed')
