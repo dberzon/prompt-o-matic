@@ -38,6 +38,8 @@ import { approveActorAudition, rejectActorAudition } from '../lib/api/actorAudit
 import { listBankEntries } from '../lib/api/characterBank.js'
 import styles from './CastingPipelinePanel.module.css'
 import CharacterCard from './CastingRoom/CharacterCard.jsx'
+import { confirmedIngestPromptIds } from './comfyIngestConfirm.js'
+import { buildPortfolioRetryPersist } from './portfolioRetryPersist.js'
 
 const POLL_MS = 20000 // backup interval; SSE triggers immediate ticks
 const ALL_VIEWS = ['front_portrait', 'three_quarter_portrait', 'profile_portrait', 'full_body', 'audition_still', 'cinematic_scene']
@@ -301,35 +303,42 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
         })
       }
 
-      // Auto-ingest newly succeeded jobs
+      // Auto-ingest newly succeeded jobs — only mark ingested after per-item ok:true
+      // (ingest-many returns HTTP 200 with item-level failures; optimistic ingestedRef
+      // permanently skips retry and can delete temp preview chars with no gallery row).
       const toIngest = jobs.filter((j) => statusMap[j.promptId] === 'success' && !ingestedRef.current.has(j.promptId))
       if (toIngest.length) {
-        for (const j of toIngest) ingestedRef.current.add(j.promptId)
         try {
-          await ingestComfyOutputsMany(toIngest.map((j) => ({ promptId: j.promptId, promptPackId: j.promptPackId, characterId: j.characterId, viewType: j.viewType || j.view })))
-          const charIds = [...new Set(toIngest.map((j) => j.characterId))]
-          const imageMap = {}
-          for (const cId of charIds) {
-            try { const list = await listGeneratedImages({ characterId: cId }); imageMap[cId] = list?.items || [] } catch { /* silent */ }
-          }
-          setAuditionImages((prev) => ({ ...prev, ...imageMap }))
-          // Persist preview image URL to candidate record and delete the temp character
-          const previewIngests = toIngest.filter((j) => j.type === 'batchPreview')
-          if (previewIngests.length) {
-            const previewImgUpdates = {}
-            for (const j of previewIngests) {
-              const imgs = imageMap[j.characterId] || []
-              const first = imgs.find((img) => !img.viewType || img.viewType === 'front_portrait') || imgs[0]
-              if (first) {
-                const url = `/api/generated-image-view?id=${encodeURIComponent(first.id)}`
-                previewImgUpdates[j.candidateId] = url
-                updateCandidatePreviewImage(j.candidateId, url).catch(() => { /* non-critical */ })
-              }
-              deleteTempCharacter(j.characterId).catch(() => { /* non-critical */ })
+          const ingestPayload = toIngest.map((j) => ({ promptId: j.promptId, promptPackId: j.promptPackId, characterId: j.characterId, viewType: j.viewType || j.view }))
+          const ingestResult = await ingestComfyOutputsMany(ingestPayload)
+          const confirmedIds = new Set(confirmedIngestPromptIds(ingestPayload, ingestResult))
+          for (const id of confirmedIds) ingestedRef.current.add(id)
+          const confirmedJobs = toIngest.filter((j) => confirmedIds.has(j.promptId))
+          if (confirmedJobs.length) {
+            const charIds = [...new Set(confirmedJobs.map((j) => j.characterId))]
+            const imageMap = {}
+            for (const cId of charIds) {
+              try { const list = await listGeneratedImages({ characterId: cId }); imageMap[cId] = list?.items || [] } catch { /* silent */ }
             }
-            if (Object.keys(previewImgUpdates).length) setBatchPreviewImages((prev) => ({ ...prev, ...previewImgUpdates }))
+            setAuditionImages((prev) => ({ ...prev, ...imageMap }))
+            // Persist preview image URL to candidate record and delete the temp character
+            const previewIngests = confirmedJobs.filter((j) => j.type === 'batchPreview')
+            if (previewIngests.length) {
+              const previewImgUpdates = {}
+              for (const j of previewIngests) {
+                const imgs = imageMap[j.characterId] || []
+                const first = imgs.find((img) => !img.viewType || img.viewType === 'front_portrait') || imgs[0]
+                if (first) {
+                  const url = `/api/generated-image-view?id=${encodeURIComponent(first.id)}`
+                  previewImgUpdates[j.candidateId] = url
+                  updateCandidatePreviewImage(j.candidateId, url).catch(() => { /* non-critical */ })
+                }
+                deleteTempCharacter(j.characterId).catch(() => { /* non-critical */ })
+              }
+              if (Object.keys(previewImgUpdates).length) setBatchPreviewImages((prev) => ({ ...prev, ...previewImgUpdates }))
+            }
           }
-        } catch { /* images will appear on next successful tick */ }
+        } catch { /* images will appear on next successful tick — do not lock ingestedRef */ }
       }
       // Clean up temp characters for failed preview renders
       const failedPreviews = jobs.filter((j) => j.type === 'batchPreview' && statusMap[j.promptId] === 'failed' && !ingestedRef.current.has(j.promptId))
@@ -371,8 +380,11 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
       const toIngest = (statusData?.items || []).filter((item) => item.ok && item.status === 'success' && !ingestedRef.current.has(item.promptId))
       if (toIngest.length) {
         const ingestJobs = toIngest.map((item) => portfolioJobs.find((j) => j.promptId === item.promptId)).filter(Boolean)
-        for (const item of toIngest) ingestedRef.current.add(item.promptId)
-        try { await ingestComfyOutputsMany(ingestJobs); await refreshGallery() } catch { /* silent */ }
+        try {
+          const ingestResult = await ingestComfyOutputsMany(ingestJobs)
+          for (const id of confirmedIngestPromptIds(ingestJobs, ingestResult)) ingestedRef.current.add(id)
+          await refreshGallery()
+        } catch { /* silent — retry ingest on next tick */ }
       }
       const toRetry = (statusData?.items || [])
         .filter((item) => item.status === 'failed')
@@ -390,6 +402,11 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
         if (replacements.size) {
           retriedJobs = portfolioJobs.map((j) => replacements.has(j.promptId) ? replacements.get(j.promptId) : j)
           setPortfolioJobs(retriedJobs)
+          // Persist new promptIds and terminalize old ones — otherwise reload restores
+          // zombie failed ids from comfy_jobs and never polls the successful retry.
+          const { oldPromptIds, newJobs } = buildPortfolioRetryPersist(replacements)
+          if (oldPromptIds.length) markComfyJobsDone(oldPromptIds, 'failed').catch(() => {})
+          if (newJobs.length) saveComfyJobs(newJobs).catch(() => {})
         }
       }
       const currentJobs = retriedJobs || portfolioJobs
