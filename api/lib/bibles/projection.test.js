@@ -311,6 +311,49 @@ describe('projectBible / projection', () => {
     expect(() => CharacterBibleSchema.parse(view.bible)).toThrow()
   })
 
+  it('projectCharacterBible: skips legacy __proto__ keys without polluting Object.prototype', () => {
+    const dbPath = createTempDbPath()
+    process.env.SQLITE_DB_PATH = dbPath
+    process.env.APP_MODE = 'local-studio'
+    const db = ensureDb(dbPath)
+    createEntity(db, { id: 'ent_proto', type: 'character', name: 'Proto' })
+    const minimal = {
+      demographics: { gender: 'male', ageRange: '30s', eraLabel: '1990s', housingNotes: 'Flat.' },
+      physical: {
+        height: 'tall',
+        build: 'lean',
+        face: 'long',
+        eyes: 'brown',
+        nose: 'straight',
+        lips: 'thin',
+        skin: 'fair',
+      },
+      visuals: { portraitBrief: 'mid-shot', continuityKeywords: ['neutral'] },
+    }
+    seedFixtureAttributes(db, 'ent_proto', minimal)
+    // Bypass writeAttribute to simulate a pre-fix poisoned row.
+    db.prepare(`
+      INSERT INTO entity_attributes (id, entity_id, key, value, provenance, confidence, source_stage, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      'attr_proto_pollution',
+      'ent_proto',
+      'demographics.__proto__.polluted',
+      JSON.stringify('pwned'),
+      'canon',
+      null,
+      null,
+      new Date().toISOString(),
+    )
+    delete Object.prototype.polluted
+    const out = projectCharacterBible(db, 'ent_proto')
+    expect(Object.prototype.polluted).toBeUndefined()
+    expect({}.polluted).toBeUndefined()
+    expect(out.demographics?.polluted).toBeUndefined()
+    expect(out.demographics?.gender).toBe('male')
+    delete Object.prototype.polluted
+  })
+
   it('projectBible dispatches environment to Character Bible', () => {
     const dbPath = createTempDbPath()
     process.env.SQLITE_DB_PATH = dbPath

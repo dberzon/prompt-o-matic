@@ -8,7 +8,14 @@ import { applyS2Parser } from './parsers/s2Parser.js'
 import { applyS4Parser } from './parsers/s4Parser.js'
 import { runExtrapolationPipeline, runExtrapolationStage } from './orchestrator.js'
 import { StageCache } from './stageCache.js'
-import { createEntity, getEntity, listAttributes, listEntities, writeAttribute } from '../db/repositories.js'
+import {
+  createEntity,
+  dismissSuggested,
+  getEntity,
+  listAttributes,
+  listEntities,
+  writeAttribute,
+} from '../db/repositories.js'
 import { getPrompt } from '../prompts/registry.js'
 import { createSqliteDatabase, initializeDatabase } from '../db/sqlite.js'
 import { parseS6ConflictOutput } from './schemas/s6Conflict.js'
@@ -204,6 +211,58 @@ describe('extrapolation orchestrator', () => {
     for (const st of result.stages) {
       expect(Array.isArray(st.dropped)).toBe(true)
     }
+  })
+
+  it('invalidates stage cache after dismissing writes so S5 can rewrite visual.descriptor', async () => {
+    const db = ensureDb(createTempDbPath())
+    createEntity(db, { id: 'ent_s5_cache', type: 'character', name: 'Ruslan' })
+    writeAttribute(db, {
+      entityId: 'ent_s5_cache',
+      key: 'description',
+      value: 'A student in 1990s Moscow.',
+      provenance: 'canon',
+      confidence: 1,
+      sourceStage: 1,
+    })
+
+    const cacheDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qpb-extrapolation-cache-'))
+    tempDirs.push(cacheDir)
+    const cache = new StageCache({ cacheDir })
+    const llm = async () => JSON.stringify({ visualDescriptor: 'frontal portrait, neutral expression' })
+
+    const first = await runExtrapolationStage({
+      db,
+      entityId: 'ent_s5_cache',
+      stageId: 5,
+      llm,
+      cache,
+    })
+    expect(first.cacheHit).toBe(false)
+    expect(first.writes).toHaveLength(1)
+    const writtenId = first.writes[0].id
+    expect(listAttributes(db, { entityId: 'ent_s5_cache', key: 'visual.descriptor' })).toHaveLength(1)
+
+    dismissSuggested(db, writtenId)
+    expect(listAttributes(db, { entityId: 'ent_s5_cache', key: 'visual.descriptor' })).toHaveLength(0)
+
+    let llmCalls = 0
+    const third = await runExtrapolationStage({
+      db,
+      entityId: 'ent_s5_cache',
+      stageId: 5,
+      llm: async () => {
+        llmCalls += 1
+        return JSON.stringify({ visualDescriptor: 'frontal portrait, neutral expression' })
+      },
+      cache,
+    })
+    expect(third.cacheHit).toBe(false)
+    expect(llmCalls).toBe(1)
+    expect(third.writes).toHaveLength(1)
+    expect(third.writes[0].id).not.toBe(writtenId)
+    const active = listAttributes(db, { entityId: 'ent_s5_cache', key: 'visual.descriptor' })
+    expect(active).toHaveLength(1)
+    expect(active[0].value).toBe('frontal portrait, neutral expression')
   })
 
   it('runs stages 2-5 in parallel when enabled', async () => {
