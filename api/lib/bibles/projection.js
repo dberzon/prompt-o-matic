@@ -1,4 +1,4 @@
-import { getEntity, listAttributes } from '../db/repositories.js'
+import { attributeKeyHasUnsafeSegment, getEntity, listAttributes } from '../db/repositories.js'
 import {
   CHARACTER_ENTITY_KEY_TO_BIBLE_PATH,
   ERA_ENTITY_KEY_TO_BIBLE_PATH,
@@ -123,6 +123,11 @@ function mergeWardrobeEverydayStrings(group) {
  */
 function setDeep(target, parts, value) {
   if (parts.length === 0) return
+  // Defense in depth: never walk/assign prototype-pollution segments, even if a
+  // legacy row somehow bypassed writeAttribute validation.
+  if (parts.some((part) => part === '__proto__' || part === 'prototype' || part === 'constructor')) {
+    return
+  }
   const [head, ...rest] = parts
   if (!head) return
   if (rest.length === 0) {
@@ -161,6 +166,7 @@ function leafMapToNestedObject(leafMap) {
   /** @type {Record<string, unknown>} */
   const root = {}
   for (const [path, { value }] of leafMap) {
+    if (attributeKeyHasUnsafeSegment(path)) continue
     setDeep(root, path.split('.').filter(Boolean), value)
   }
   return root

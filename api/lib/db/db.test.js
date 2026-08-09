@@ -772,6 +772,21 @@ describe('relationship repository (createRelationship / listRelationships / upda
 })
 
 describe('attribute queries (getAttribute / listAttributes / promoteToCanon / dismissSuggested)', () => {
+  it('writeAttribute rejects prototype-pollution key segments', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_proto', type: 'character', name: 'X' })
+    expect(() =>
+      writeAttribute(db, {
+        entityId: 'e_proto',
+        key: 'demographics.__proto__.polluted',
+        value: 'pwned',
+        provenance: 'canon',
+      }),
+    ).toThrow(/unsafe attribute key segment/)
+    expect(listAttributes(db, { entityId: 'e_proto' })).toEqual([])
+    db.close()
+  })
+
   it('getAttribute returns single attribute by id', () => {
     const { db } = createTempDb()
     createEntity(db, { id: 'e_g', type: 'character', name: 'X' })

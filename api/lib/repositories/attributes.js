@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { CharacterBibleSchema } from '../bibles/schemas/characterBible.schema.js'
 import { LocationBibleSchema } from '../bibles/schemas/locationBible.schema.js'
-import { getEntity, listAttributes, writeAttribute } from '../db/repositories.js'
+import { attributeKeyHasUnsafeSegment, getEntity, listAttributes, writeAttribute } from '../db/repositories.js'
 
 export const WriteAttributeRowSchema = z
   .object({
@@ -49,6 +49,9 @@ const SAFE_KEY = /^[a-zA-Z0-9_.:\-]+$/
 export function validateAttributeKeyForEntityType(entityType, key) {
   if (!SAFE_KEY.test(key)) {
     return { ok: false, reason: 'invalid_key_charset' }
+  }
+  if (attributeKeyHasUnsafeSegment(key)) {
+    return { ok: false, reason: 'unsafe_key_segment' }
   }
   const root = key.includes('.') ? key.slice(0, key.indexOf('.')) : key
   if (entityType === 'character') {

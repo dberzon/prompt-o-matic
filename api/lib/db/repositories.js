@@ -1196,6 +1196,20 @@ export function archiveEntity(db, id) {
 
 const ATTRIBUTE_PROVENANCES = new Set(['canon', 'inferred', 'suggested', 'temporary', 'derived'])
 
+/** Path segments that can poison Object.prototype when nested via setDeep-style writers. */
+const UNSAFE_ATTRIBUTE_KEY_SEGMENTS = new Set(['__proto__', 'prototype', 'constructor'])
+
+/**
+ * True when a dotted attribute key contains a prototype-pollution segment.
+ * @param {unknown} key
+ */
+export function attributeKeyHasUnsafeSegment(key) {
+  return String(key ?? '')
+    .split('.')
+    .filter(Boolean)
+    .some((part) => UNSAFE_ATTRIBUTE_KEY_SEGMENTS.has(part))
+}
+
 function mapAttributeRow(row) {
   if (!row) return null
   return {
@@ -1225,6 +1239,9 @@ export function writeAttribute(db, { entityId, key, value, provenance, confidenc
   }
   if (!entityId) throw new Error('writeAttribute: entityId is required')
   if (!key) throw new Error('writeAttribute: key is required')
+  if (attributeKeyHasUnsafeSegment(key)) {
+    throw new Error('writeAttribute: unsafe attribute key segment')
+  }
 
   const id = randomUUID()
   const createdAt = nowIso()
