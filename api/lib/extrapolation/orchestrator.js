@@ -1,4 +1,4 @@
-import { getEntity } from '../db/repositories.js'
+import { getAttribute, getEntity } from '../db/repositories.js'
 import { resolveStageModelId } from './modelRouting.js'
 import { chainFor } from './stageRegistry.js'
 import { StageCache } from './stageCache.js'
@@ -11,6 +11,25 @@ const MIDDLE_STAGE_IDS = [2, 3, 4, 5]
  */
 function entityChainType(entity) {
   return String(entity?.type || 'character').trim().toLowerCase()
+}
+
+/**
+ * Cache hits skip stage.run() (and therefore parsers/writeAttribute). If every
+ * cached write is still an active head, replaying the payload is safe. If any
+ * write was dismissed or superseded, treat as a miss so the stage can rewrite.
+ *
+ * @param {import('better-sqlite3').Database} db
+ * @param {unknown} writes
+ */
+export function cachedStageWritesAreActive(db, writes) {
+  if (!Array.isArray(writes) || writes.length === 0) return true
+  for (const write of writes) {
+    const id = write && typeof write === 'object' ? /** @type {{ id?: string }} */ (write).id : null
+    if (!id) return false
+    const row = getAttribute(db, id)
+    if (!row || row.dismissedAt || row.supersededBy) return false
+  }
+  return true
 }
 
 export function resolveParallelMiddleStages({ parallelMiddleStages, env = process.env } = {}) {
@@ -41,7 +60,7 @@ export async function runExtrapolationStage({
   const modelId = resolveStageModelId(stageId, env)
   const snapshot = buildStageSnapshot(db, entityId)
   const cached = cache.get({ snapshot, stageId, modelId })
-  if (cached?.result) {
+  if (cached?.result && cachedStageWritesAreActive(db, cached.result.writes)) {
     return {
       stageId,
       modelId,
