@@ -577,6 +577,38 @@ describe('writeAttribute (provenance enforcement, supersedes chain)', () => {
     expect(count).toBe(0)
     db.close()
   })
+
+  it('refuses to overwrite an existing supersede link (no orphaned active heads)', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_sup_race', type: 'character', name: 'X' })
+    const v1 = writeAttribute(db, {
+      entityId: 'e_sup_race',
+      key: 'eyes',
+      value: 'blue',
+      provenance: 'inferred',
+    })
+    const v2 = writeAttribute(db, {
+      entityId: 'e_sup_race',
+      key: 'eyes',
+      value: 'hazel',
+      provenance: 'canon',
+      supersedes: v1.id,
+    })
+    expect(() =>
+      writeAttribute(db, {
+        entityId: 'e_sup_race',
+        key: 'eyes',
+        value: 'green',
+        provenance: 'canon',
+        supersedes: v1.id,
+      }),
+    ).toThrow(/already superseded/)
+    expect(getAttribute(db, v1.id).supersededBy).toBe(v2.id)
+    const active = listAttributes(db, { entityId: 'e_sup_race', key: 'eyes' })
+    expect(active).toHaveLength(1)
+    expect(active[0].id).toBe(v2.id)
+    db.close()
+  })
 })
 
 describe('visual anchor repository (createVisualAnchor / listVisualAnchors / setPrimaryAnchor)', () => {
@@ -640,16 +672,31 @@ describe('visual anchor repository (createVisualAnchor / listVisualAnchors / set
   it('setPrimaryAnchor flips is_primary atomically and enforces single primary per entity', () => {
     const { db } = createTempDb()
     createEntity(db, { id: 'e_sp', type: 'character', name: 'X' })
-    const a = createVisualAnchor(db, { entityId: 'e_sp', type: 'reference_image', isPrimary: true })
+    createVisualAnchor(db, { entityId: 'e_sp', type: 'reference_image', isPrimary: true })
     const b = createVisualAnchor(db, { entityId: 'e_sp', type: 'reference_image' })
     const c = createVisualAnchor(db, { entityId: 'e_sp', type: 'seed' })
     expect(setPrimaryAnchor(db, b.id)).toBe(true)
     const all = listVisualAnchors(db, { entityId: 'e_sp' })
     const primaries = all.filter((x) => x.isPrimary).map((x) => x.id)
     expect(primaries).toEqual([b.id])
-    expect(setPrimaryAnchor(db, c.id)).toBe(true)
+    expect(() => setPrimaryAnchor(db, c.id)).toThrow(/only reference_image/)
     const after = listVisualAnchors(db, { entityId: 'e_sp' })
-    expect(after.filter((x) => x.isPrimary).map((x) => x.id)).toEqual([c.id])
+    expect(after.filter((x) => x.isPrimary).map((x) => x.id)).toEqual([b.id])
+    db.close()
+  })
+
+  it('rejects creating or promoting non-reference_image anchors as primary', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_sp3', type: 'character', name: 'X' })
+    const ref = createVisualAnchor(db, { entityId: 'e_sp3', type: 'reference_image', isPrimary: true })
+    expect(() =>
+      createVisualAnchor(db, { entityId: 'e_sp3', type: 'ipadapter_embedding', isPrimary: true }),
+    ).toThrow(/only reference_image/)
+    const emb = createVisualAnchor(db, { entityId: 'e_sp3', type: 'ipadapter_embedding' })
+    expect(() => setPrimaryAnchor(db, emb.id)).toThrow(/only reference_image/)
+    expect(listVisualAnchors(db, { entityId: 'e_sp3' }).filter((x) => x.isPrimary).map((x) => x.id)).toEqual([
+      ref.id,
+    ])
     db.close()
   })
 
@@ -829,6 +876,33 @@ describe('attribute queries (getAttribute / listAttributes / promoteToCanon / di
     expect(promoted.entityId).toBe('e_p')
     const originalReloaded = getAttribute(db, inferred.id)
     expect(originalReloaded.supersededBy).toBe(promoted.id)
+    db.close()
+  })
+
+  it('promoteToCanon rejects already-superseded and dismissed originals', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_p2', type: 'character', name: 'X' })
+    const inferred = writeAttribute(db, {
+      entityId: 'e_p2',
+      key: 'eyes',
+      value: 'blue',
+      provenance: 'inferred',
+    })
+    promoteToCanon(db, inferred.id)
+    expect(() => promoteToCanon(db, inferred.id, { value: 'green' })).toThrow(/already superseded/)
+
+    const suggested = writeAttribute(db, {
+      entityId: 'e_p2',
+      key: 'mood',
+      value: 'wistful',
+      provenance: 'suggested',
+    })
+    dismissSuggested(db, suggested.id)
+    expect(() => promoteToCanon(db, suggested.id)).toThrow(/is dismissed/)
+
+    const activeEyes = listAttributes(db, { entityId: 'e_p2', key: 'eyes' })
+    expect(activeEyes).toHaveLength(1)
+    expect(activeEyes[0].value).toBe('blue')
     db.close()
   })
 

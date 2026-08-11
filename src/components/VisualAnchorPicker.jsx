@@ -221,16 +221,18 @@ export default function VisualAnchorPicker({ entityId }) {
                 )}
                 <div className={styles.meta}>
                   <span className={styles.type}>{anchor.type}</span>
-                  <button
-                    type="button"
-                    className={`${styles.primaryBtn} ${anchor.isPrimary ? styles.primaryBtnActive : ''}`}
-                    onClick={() => handleSetPrimary(anchor.id)}
-                    disabled={anchor.isPrimary || settingPrimaryId === anchor.id}
-                    aria-label={anchor.isPrimary ? 'Primary anchor' : 'Set as primary anchor'}
-                    title={anchor.isPrimary ? 'Primary anchor' : 'Set as primary'}
-                  >
-                    {settingPrimaryId === anchor.id ? '…' : anchor.isPrimary ? '★' : '☆'}
-                  </button>
+                  {anchor.type === 'reference_image' ? (
+                    <button
+                      type="button"
+                      className={`${styles.primaryBtn} ${anchor.isPrimary ? styles.primaryBtnActive : ''}`}
+                      onClick={() => handleSetPrimary(anchor.id)}
+                      disabled={anchor.isPrimary || settingPrimaryId === anchor.id}
+                      aria-label={anchor.isPrimary ? 'Primary anchor' : 'Set as primary anchor'}
+                      title={anchor.isPrimary ? 'Primary anchor' : 'Set as primary'}
+                    >
+                      {settingPrimaryId === anchor.id ? '…' : anchor.isPrimary ? '★' : '☆'}
+                    </button>
+                  ) : null}
                 </div>
               </div>
             )

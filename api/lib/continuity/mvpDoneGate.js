@@ -53,15 +53,24 @@ function buildBibleOrCanonGateCheck(db, entityId, entity) {
   const ratioOk = completeness.ratio >= minRatio
   const missingReq = completeness.missingRequired.map((r) => `${r.section}.${r.field}`)
   const missingRec = completeness.missingRecommended.map((r) => `${r.section}.${r.field}`)
+  // Ratio alone is not enough: weighted coverage can clear 0.75 while required leaves
+  // (e.g. physical.eyes) are still empty if many recommended fields are filled.
+  const requiredOk = missingReq.length === 0
+  const met = ratioOk && requiredOk
 
   let detail
-  if (ratioOk) {
+  if (met) {
     detail = `ratio ${completeness.ratio.toFixed(3)} (≥${minRatio})`
   } else {
-    const parts = [`ratio ${completeness.ratio.toFixed(3)} (need ≥${minRatio})`]
+    const parts = []
+    if (!ratioOk) {
+      parts.push(`ratio ${completeness.ratio.toFixed(3)} (need ≥${minRatio})`)
+    } else {
+      parts.push(`ratio ${completeness.ratio.toFixed(3)} (≥${minRatio})`)
+    }
     if (missingReq.length) {
       parts.push(`missing required: ${missingReq.join(', ')}`)
-    } else if (missingRec.length) {
+    } else if (!ratioOk && missingRec.length) {
       const head = missingRec.slice(0, 12).join(', ')
       parts.push(`missing recommended (raise weighted coverage): ${head}${missingRec.length > 12 ? '…' : ''}`)
     }
@@ -71,7 +80,7 @@ function buildBibleOrCanonGateCheck(db, entityId, entity) {
   return {
     id: 'bible_completeness',
     label: 'Character Bible completeness',
-    met: ratioOk,
+    met,
     detail,
     missingRequiredFields: missingReq,
     completenessRatio: completeness.ratio,

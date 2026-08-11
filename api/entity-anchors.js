@@ -50,12 +50,14 @@ async function readCreateAnchorInput(req) {
 }
 
 function resolveCreateAnchorIsPrimary(input, { type, payload }) {
+  // Non-reference types must never become primary (sole is_primary slot per entity).
+  if (type !== 'reference_image') return false
   const explicit = input?.isPrimary !== undefined
     || input?.fields?.isPrimary !== undefined
   const requested = input?.isPrimary === true
     || input?.isPrimary === 'true'
     || input?.fields?.isPrimary === 'true'
-  if (type === 'reference_image' && !explicit && Buffer.isBuffer(payload)) {
+  if (!explicit && Buffer.isBuffer(payload)) {
     return true
   }
   return requested

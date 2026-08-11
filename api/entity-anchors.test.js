@@ -81,19 +81,62 @@ describe('entity anchors routes', () => {
       url: '/api/entities/ent_a/anchors',
       body: { id: 'anchor_route_2', type: 'seed', payload: '42' },
     }, secondRes)
+    expect(secondRes.statusCode).toBe(200)
+    expect(secondRes.payload.item.isPrimary).toBe(false)
 
     const primaryRes = mockRes()
     await entityAnchorsHandler({
       method: 'POST',
       url: '/api/entities/ent_a/anchors/anchor_route_2/set-primary',
     }, primaryRes)
-    expect(primaryRes.payload.item.id).toBe('anchor_route_2')
-    expect(primaryRes.payload.item.isPrimary).toBe(true)
+    expect(primaryRes.statusCode).toBe(400)
+    expect(primaryRes.payload.error).toMatch(/only reference_image/)
+    // Original reference remains the sole primary
+    expect(listVisualAnchors(db, { entityId: 'ent_a' }).filter((a) => a.isPrimary).map((a) => a.id)).toEqual([
+      'anchor_route_1',
+    ])
 
     const deleteRes = mockRes()
     await entityAnchorsHandler({ method: 'DELETE', url: '/api/entities/ent_a/anchors/anchor_route_1' }, deleteRes)
     expect(deleteRes.payload.deleted).toBe(true)
     expect(listVisualAnchors(db, { entityId: 'ent_a' }).map((item) => item.id)).toEqual(['anchor_route_2'])
+  })
+
+  it('rejects creating a non-reference_image anchor as primary', async () => {
+    const dbPath = createTempDbPath()
+    process.env.SQLITE_DB_PATH = dbPath
+    process.env.APP_MODE = 'local-studio'
+    const db = ensureDb(dbPath)
+    createEntity(db, { id: 'ent_a', type: 'character', name: 'Ruslan' })
+
+    await entityAnchorsHandler({
+      method: 'POST',
+      url: '/api/entities/ent_a/anchors',
+      body: {
+        id: 'anchor_ref',
+        type: 'reference_image',
+        payload: PNG_BYTES,
+        isPrimary: true,
+      },
+    }, mockRes())
+
+    const createEmb = mockRes()
+    await entityAnchorsHandler({
+      method: 'POST',
+      url: '/api/entities/ent_a/anchors',
+      body: {
+        id: 'anchor_emb',
+        type: 'ipadapter_embedding',
+        payload: Buffer.from('{"v":1}'),
+        isPrimary: true,
+      },
+    }, createEmb)
+    // resolveCreateAnchorIsPrimary forces false for non-reference; create succeeds non-primary
+    expect(createEmb.statusCode).toBe(200)
+    expect(createEmb.payload.item.isPrimary).toBe(false)
+    expect(listVisualAnchors(db, { entityId: 'ent_a' }).filter((a) => a.isPrimary).map((a) => a.id)).toEqual([
+      'anchor_ref',
+    ])
   })
 
   it('accepts multipart uploads for reference_image anchors and promotes uploaded image', async () => {

@@ -154,6 +154,52 @@ describe('MVP Done gate readiness', () => {
     expect(String(bible?.detail)).toMatch(/≥/)
   })
 
+  it('rejects when weighted ratio clears the threshold but required Bible leaves are still missing', () => {
+    const db = createTempDb()
+    const entityId = 'sparse_required'
+    seedSharedGateRows(db, entityId)
+    // All demographics + most physical, skip eyes/nose; flood recommended leaves so ratio ≥ 0.75.
+    seedFixtureAttributes(db, entityId, {
+      demographics: {
+        gender: 'm',
+        ageRange: '20s',
+        eraLabel: 'Present',
+        housingNotes: 'Unknown.',
+      },
+      physical: {
+        height: 'medium',
+        build: 'stocky',
+        face: 'square',
+        lips: 'thin',
+        skin: 'fair',
+      },
+      wardrobe: { everyday: 'jeans', accessories: ['belt'] },
+      voice: { dialogueDeliveryNotes: 'dry', accentOrDiction: 'local' },
+      psychology: { temperament: 'wry', motivations: 'study' },
+      history: {
+        biographySummary: 'A long enough biography summary for the character.',
+        educationOrWork: 'college',
+        habits: 'smokes',
+      },
+      relationships: [{ slug: 'rita', label: 'Rita', nature: 'friend' }],
+      visuals: { portraitBrief: 'bust', continuityKeywords: ['freckles'] },
+    })
+    const c = getBibleCompleteness(db, entityId)
+    expect(c.ratio).toBeGreaterThanOrEqual(MVP_DONE_GATE_MIN_COMPLETENESS_RATIO)
+    expect(c.missingRequired.map((r) => `${r.section}.${r.field}`)).toEqual(
+      expect.arrayContaining(['physical.eyes', 'physical.nose']),
+    )
+
+    const readiness = assessMvpDoneGateReadiness(db, entityId)
+    expect(readiness.ready).toBe(false)
+    const bible = readiness.checks.find((ch) => ch.id === 'bible_completeness')
+    expect(bible?.met).toBe(false)
+    expect(String(bible?.detail)).toMatch(/missing required:/)
+    expect(bible?.missingRequiredFields).toEqual(
+      expect.arrayContaining(['physical.eyes', 'physical.nose']),
+    )
+  })
+
   it('accepts fully seeded character Bible at ratio 1.0', () => {
     const db = createTempDb()
     const entityId = 'ent_full'

@@ -1236,9 +1236,17 @@ export function writeAttribute(db, { entityId, key, value, provenance, confidenc
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, entityId, key, stringValue, provenance, confidence ?? null, sourceStage ?? null, createdAt)
     if (supersedes) {
-      const result = db.prepare('UPDATE entity_attributes SET superseded_by = ? WHERE id = ?').run(id, supersedes)
-      if (result.changes === 0) {
+      const target = selectAttributeById(db, supersedes)
+      if (!target) {
         throw new Error(`writeAttribute: supersedes target ${supersedes} not found`)
+      }
+      // Must not overwrite an existing supersede link — that orphans the prior head
+      // and leaves two active (superseded_by IS NULL) rows for the same key.
+      const result = db.prepare(
+        'UPDATE entity_attributes SET superseded_by = ? WHERE id = ? AND superseded_by IS NULL',
+      ).run(id, supersedes)
+      if (result.changes === 0) {
+        throw new Error(`writeAttribute: supersedes target ${supersedes} already superseded`)
       }
     }
   })
@@ -1317,6 +1325,12 @@ export function promoteToCanon(db, originalId, { value } = {}) {
   if (!original) {
     throw new Error(`promoteToCanon: attribute ${originalId} not found`)
   }
+  if (original.supersededBy) {
+    throw new Error(`promoteToCanon: attribute ${originalId} already superseded`)
+  }
+  if (original.dismissedAt) {
+    throw new Error(`promoteToCanon: attribute ${originalId} is dismissed`)
+  }
   return writeAttribute(db, {
     entityId: original.entityId,
     key: original.key,
@@ -1365,6 +1379,12 @@ export function createVisualAnchor(db, { id, entityId, type, payload, isPrimary 
   if (!type || !VISUAL_ANCHOR_TYPES.has(type)) {
     throw new Error(`createVisualAnchor: type must be one of ${[...VISUAL_ANCHOR_TYPES].join(', ')}`)
   }
+  // Continuity / Comfy / MVP Done treat "primary" as the reference_image identity anchor.
+  // Allowing other types to hold the sole primary flag demotes the real reference and
+  // can leave the entity with zero primary reference_images after embedding refresh.
+  if (isPrimary && type !== 'reference_image') {
+    throw new Error('createVisualAnchor: only reference_image anchors can be primary')
+  }
   const anchorId = id || randomUUID()
   const createdAt = nowIso()
 
@@ -1399,8 +1419,13 @@ export function listVisualAnchors(db, { entityId, type } = {}) {
 }
 
 export function setPrimaryAnchor(db, anchorId) {
-  const row = db.prepare('SELECT entity_id FROM visual_anchors WHERE id = ?').get(anchorId)
+  const row = db.prepare('SELECT entity_id, type FROM visual_anchors WHERE id = ?').get(anchorId)
   if (!row) return false
+  if (row.type !== 'reference_image') {
+    const err = new Error('setPrimaryAnchor: only reference_image anchors can be primary')
+    err.status = 400
+    throw err
+  }
   const apply = db.transaction(() => {
     db.prepare(
       'UPDATE visual_anchors SET is_primary = 0 WHERE entity_id = ? AND is_primary = 1 AND id != ?',
