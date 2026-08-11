@@ -1,7 +1,29 @@
 import { z } from 'zod'
 import { CharacterBibleSchema } from '../bibles/schemas/characterBible.schema.js'
 import { LocationBibleSchema } from '../bibles/schemas/locationBible.schema.js'
-import { getEntity, listAttributes, writeAttribute } from '../db/repositories.js'
+import {
+  getEntity,
+  listAttributes,
+  supersedeAttributeBy,
+  writeAttribute,
+} from '../db/repositories.js'
+
+/** Lower rank = stronger (matches bible projection). */
+const PROVENANCE_RANK = {
+  canon: 0,
+  inferred: 1,
+  derived: 2,
+  suggested: 3,
+  temporary: 4,
+}
+
+/**
+ * @param {string} provenance
+ * @returns {number}
+ */
+function provenanceRank(provenance) {
+  return PROVENANCE_RANK[/** @type {keyof typeof PROVENANCE_RANK} */ (provenance)] ?? 99
+}
 
 export const WriteAttributeRowSchema = z
   .object({
@@ -104,26 +126,44 @@ export function writeAttributesBatch(db, { entityId, attributes }) {
     }
 
     const existing = listAttributes(db, { entityId, key: row.key })
-    const dup = existing.find(
-      (a) =>
-        valuesEqual(a.value, row.value) &&
-        a.provenance === row.provenance &&
-        !a.dismissedAt &&
-        !a.supersededBy,
+    const active = existing.filter((a) => !a.dismissedAt && !a.supersededBy)
+    const dup = active.find(
+      (a) => valuesEqual(a.value, row.value) && a.provenance === row.provenance,
     )
     if (dup) {
       deduped.push({ key: row.key, value: row.value, provenance: row.provenance })
       return
     }
 
-    const saved = writeAttribute(db, {
-      entityId,
-      key: row.key,
-      value: row.value,
-      provenance: row.provenance,
-      confidence: row.confidence ?? undefined,
-      sourceStage: row.sourceStage ?? undefined,
-    })
+    // Supersede same-or-weaker active heads for this key so batch writes cannot leave
+    // duplicate active canon (or duplicate inferred) heads. Stronger heads (e.g. canon
+    // when writing inferred) are left alone — projection still prefers them.
+    const toSupersede = active.filter(
+      (a) => provenanceRank(a.provenance) >= provenanceRank(row.provenance),
+    )
+
+    let saved
+    try {
+      saved = writeAttribute(db, {
+        entityId,
+        key: row.key,
+        value: row.value,
+        provenance: row.provenance,
+        confidence: row.confidence ?? undefined,
+        sourceStage: row.sourceStage ?? undefined,
+        supersedes: toSupersede[0]?.id,
+      })
+      for (const extra of toSupersede.slice(1)) {
+        supersedeAttributeBy(db, extra.id, saved.id)
+      }
+    } catch (err) {
+      rejected.push({
+        index,
+        reason: 'write_failed',
+        detail: err instanceof Error ? err.message : String(err),
+      })
+      return
+    }
     if (!saved?.provenance) {
       rejected.push({ index, reason: 'write_missing_provenance' })
       return
