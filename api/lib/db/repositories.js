@@ -1236,9 +1236,17 @@ export function writeAttribute(db, { entityId, key, value, provenance, confidenc
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(id, entityId, key, stringValue, provenance, confidence ?? null, sourceStage ?? null, createdAt)
     if (supersedes) {
-      const result = db.prepare('UPDATE entity_attributes SET superseded_by = ? WHERE id = ?').run(id, supersedes)
-      if (result.changes === 0) {
+      const target = selectAttributeById(db, supersedes)
+      if (!target) {
         throw new Error(`writeAttribute: supersedes target ${supersedes} not found`)
+      }
+      // Must not overwrite an existing supersede link — that orphans the prior head
+      // and leaves two active (superseded_by IS NULL) rows for the same key.
+      const result = db.prepare(
+        'UPDATE entity_attributes SET superseded_by = ? WHERE id = ? AND superseded_by IS NULL',
+      ).run(id, supersedes)
+      if (result.changes === 0) {
+        throw new Error(`writeAttribute: supersedes target ${supersedes} already superseded`)
       }
     }
   })
@@ -1316,6 +1324,12 @@ export function promoteToCanon(db, originalId, { value } = {}) {
   const original = selectAttributeById(db, originalId)
   if (!original) {
     throw new Error(`promoteToCanon: attribute ${originalId} not found`)
+  }
+  if (original.supersededBy) {
+    throw new Error(`promoteToCanon: attribute ${originalId} already superseded`)
+  }
+  if (original.dismissedAt) {
+    throw new Error(`promoteToCanon: attribute ${originalId} is dismissed`)
   }
   return writeAttribute(db, {
     entityId: original.entityId,
