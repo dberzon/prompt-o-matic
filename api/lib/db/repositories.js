@@ -1379,6 +1379,12 @@ export function createVisualAnchor(db, { id, entityId, type, payload, isPrimary 
   if (!type || !VISUAL_ANCHOR_TYPES.has(type)) {
     throw new Error(`createVisualAnchor: type must be one of ${[...VISUAL_ANCHOR_TYPES].join(', ')}`)
   }
+  // Continuity / Comfy / MVP Done treat "primary" as the reference_image identity anchor.
+  // Allowing other types to hold the sole primary flag demotes the real reference and
+  // can leave the entity with zero primary reference_images after embedding refresh.
+  if (isPrimary && type !== 'reference_image') {
+    throw new Error('createVisualAnchor: only reference_image anchors can be primary')
+  }
   const anchorId = id || randomUUID()
   const createdAt = nowIso()
 
@@ -1413,8 +1419,13 @@ export function listVisualAnchors(db, { entityId, type } = {}) {
 }
 
 export function setPrimaryAnchor(db, anchorId) {
-  const row = db.prepare('SELECT entity_id FROM visual_anchors WHERE id = ?').get(anchorId)
+  const row = db.prepare('SELECT entity_id, type FROM visual_anchors WHERE id = ?').get(anchorId)
   if (!row) return false
+  if (row.type !== 'reference_image') {
+    const err = new Error('setPrimaryAnchor: only reference_image anchors can be primary')
+    err.status = 400
+    throw err
+  }
   const apply = db.transaction(() => {
     db.prepare(
       'UPDATE visual_anchors SET is_primary = 0 WHERE entity_id = ? AND is_primary = 1 AND id != ?',

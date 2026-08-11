@@ -672,16 +672,31 @@ describe('visual anchor repository (createVisualAnchor / listVisualAnchors / set
   it('setPrimaryAnchor flips is_primary atomically and enforces single primary per entity', () => {
     const { db } = createTempDb()
     createEntity(db, { id: 'e_sp', type: 'character', name: 'X' })
-    const a = createVisualAnchor(db, { entityId: 'e_sp', type: 'reference_image', isPrimary: true })
+    createVisualAnchor(db, { entityId: 'e_sp', type: 'reference_image', isPrimary: true })
     const b = createVisualAnchor(db, { entityId: 'e_sp', type: 'reference_image' })
     const c = createVisualAnchor(db, { entityId: 'e_sp', type: 'seed' })
     expect(setPrimaryAnchor(db, b.id)).toBe(true)
     const all = listVisualAnchors(db, { entityId: 'e_sp' })
     const primaries = all.filter((x) => x.isPrimary).map((x) => x.id)
     expect(primaries).toEqual([b.id])
-    expect(setPrimaryAnchor(db, c.id)).toBe(true)
+    expect(() => setPrimaryAnchor(db, c.id)).toThrow(/only reference_image/)
     const after = listVisualAnchors(db, { entityId: 'e_sp' })
-    expect(after.filter((x) => x.isPrimary).map((x) => x.id)).toEqual([c.id])
+    expect(after.filter((x) => x.isPrimary).map((x) => x.id)).toEqual([b.id])
+    db.close()
+  })
+
+  it('rejects creating or promoting non-reference_image anchors as primary', () => {
+    const { db } = createTempDb()
+    createEntity(db, { id: 'e_sp3', type: 'character', name: 'X' })
+    const ref = createVisualAnchor(db, { entityId: 'e_sp3', type: 'reference_image', isPrimary: true })
+    expect(() =>
+      createVisualAnchor(db, { entityId: 'e_sp3', type: 'ipadapter_embedding', isPrimary: true }),
+    ).toThrow(/only reference_image/)
+    const emb = createVisualAnchor(db, { entityId: 'e_sp3', type: 'ipadapter_embedding' })
+    expect(() => setPrimaryAnchor(db, emb.id)).toThrow(/only reference_image/)
+    expect(listVisualAnchors(db, { entityId: 'e_sp3' }).filter((x) => x.isPrimary).map((x) => x.id)).toEqual([
+      ref.id,
+    ])
     db.close()
   })
 
