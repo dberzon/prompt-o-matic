@@ -1,5 +1,5 @@
 // src/hooks/usePolish.js
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 
 // States: idle | loading | polished | dry-run | error
 export function usePolish() {
@@ -11,6 +11,8 @@ export function usePolish() {
     lastResponse: null,
     lastError: null,
   })
+  /** Monotonic id so slower in-flight polish responses cannot clobber a newer request. */
+  const requestIdRef = useRef(0)
 
   const polish = useCallback(async ({
     fragments,
@@ -59,6 +61,7 @@ export function usePolish() {
     }
 
     if (dryRun) {
+      requestIdRef.current += 1
       setState('dry-run')
       setPolished(null)
       setError(null)
@@ -71,6 +74,7 @@ export function usePolish() {
       return
     }
 
+    const requestId = ++requestIdRef.current
     setState('loading')
     setError(null)
     setDebug((prev) => ({
@@ -103,6 +107,8 @@ export function usePolish() {
         throw new Error(data.error ?? `HTTP ${response.status}`)
       }
 
+      if (requestId !== requestIdRef.current) return
+
       setPolished(data.polished)
       setState('polished')
       setDebug((prev) => ({
@@ -114,6 +120,7 @@ export function usePolish() {
         },
       }))
     } catch (err) {
+      if (requestId !== requestIdRef.current) return
       setError(err.message ?? 'Unknown error')
       setState('error')
       setDebug((prev) => ({
@@ -124,6 +131,7 @@ export function usePolish() {
   }, [])
 
   const revert = useCallback(() => {
+    requestIdRef.current += 1
     setState('idle')
     setPolished(null)
     setError(null)

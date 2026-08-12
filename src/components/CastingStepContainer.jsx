@@ -78,12 +78,6 @@ export default function CastingStepContainer({
     })
   }, [applyCharacterSelection])
 
-  const relayCharacterSelect = useCallback((payload) => {
-    applyCharacterSelection(typeof payload === 'string'
-      ? { charId: payload, source: 'actor-bank' }
-      : payload)
-  }, [applyCharacterSelection])
-
   return (
     <div className={styles.root}>
       <div className={styles.subTabs} role="tablist" aria-label="Casting step views">
@@ -123,12 +117,28 @@ export default function CastingStepContainer({
             aiEngine={aiEngine}
             localOnly={localOnly}
             embeddedStatus={embeddedStatus}
-            onOpenEntityEditor={(entityId) => {
-              if (activeCharId) {
+            onOpenEntityEditor={(payload) => {
+              const entityId = typeof payload === 'string' ? payload : payload?.entityId
+              if (!entityId) return
+              const charId = typeof payload === 'object' && payload?.charId
+                ? payload.charId
+                : activeCharId
+              if (!charId) {
+                // Lift succeeded but we have no workflow character id to bind —
+                // still attach the entity so Step 2 is reachable after selection.
                 setActiveEntityId(entityId)
+                if (typeof payload === 'object' && payload?.bankSlug != null) {
+                  setActiveBankSlug(payload.bankSlug)
+                }
+                return
               }
+              applyCharacterSelection({
+                charId,
+                entityId,
+                bankSlug: typeof payload === 'object' ? payload?.bankSlug ?? null : null,
+                source: 'character-builder',
+              })
             }}
-            onWorkflowCharacterSelect={relayCharacterSelect}
           />
         )}
         {activeSubTab === 'actor-bank' && (

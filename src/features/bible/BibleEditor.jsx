@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import AutofillStatusToast from '../../components/AutofillStatusToast.jsx'
 import AttributeReviewPanel from '../../components/AttributeReviewPanel.jsx'
 import EntityConflictPanel from '../../components/EntityConflictPanel.jsx'
@@ -57,12 +57,18 @@ export default function BibleEditor({ entityId }) {
   const [bundle, setBundle] = useState(null)
   /** @type {[AutofillUiState, import('react').Dispatch<import('react').SetStateAction<AutofillUiState>>]} */
   const [autofillUi, setAutofillUi] = useState(/** @type {AutofillUiState} */ (null))
+  const entityIdRef = useRef(entityId)
+  entityIdRef.current = entityId
+  /** Bumped on entity change / unmount so in-flight loads cannot commit stale bundles. */
+  const loadGenRef = useRef(0)
 
   const autofillRunId = autofillUi?.phase === 'live' ? autofillUi.runId : null
   const stream = useExtrapolationStream(autofillRunId)
 
   const load = useCallback(async () => {
-    if (!entityId) {
+    const requestedEntityId = entityIdRef.current
+    const loadGen = ++loadGenRef.current
+    if (!requestedEntityId) {
       setBundle(null)
       setError('')
       setLoading(false)
@@ -72,10 +78,11 @@ export default function BibleEditor({ entityId }) {
     setError('')
     try {
       const [bibleRes, report, attrRes] = await Promise.all([
-        fetchBible(entityId),
-        fetchBibleCompleteness(entityId),
-        listEntityAttributes(entityId),
+        fetchBible(requestedEntityId),
+        fetchBibleCompleteness(requestedEntityId),
+        listEntityAttributes(requestedEntityId),
       ])
+      if (loadGen !== loadGenRef.current || requestedEntityId !== entityIdRef.current) return
       const bibleRaw = bibleRes?.bible
       if (!bibleRaw || typeof bibleRaw !== 'object') {
         throw new Error('Invalid bible response')
@@ -92,16 +99,22 @@ export default function BibleEditor({ entityId }) {
       const approvals = parseBibleApprovalStates(attrRes?.items)
       setBundle({ bible, provenance: flatProv, report, sectionEntries, approvals })
     } catch (err) {
+      if (loadGen !== loadGenRef.current || requestedEntityId !== entityIdRef.current) return
       setBundle(null)
       setError(err instanceof Error ? err.message : 'Failed to load bible')
     } finally {
-      setLoading(false)
+      if (loadGen === loadGenRef.current && requestedEntityId === entityIdRef.current) {
+        setLoading(false)
+      }
     }
-  }, [entityId])
+  }, [])
 
   useEffect(() => {
     void load()
-  }, [load])
+    return () => {
+      loadGenRef.current += 1
+    }
+  }, [entityId, load])
 
   useEffect(() => {
     setAutofillUi(null)

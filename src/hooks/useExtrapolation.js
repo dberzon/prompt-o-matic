@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { apiPost } from '../lib/api/http.js'
+import { apiGet, apiPost } from '../lib/api/http.js'
 import { useExtrapolationStream } from './useExtrapolationStream.js'
 
 /**
@@ -45,11 +45,35 @@ export function formatExtrapolationDropSummary(stages) {
 }
 
 /**
+ * Poll until an extrapolation run reports done (best-effort; TTL-capped).
+ * Used after UI cancel so a second Run cannot overlap the abandoned server pipeline.
+ * @param {string} runId
+ * @param {{ attempts?: number, intervalMs?: number, apiGetFn?: typeof apiGet }} [opts]
+ */
+export async function waitForExtrapolationRunSettle(runId, opts = {}) {
+  const attempts = opts.attempts ?? 120
+  const intervalMs = opts.intervalMs ?? 500
+  const get = opts.apiGetFn ?? apiGet
+  const statusUrl = `/api/extrapolation/${encodeURIComponent(runId)}/status`
+  for (let i = 0; i < attempts; i += 1) {
+    try {
+      const snap = await get(statusUrl)
+      if (snap && snap.done === true) return true
+    } catch {
+      /* keep waiting */
+    }
+    await new Promise((r) => setTimeout(r, intervalMs))
+  }
+  return false
+}
+
+/**
  * @param {{ entityId: string }} params
  */
 export function useExtrapolation({ entityId } = {}) {
   const cancelledRef = useRef(false)
   const busyRef = useRef(false)
+  const activeRunIdRef = useRef(/** @type {string | null} */ (null))
   const [running, setRunning] = useState(false)
   const [stage, setStage] = useState(0)
   const [status, setStatus] = useState('')
@@ -59,11 +83,26 @@ export function useExtrapolation({ entityId } = {}) {
 
   const stream = useExtrapolationStream(activeRunId)
 
+  const setRunId = useCallback((id) => {
+    activeRunIdRef.current = id
+    setActiveRunId(id)
+  }, [])
+
+  const releaseBusyAfterRun = useCallback(async (runId) => {
+    if (typeof runId === 'string' && runId) {
+      await waitForExtrapolationRunSettle(runId, { attempts: 120, intervalMs: 100 })
+    }
+    // Only unlock if UI has not started a newer non-cancelled run.
+    if (cancelledRef.current && activeRunIdRef.current == null) {
+      busyRef.current = false
+    }
+  }, [])
+
   useEffect(() => {
     if (!activeRunId) return
     if (stream.status === 'done' && stream.result) {
       if (cancelledRef.current) {
-        setActiveRunId(null)
+        setRunId(null)
         busyRef.current = false
         return
       }
@@ -79,7 +118,7 @@ export function useExtrapolation({ entityId } = {}) {
       )
       setRunning(false)
       busyRef.current = false
-      setActiveRunId(null)
+      setRunId(null)
       return
     }
     if (stream.status === 'error') {
@@ -89,17 +128,22 @@ export function useExtrapolation({ entityId } = {}) {
       }
       setRunning(false)
       busyRef.current = false
-      setActiveRunId(null)
+      setRunId(null)
     }
-  }, [activeRunId, stream.status, stream.result, stream.error])
+  }, [activeRunId, stream.status, stream.result, stream.error, setRunId])
 
   const cancel = useCallback(() => {
     cancelledRef.current = true
-    setActiveRunId(null)
+    const runId = activeRunIdRef.current
+    setRunId(null)
     setRunning(false)
-    busyRef.current = false
     setStatus('Cancelled')
-  }, [])
+    // Keep busyRef locked until the abandoned server run settles so Cancel→Run
+    // cannot start a second pipeline while the first is still writing.
+    if (runId) {
+      void releaseBusyAfterRun(runId)
+    }
+  }, [releaseBusyAfterRun, setRunId])
 
   const run = useCallback(async () => {
     if (!entityId || busyRef.current) return null
@@ -110,18 +154,26 @@ export function useExtrapolation({ entityId } = {}) {
     setStage(0)
     setStatus('Starting extrapolation…')
     setResult(null)
-    setActiveRunId(null)
+    setRunId(null)
     try {
       const raw = await apiPost(`/api/extrapolate/character/${encodeURIComponent(entityId)}`, {
         stream: true,
       })
+      const runId = raw && typeof raw === 'object' && typeof raw.runId === 'string'
+        ? raw.runId
+        : null
       if (cancelledRef.current) {
         setRunning(false)
-        busyRef.current = false
+        setStatus('Cancelled')
+        if (runId) {
+          void releaseBusyAfterRun(runId)
+        } else {
+          busyRef.current = false
+        }
         return null
       }
-      if (raw && typeof raw === 'object' && typeof raw.runId === 'string' && raw.runId) {
-        setActiveRunId(raw.runId)
+      if (runId) {
+        setRunId(runId)
         return null
       }
       const stages = normalizeExtrapolationStages(raw?.stages)
@@ -143,7 +195,7 @@ export function useExtrapolation({ entityId } = {}) {
       busyRef.current = false
       return null
     }
-  }, [entityId])
+  }, [entityId, releaseBusyAfterRun, setRunId])
 
   const progressStage = activeRunId ? Math.max(stream.liveStage, 0) : stage
   const streamWarning = activeRunId ? stream.warning : ''

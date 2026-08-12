@@ -204,6 +204,52 @@ describe('usePolish', () => {
     expect(body).not.toHaveProperty('entityId')
   })
 
+  it('ignores stale polish responses when a newer request finishes first', async () => {
+    const resolvers = []
+    vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => {
+      resolvers.push(resolve)
+    })))
+
+    const { result } = renderHook(() => usePolish())
+
+    let first
+    let second
+    await act(async () => {
+      first = result.current.polish({ ...baseInput, fragments: ['first'] })
+      await Promise.resolve()
+      second = result.current.polish({ ...baseInput, fragments: ['second'] })
+      await Promise.resolve()
+    })
+
+    expect(resolvers).toHaveLength(2)
+
+    await act(async () => {
+      resolvers[1](jsonResponse({
+        polished: 'newer polished text',
+        provider: 'ollama',
+        fallback: false,
+        engine: 'local',
+      }))
+      await second
+    })
+
+    expect(result.current.polished).toBe('newer polished text')
+    expect(result.current.state).toBe('polished')
+
+    await act(async () => {
+      resolvers[0](jsonResponse({
+        polished: 'stale polished text',
+        provider: 'ollama',
+        fallback: false,
+        engine: 'local',
+      }))
+      await first
+    })
+
+    expect(result.current.polished).toBe('newer polished text')
+    expect(result.current.state).toBe('polished')
+  })
+
   it('revert(): from polished, returns state to idle and clears polished/error', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => jsonResponse({
       polished: 'something',
