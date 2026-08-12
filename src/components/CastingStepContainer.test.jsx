@@ -27,19 +27,33 @@ vi.mock('./CastingPipelinePanel.jsx', () => ({
 }))
 
 vi.mock('./CharacterBuilder.jsx', () => ({
-  default: ({ onWorkflowCharacterSelect }) => (
-    <button
-      type="button"
-      data-testid="mock-builder-char"
-      onClick={() => onWorkflowCharacterSelect?.({
-        charId: 'char_builder',
-        bankSlug: 'ivan',
-        entityId: 'ent_builder',
-        source: 'character-builder',
-      })}
-    >
-      Pick builder character
-    </button>
+  default: ({ onOpenEntityEditor, onWorkflowCharacterSelect }) => (
+    <>
+      <button
+        type="button"
+        data-testid="mock-builder-char"
+        onClick={() => onWorkflowCharacterSelect?.({
+          charId: 'char_builder',
+          bankSlug: 'ivan',
+          entityId: 'ent_builder',
+          source: 'character-builder',
+        })}
+      >
+        Pick builder character
+      </button>
+      <button
+        type="button"
+        data-testid="mock-builder-open-entity"
+        onClick={() => onOpenEntityEditor?.({
+          charId: 'char_bob',
+          bankSlug: 'bob',
+          entityId: 'ent_bob',
+          source: 'character-builder',
+        })}
+      >
+        Open bob as entity
+      </button>
+    </>
   ),
 }))
 
@@ -121,14 +135,42 @@ describe('CastingStepContainer', () => {
     setActiveEntityId.mockClear()
     setActiveBankSlug.mockClear()
     fireEvent.click(screen.getByTestId('mock-builder-char'))
-    expect(setActiveCharId).toHaveBeenCalledWith('char_builder')
-    expect(setActiveEntityId).toHaveBeenCalledWith('ent_builder')
-    expect(setActiveBankSlug).toHaveBeenCalledWith('ivan')
+    // Real CharacterBuilder uses onOpenEntityEditor; legacy mock path kept for coverage.
+    expect(setActiveCharId).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByTestId('mock-builder-open-entity'))
+    expect(setActiveCharId).toHaveBeenCalledWith('char_bob')
+    expect(setActiveEntityId).toHaveBeenCalledWith('ent_bob')
+    expect(setActiveBankSlug).toHaveBeenCalledWith('bob')
 
     fireEvent.click(screen.getByRole('tab', { name: /Actor Bank/i }))
     setActiveCharId.mockClear()
     fireEvent.click(screen.getByTestId('mock-bank-char'))
     expect(setActiveCharId).toHaveBeenCalledWith('char_bank')
+  })
+
+  it('Open as entity replaces a prior pipeline character selection', () => {
+    const setActiveCharId = vi.fn()
+    const setActiveEntityId = vi.fn()
+    const setActiveBankSlug = vi.fn()
+    render(
+      <CastingStepHarness
+        {...baseProps}
+        activeCharId="char_alice"
+        activeEntityId="ent_alice"
+        activeBankSlug="alice"
+        setActiveCharId={setActiveCharId}
+        setActiveEntityId={setActiveEntityId}
+        setActiveBankSlug={setActiveBankSlug}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('tab', { name: /Character Builder/i }))
+    fireEvent.click(screen.getByTestId('mock-builder-open-entity'))
+
+    expect(setActiveCharId).toHaveBeenCalledWith('char_bob')
+    expect(setActiveEntityId).toHaveBeenCalledWith('ent_bob')
+    expect(setActiveBankSlug).toHaveBeenCalledWith('bob')
   })
 
   it('Next Step is disabled without activeCharId and calls onNext when enabled', () => {

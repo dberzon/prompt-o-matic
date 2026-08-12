@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { useCharacterOptimize } from '../hooks/useCharacterOptimize.js'
 import { listBankEntries, createBankEntry, updateBankEntry, deleteBankEntry } from '../lib/api/characterBank.js'
 import { liftEntityFromBankEntry } from '../lib/api/entities.js'
 import { toSnakeSlug, withUniqueSuffix } from '../utils/slugify.js'
+import {
+  isBankHydrateCurrent,
+  mergeBankEntriesIntoCharacters,
+} from './characterBuilderBankHydrate.js'
 import styles from './CharacterBuilder.module.css'
 
 const HINT_OPTIONS = {
@@ -117,12 +121,15 @@ export default function CharacterBuilder({
   const [bankSyncStatus, setBankSyncStatus] = useState({})
   const [bankSyncError, setBankSyncError] = useState({})
   const [saving, setSaving] = useState(false)
+  /** Bumped on successful save so an in-flight mount hydrate cannot overwrite fresher cache. */
+  const bankHydrateGenRef = useRef(0)
 
   useEffect(() => {
     let cancelled = false
+    const hydrateId = bankHydrateGenRef.current
     listBankEntries()
       .then((data) => {
-        if (cancelled) return
+        if (!isBankHydrateCurrent(hydrateId, bankHydrateGenRef.current, cancelled)) return
         const items = Array.isArray(data?.items) ? data.items : []
         setBankEntries(items)
         const initialStatus = {}
@@ -132,21 +139,10 @@ export default function CharacterBuilder({
           }
         }
         setBankSyncStatus((prev) => ({ ...initialStatus, ...prev }))
-        // DB is the authority — overwrite localStorage cache with DB values.
+        // DB is the authority — overwrite localStorage cache with DB values,
+        // but only when no save completed while this list was in flight.
         if (items.length > 0) {
-          setCharacters((prev) => {
-            const merged = { ...prev }
-            for (const bankEntry of items) {
-              merged[bankEntry.slug] = {
-                slug: bankEntry.slug,
-                name: bankEntry.name,
-                rawDescription: bankEntry.description,
-                optimizedDescription: bankEntry.optimizedDescription || '',
-                createdAt: new Date(bankEntry.createdAt).getTime(),
-              }
-            }
-            return merged
-          })
+          setCharacters((prev) => mergeBankEntriesIntoCharacters(prev, items))
         }
       })
       .catch(() => {
@@ -154,6 +150,7 @@ export default function CharacterBuilder({
         // Sync UI stays in idle state; local-only flow continues to work.
       })
     return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only bank hydrate
   }, [])
 
   const slugAuto = useMemo(() => toSnakeSlug(name), [name])
@@ -239,6 +236,8 @@ export default function CharacterBuilder({
         })
         setBankEntries((prev) => [...prev, result.item])
       }
+      // Invalidate mount hydrate so a stale listBankEntries cannot wipe this save.
+      bankHydrateGenRef.current += 1
       // DB write succeeded — cache to localStorage.
       setCharacters((prev) => {
         const next = { ...prev, [finalSlug]: value }
@@ -348,7 +347,15 @@ export default function CharacterBuilder({
       })
       const entityId = result?.entity?.id
       if (!entityId) throw new Error('Entity lift failed')
-      onOpenEntityEditor?.(entityId)
+      const bankEntry = bankEntries.find((e) => e.slug === entry.slug)
+      // Pass full workflow selection so CastingStepContainer can clear stale
+      // activeCharId / bankSlug instead of only flipping entityId.
+      onOpenEntityEditor?.({
+        entityId,
+        charId: bankEntry?.id || entry.slug,
+        bankSlug: entry.slug,
+        source: 'character-builder',
+      })
     } catch (err) {
       setFlash(err?.message || 'Failed to open entity editor')
       setFlashIsError(true)
