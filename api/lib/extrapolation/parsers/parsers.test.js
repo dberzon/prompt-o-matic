@@ -2,8 +2,10 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createEntity } from '../../db/repositories.js'
+import { projectBibleView } from '../../bibles/projection.js'
+import { createEntity, listAttributes, writeAttribute } from '../../db/repositories.js'
 import { createSqliteDatabase, initializeDatabase } from '../../db/sqlite.js'
+import { applyS1Parser } from './s1Parser.js'
 import { applyS2Parser } from './s2Parser.js'
 import { applyS3Parser } from './s3Parser.js'
 import { applyS4Parser } from './s4Parser.js'
@@ -35,6 +37,71 @@ afterEach(() => {
   while (tempDirs.length) {
     fs.rmSync(tempDirs.pop(), { recursive: true, force: true })
   }
+})
+
+describe('applyS1Parser', () => {
+  it('writes primary canon attributes when the key has no active canon head', () => {
+    const db = ensureDb(createTempDbPath())
+    createEntity(db, { id: 'e1', type: 'character', name: 'A' })
+    const out = applyS1Parser(db, 'e1', {
+      primary: { attributes: [{ key: 'appearance.eyes', value: 'hazel' }] },
+      entities: [],
+    })
+    expect(out.writes).toHaveLength(1)
+    expect(listAttributes(db, { entityId: 'e1', key: 'appearance.eyes' })).toHaveLength(1)
+    expect(projectBibleView(db, 'e1').bible.physical.eyes).toBe('hazel')
+  })
+
+  it('does not shadow existing canon with a newer S1 canon head', () => {
+    const db = ensureDb(createTempDbPath())
+    createEntity(db, { id: 'e1b', type: 'character', name: 'B' })
+    writeAttribute(db, {
+      entityId: 'e1b',
+      key: 'appearance.eyes',
+      value: 'hazel',
+      provenance: 'canon',
+    })
+    const out = applyS1Parser(db, 'e1b', {
+      primary: { attributes: [{ key: 'appearance.eyes', value: 'ice blue' }] },
+      entities: [],
+    })
+    expect(out.writes).toHaveLength(0)
+    const heads = listAttributes(db, { entityId: 'e1b', key: 'appearance.eyes' })
+    expect(heads).toHaveLength(1)
+    expect(heads[0].value).toBe('hazel')
+    expect(projectBibleView(db, 'e1b').bible.physical.eyes).toBe('hazel')
+  })
+
+  it('still fills empty keys on a related entity while preserving its existing canon', () => {
+    const db = ensureDb(createTempDbPath())
+    createEntity(db, { id: 'e1c', type: 'character', name: 'Primary' })
+    createEntity(db, { id: 'rita_vlasova', type: 'character', name: 'Rita Vlasova' })
+    writeAttribute(db, {
+      entityId: 'rita_vlasova',
+      key: 'appearance.eyes',
+      value: 'green',
+      provenance: 'canon',
+    })
+    const out = applyS1Parser(db, 'e1c', {
+      primary: { attributes: [] },
+      entities: [{
+        slug: 'rita_vlasova',
+        type: 'character',
+        name: 'Rita Vlasova',
+        attributes: [
+          { key: 'appearance.eyes', value: 'blue' },
+          { key: 'appearance.hair', value: 'dark bob' },
+        ],
+      }],
+    })
+    expect(out.suggestions).toHaveLength(0)
+    expect(out.writes).toHaveLength(1)
+    expect(out.writes[0].key).toBe('appearance.hair')
+    const eyeHeads = listAttributes(db, { entityId: 'rita_vlasova', key: 'appearance.eyes' })
+    expect(eyeHeads).toHaveLength(1)
+    expect(eyeHeads[0].value).toBe('green')
+    expect(projectBibleView(db, 'rita_vlasova').bible.physical.eyes).toBe('green')
+  })
 })
 
 describe('applyS2Parser', () => {
