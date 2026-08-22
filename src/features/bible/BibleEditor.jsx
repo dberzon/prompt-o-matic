@@ -156,8 +156,6 @@ export default function BibleEditor({ entityId }) {
     [entityId, load],
   )
 
-  const noopOnChange = useCallback((_field, _value) => {}, [])
-
   const panels = useMemo(
     () =>
       sectionEntries.map(({ key, sectionSchema }) => {
@@ -175,14 +173,13 @@ export default function BibleEditor({ entityId }) {
             values={secValues}
             provenance={provSlice}
             approvalState={approvalState}
-            onChange={noopOnChange}
             onApprove={() => {
               void handleApprove(key)
             }}
           />
         )
       }),
-    [approvals, bundle?.bible, bundle?.provenance, handleApprove, noopOnChange, sectionEntries],
+    [approvals, bundle?.bible, bundle?.provenance, handleApprove, sectionEntries],
   )
 
   if (!entityId) {
