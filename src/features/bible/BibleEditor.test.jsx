@@ -139,4 +139,17 @@ describe('BibleEditor', () => {
       expect(fetchBible.mock.calls.length).toBeGreaterThan(fetchCountBefore)
     })
   })
+
+  it('renders projected bible fields as read-only so typed edits are not silently discarded', async () => {
+    vi.mocked(fetchBible).mockResolvedValue({ bible: characterBible, provenance: {} })
+    vi.mocked(fetchBibleCompleteness).mockResolvedValue(completenessReport())
+    vi.mocked(listEntityAttributes).mockResolvedValue({ items: [] })
+
+    render(<BibleEditor entityId="ent_ro" />)
+    await waitFor(() => expect(screen.getByTestId('T_BIBLE_EDITOR')).toBeTruthy())
+
+    expect(screen.queryByTestId('T_BIBLE_FIELD_INPUT_gender')).toBeNull()
+    expect(screen.getAllByTestId('T_BIBLE_FIELD_READONLY').length).toBeGreaterThan(0)
+    expect(screen.getAllByTestId('T_BIBLE_APPROVE')[0].disabled).toBe(false)
+  })
 })
