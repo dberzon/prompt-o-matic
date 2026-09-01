@@ -10,6 +10,7 @@ import { runBatchCharacterGeneration } from './batchGeneration.js'
 import {
   approveBatchCandidate,
   createBatchCandidate,
+  createCharacter,
   createCharacterBatch,
   getBatchCandidate,
   getCharacterBatch,
@@ -32,6 +33,22 @@ const ListCandidatesQuerySchema = z.object({
   classification: z.enum(['accepted', 'rejected', 'needsMutation', 'pendingReview']).optional(),
   reviewStatus: z.enum(['pending', 'approved', 'rejected', 'mutated', 'saved']).optional(),
 }).strict()
+
+/**
+ * Temporary character used only to compile/queue a batch preview render.
+ * Must not reuse the candidate profile id or slug — those keys are reserved
+ * for Save → Active Character (`saveApprovedCandidateAsCharacter`).
+ */
+export function createBatchPreviewCharacter(db, candidateProfile) {
+  const profile = candidateProfile && typeof candidateProfile === 'object' ? candidateProfile : {}
+  const { id: _id, slug: _slug, ...rest } = profile
+  return createCharacter(db, {
+    ...rest,
+    id: randomUUID(),
+    embeddingStatus: 'not_indexed',
+    lifecycleStatus: 'preview',
+  })
+}
 
 export function persistBatchFromGeneration(db, generationResult) {
   const batch = createCharacterBatch(db, {
