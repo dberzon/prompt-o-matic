@@ -4,6 +4,7 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createSqliteDatabase, initializeDatabase } from '../db/sqlite.js'
 import {
+  createCharacter,
   getCharacter,
   getCharacterBatch,
   listBatchCandidates,
@@ -12,6 +13,7 @@ import {
 import { validCharacterProfile } from './fixtures.js'
 import {
   approveCandidate,
+  createBatchPreviewCharacter,
   listCandidatesForBatch,
   mutateBatchCandidate,
   persistBatchFromGeneration,
@@ -95,6 +97,35 @@ describe('batch review repository/service', () => {
     expect(saved.reviewStatus).toBe('saved')
     expect(saved.savedCharacterId).toBeTruthy()
     expect(getCharacter(db, saved.savedCharacterId)).not.toBeNull()
+    db.close()
+  })
+
+  it('preview character does not occupy the candidate profile id', () => {
+    const db = createTempDb()
+    const preview = createBatchPreviewCharacter(db, { ...validCharacterProfile, id: 'cand_ok' })
+    expect(preview.id).not.toBe('cand_ok')
+    expect(preview.lifecycleStatus).toBe('preview')
+    expect(getCharacter(db, 'cand_ok')).toBeNull()
+    db.close()
+  })
+
+  it('saves approved candidate while a preview temp still uses the profile id', async () => {
+    const db = createTempDb()
+    const batch = persistBatchFromGeneration(db, makeGenerationResult())
+    const candidate = listBatchCandidates(db, batch.id).find((item) => item.classification === 'accepted')
+    approveCandidate(db, { candidateId: candidate.id })
+    createCharacter(db, {
+      ...candidate.candidate,
+      embeddingStatus: 'not_indexed',
+      lifecycleStatus: 'preview',
+    })
+    const saved = await saveCandidateAsCharacter({ db }, { candidateId: candidate.id })
+    expect(saved.reviewStatus).toBe('saved')
+    expect(saved.savedCharacterId).toBeTruthy()
+    expect(saved.savedCharacterId).not.toBe(candidate.candidate.id)
+    const persisted = getCharacter(db, saved.savedCharacterId)
+    expect(persisted).not.toBeNull()
+    expect(persisted.lifecycleStatus).toBe('auditioned')
     db.close()
   })
 

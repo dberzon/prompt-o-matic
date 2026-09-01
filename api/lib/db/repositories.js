@@ -705,8 +705,21 @@ export function saveApprovedCandidateAsCharacter(db, id) {
     err.status = 400
     throw err
   }
+  const profile = { ...(candidateRecord.candidate || {}) }
+  // Preview renders insert a temp character with the candidate profile id.
+  // Saving while that row still exists (in-flight Comfy job, failed cleanup)
+  // would UNIQUE-fail on characters.id and drop the user's save.
+  if (profile.id && getCharacter(db, profile.id)) {
+    profile.id = randomUUID()
+  }
+  if (profile.slug) {
+    const slugTaken = db.prepare('SELECT 1 FROM characters WHERE slug = ? LIMIT 1').get(profile.slug)
+    if (slugTaken) {
+      delete profile.slug
+    }
+  }
   const saved = createCharacter(db, {
-    ...candidateRecord.candidate,
+    ...profile,
     embeddingStatus: 'not_indexed',
     lifecycleStatus: 'auditioned',
   })

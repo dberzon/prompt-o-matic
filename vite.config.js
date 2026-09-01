@@ -19,6 +19,7 @@ import {
   recalculateCharacterBatchSummary,
   rejectCandidate,
   saveCandidateAsCharacter,
+  createBatchPreviewCharacter,
 } from './api/lib/characters/batchReview.js'
 import { assertCharacterBatchOperationAllowed } from './api/lib/characters/access.js'
 import { assertPromptPackOperationAllowed } from './api/lib/prompts/access.js'
@@ -44,7 +45,6 @@ import {
   getPromptPack,
   listActorAuditions,
   listActorCandidates,
-  createCharacter,
   getCharacter,
   listCharacters,
   deleteCharacter,
@@ -816,11 +816,7 @@ function apiDevPlugin(env) {
           if (candidate.reviewStatus !== 'approved') {
             sendJsonMiddleware(res, 400, { error: 'Candidate must be approved before previewing' }); return
           }
-          const tempChar = createCharacter(runtime.db, {
-            ...candidate.candidate,
-            embeddingStatus: 'not_indexed',
-            lifecycleStatus: 'preview',
-          })
+          const tempChar = createBatchPreviewCharacter(runtime.db, candidate.candidate)
           const compileResult = compileCharacterPromptPacks({
             db: runtime.db,
             input: { characterId: tempChar.id, views: ['front_portrait'] },
