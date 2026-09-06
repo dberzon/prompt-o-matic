@@ -610,6 +610,22 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
     finally { setAuditionRunning(false) }
   }
 
+  async function handleApproveAudition(auditionId, characterId) {
+    setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: true, error: null } }))
+    try {
+      await approveActorAudition(auditionId)
+      setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, status: 'approved' } }))
+    } catch (err) {
+      setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: false, error: err?.message || 'Approve failed' } }))
+      return
+    }
+    if (characterId) {
+      setSelectedCharacterId(characterId)
+      setTimeout(() => activeCharSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100)
+    }
+    setSuccess('Character ready — select them in Active Character ↓')
+  }
+
   async function handleApproveAndQueuePortfolio(auditionId, characterId) {
     setAuditionItemActions((prev) => ({ ...prev, [auditionId]: { busy: true, error: null } }))
     try {
@@ -1111,7 +1127,7 @@ export default function CastingPipelinePanel({ jumpToCharacterId, onJumpConsumed
                                       />
                                     ))}
                                   <div className={styles.row}>
-                                    <button type="button" onClick={() => handleApproveAudition(v.auditionId)}
+                                    <button type="button" onClick={() => handleApproveAudition(v.auditionId, result.characterId)}
                                       disabled={auditionItemActions[v.auditionId]?.busy}>
                                       {auditionItemActions[v.auditionId]?.status === 'approved' ? '✓ Selected' : 'Select this look'}
                                     </button>
