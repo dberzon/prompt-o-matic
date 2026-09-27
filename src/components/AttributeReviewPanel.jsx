@@ -40,8 +40,9 @@ function groupAttributes(items) {
     groups.get(groupKey).items.push(item)
   }
   return Array.from(groups.values()).sort((a, b) => {
-    if (a.stage !== b.stage) return a.stage.localeCompare(b.stage)
-    return a.prefix.localeCompare(b.prefix)
+    const stageCmp = String(a.stage).localeCompare(String(b.stage), undefined, { numeric: true })
+    if (stageCmp !== 0) return stageCmp
+    return String(a.prefix).localeCompare(String(b.prefix))
   })
 }
 
