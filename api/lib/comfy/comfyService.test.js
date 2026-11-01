@@ -64,7 +64,7 @@ describe('comfy service', () => {
     expect(payload.prompt['99']).toBeUndefined()
   })
 
-  it('injects primary reference anchor into workflow when available', () => {
+  it('drops unwired IPAdapter stubs when a reference anchor exists', () => {
     const db = createTempDb()
     createEntity(db, { id: 'ent_anchor', type: 'character', name: 'Ruslan' })
     createVisualAnchor(db, {
@@ -74,15 +74,67 @@ describe('comfy service', () => {
       payload: 'reference-anchor.png',
       isPrimary: true,
     })
-    const payload = buildComfyPromptPayload({
-      promptPack: { ...validQwenImagePromptPack, characterId: 'ent_anchor' },
+    const pack = { ...validQwenImagePromptPack, characterId: 'ent_anchor' }
+    const stubPayload = buildComfyPromptPayload({
+      promptPack: pack,
       workflowId: 'qwen-image-2512-default',
       db,
       entityId: 'ent_anchor',
       ipadapterStrength: 0.72,
     })
-    expect(payload.prompt['99'].inputs.image).toBe('reference-anchor.png')
-    expect(payload.prompt['98'].inputs.weight).toBe(0.72)
+    expect(stubPayload.prompt['98']).toBeUndefined()
+    expect(stubPayload.prompt['99']).toBeUndefined()
+    expect(stubPayload.prompt['6'].inputs.text).toContain('woman in worn wool coat')
+
+    const runnablePayload = buildComfyPromptPayload({
+      promptPack: pack,
+      workflowId: 'qwen-image-2512-comfyui-00010',
+      db,
+      entityId: 'ent_anchor',
+      ipadapterStrength: 0.72,
+    })
+    expect(runnablePayload.resolvedWorkflowId).toBe('qwen-image-2512-comfyui-00010')
+    expect(runnablePayload.prompt['198']).toBeUndefined()
+    expect(runnablePayload.prompt['199']).toBeUndefined()
+    expect(runnablePayload.prompt['6'].inputs.text).toContain('woman in worn wool coat')
+  })
+
+  it('keeps IPAdapter nodes that the rest of the graph links', () => {
+    const workflow = {
+      1: { inputs: { text: '' } },
+      2: { inputs: { text: '' } },
+      3: { inputs: { seed: 1 } },
+      4: { inputs: { width: 8, height: 8 } },
+      10: { inputs: { model: ['98', 0], latent_image: ['4', 0] } },
+      99: { inputs: { image: '__IPADAPTER_IMAGE__' } },
+      98: { inputs: { weight: 0.6, image: ['99', 0] } },
+    }
+    const mapping = {
+      fields: {
+        positivePrompt: { nodeId: '1', inputKey: 'text' },
+        negativePrompt: { nodeId: '2', inputKey: 'text' },
+        seed: { nodeId: '3', inputKey: 'seed' },
+        width: { nodeId: '4', inputKey: 'width' },
+        height: { nodeId: '4', inputKey: 'height' },
+      },
+      optionalFields: {
+        ipadapterImage: { nodeId: '99', inputKey: 'image' },
+        ipadapterStrength: { nodeId: '98', inputKey: 'weight' },
+      },
+    }
+    const injected = injectPromptPackIntoWorkflow({
+      workflow,
+      mapping,
+      promptPack: validQwenImagePromptPack,
+      seed: 7,
+      width: 832,
+      height: 1248,
+      ipadapterImage: 'reference-anchor.png',
+      ipadapterStrength: 0.72,
+    })
+    expect(injected['99'].inputs.image).toBe('reference-anchor.png')
+    expect(injected['98'].inputs.weight).toBe(0.72)
+    expect(injected['98'].inputs.image).toEqual(['99', 0])
   })
 
   it('uses cached comfy filename instead of raw image bytes when an embedding anchor exists', async () => {
@@ -115,7 +167,12 @@ describe('comfy service', () => {
       db,
       entityId: 'ent_cached',
     })
-    expect(payload.prompt['99'].inputs.image).toBe('cached-reference.png')
+    expect(payload.prompt['98']).toBeUndefined()
+    expect(payload.prompt['99']).toBeUndefined()
+    const promptCall = fetchImpl.mock.calls.find(([url]) => String(url).includes('/prompt'))
+    const queuedPrompt = JSON.parse(promptCall[1].body).prompt
+    expect(queuedPrompt['98']).toBeUndefined()
+    expect(queuedPrompt['99']).toBeUndefined()
     expect(fetchImpl.mock.calls.some(([url]) => String(url).includes('/upload/image'))).toBe(true)
   })
 

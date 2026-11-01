@@ -192,15 +192,43 @@ export function validateWorkflowMapping({ workflow, mapping }) {
   }
 }
 
-function stripUnmappedOptionalNodes(workflow, mapping, { ipadapterImage } = {}) {
-  if (ipadapterImage || !workflow || !mapping?.optionalFields) return workflow
-  const nodeIds = new Set()
+function ipAdapterNodeIds(mapping) {
+  const ids = []
   for (const key of ['ipadapterImage', 'ipadapterStrength']) {
-    const nodeId = mapping.optionalFields[key]?.nodeId
-    if (nodeId) nodeIds.add(nodeId)
+    const nodeId = mapping?.optionalFields?.[key]?.nodeId
+    if (nodeId) ids.push(String(nodeId))
   }
-  for (const nodeId of nodeIds) {
-    delete workflow[nodeId]
+  return ids
+}
+
+function linkedNodeIds(workflow) {
+  const targets = new Set()
+  for (const node of Object.values(workflow || {})) {
+    const inputs = node?.inputs
+    if (!inputs || typeof inputs !== 'object') continue
+    for (const value of Object.values(inputs)) {
+      if (
+        Array.isArray(value)
+        && value.length >= 2
+        && typeof value[1] === 'number'
+        && (typeof value[0] === 'string' || typeof value[0] === 'number')
+      ) {
+        targets.add(String(value[0]))
+      }
+    }
+  }
+  return targets
+}
+
+function stripUnmappedOptionalNodes(workflow, mapping, { ipadapterImage } = {}) {
+  if (!workflow || !mapping?.optionalFields) return workflow
+  // Comfy validates every node in the prompt. The shipped Qwen templates only
+  // stub LoadImage / IPAdapterApply and nothing else links them, so leaving
+  // them in (once a reference anchor exists) makes /prompt reject the graph.
+  const linked = linkedNodeIds(workflow)
+  for (const nodeId of ipAdapterNodeIds(mapping)) {
+    const wired = Boolean(ipadapterImage) && linked.has(nodeId)
+    if (!wired) delete workflow[nodeId]
   }
   return workflow
 }
